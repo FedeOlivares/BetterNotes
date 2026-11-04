@@ -1,6 +1,7 @@
 package app.betternotes.core.library
 
 import app.betternotes.core.format.CorruptFileException
+import app.betternotes.core.format.DocumentCodec
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.DocumentKind
@@ -88,8 +89,16 @@ class LibraryTest {
     fun moveTargetsLeaveOutTheCurrentFolderAndTheFoldersInside() {
         val library = Library(listOf(folder(1), folder(2, parent = 1), folder(3), folder(4)))
             .trashed(4, 10)
-        assertEquals(listOf(3L), ids(library.moveTargets(1)))
-        assertEquals(listOf(3L), ids(library.moveTargets(2)))
+        assertEquals(listOf(3L), ids(library.moveTargets(listOf(1L))))
+        assertEquals(listOf(3L), ids(library.moveTargets(listOf(2L))))
+        assertEquals(listOf(3L), ids(library.moveTargets(listOf(1L, 2L))))
+    }
+
+    @Test
+    fun aFoldersPathStartsAtTheTop() {
+        val library = Library(listOf(folder(1), folder(2, parent = 1), folder(3, parent = 2)))
+        assertEquals(listOf(1L, 2L, 3L), ids(library.pathTo(3)))
+        assertTrue(library.pathTo(99).isEmpty())
     }
 
     @Test
@@ -147,6 +156,11 @@ class LibraryTest {
         val scanned = ScannedDocument(note, savedAtMs = 9L)
         assertEquals(note.id, scanned.id)
         assertEquals(DocumentInfo(DocumentKind.NOTE, 0x11223344, 9L), scanned.info)
+
+        val text = Document.newText("Text", PageSize.A4, PageBackground(), 7L)
+        val decoded = DocumentCodec.decode(DocumentCodec.encode(text))
+        assertEquals(DocumentKind.TEXT, decoded.kind)
+        assertFalse(decoded.canAddPages)
 
         val pdf = Document.fromPdf("Pdf", "a", listOf(PageSize.A4), 7L)
         assertEquals(0xFFFFFFFF.toInt(), ScannedDocument(pdf, 9L).info.paperColor)

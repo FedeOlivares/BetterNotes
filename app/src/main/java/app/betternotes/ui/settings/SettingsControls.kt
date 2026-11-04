@@ -53,17 +53,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.ui.theme.ReferenceScale
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -144,33 +142,19 @@ private val LightSettings = SettingsColors(
 
 internal val LocalSettingsColors = staticCompositionLocalOf { DarkSettings }
 
-/** The screenshots' short side in pixels, halved, which comes out close to real dp on the tablet. */
-private const val REFERENCE_SHORT_SIDE = 1068f
-
-/** On a small screen, keeps things from shrinking past what a finger can hit. */
-private const val MIN_DP_PER_UNIT = 0.7f
-
-/**
- * Inside this, one dp is one reference pixel, so a measurement from a screenshot lands in the same
- * place on the tablet, whatever display size it is set to.
- */
+/** Colors plus [ReferenceScale], so a measurement from a screenshot lands in the same place on the tablet. */
 @Composable
 fun SettingsTheme(dark: Boolean = true, content: @Composable () -> Unit) {
     val colors = if (dark) DarkSettings else LightSettings
-    val density = LocalDensity.current
-    val window = LocalWindowInfo.current.containerSize
-    val scale = maxOf(min(window.width, window.height) / REFERENCE_SHORT_SIDE, density.density * MIN_DP_PER_UNIT)
     val scheme = if (dark) {
         darkColorScheme(primary = colors.accent, surface = colors.menu, surfaceContainer = colors.menu, onSurface = colors.text)
     } else {
         lightColorScheme(primary = colors.accent, surface = colors.menu, surfaceContainer = colors.menu, onSurface = colors.text)
     }
     MaterialTheme(colorScheme = scheme) {
-        CompositionLocalProvider(
-            LocalSettingsColors provides colors,
-            LocalDensity provides Density(scale, density.fontScale),
-            content = content,
-        )
+        ReferenceScale {
+            CompositionLocalProvider(LocalSettingsColors provides colors, content = content)
+        }
     }
 }
 

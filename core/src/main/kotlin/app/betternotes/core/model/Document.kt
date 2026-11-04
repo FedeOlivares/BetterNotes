@@ -12,6 +12,9 @@ enum class DocumentKind {
 
     /** Pages imported from a PDF, plus any blank pages added to it. */
     PDF,
+
+    /** A typed notebook: one page holding one text item. */
+    TEXT,
 }
 
 /** Where a page's base image comes from. */
@@ -63,7 +66,7 @@ class Document(
     var version = 0L
         private set
 
-    val canAddPages get() = kind != DocumentKind.CANVAS
+    val canAddPages get() = kind == DocumentKind.NOTE || kind == DocumentKind.PDF
 
     /** A document keeps at least one page. */
     val canRemovePages get() = pageList.size > 1
@@ -120,6 +123,9 @@ class Document(
     companion object {
         fun newNote(title: String, size: PageSize, background: PageBackground, nowMs: Long, ids: IdSource = IdSource.Random) =
             Document(ids.next(), title, DocumentKind.NOTE, nowMs, nowMs, listOf(Page(ids.next(), size, background)))
+
+        fun newText(title: String, size: PageSize, background: PageBackground, nowMs: Long, ids: IdSource = IdSource.Random) =
+            Document(ids.next(), title, DocumentKind.TEXT, nowMs, nowMs, listOf(Page(ids.next(), size, background)))
 
         fun newCanvas(title: String, background: PageBackground, nowMs: Long, ids: IdSource = IdSource.Random) =
             Document(ids.next(), title, DocumentKind.CANVAS, nowMs, nowMs, listOf(Page(ids.next(), null, background)))

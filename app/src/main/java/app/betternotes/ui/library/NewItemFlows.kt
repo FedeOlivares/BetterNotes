@@ -16,9 +16,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.betternotes.R
+import app.betternotes.core.settings.NewNoteName
 import app.betternotes.library.LibraryRepository
 import app.betternotes.library.PhotoLayout
+import app.betternotes.settings.SettingsRepository
 import app.betternotes.ui.MainActivity
 import java.io.File
 import java.time.LocalDate
@@ -36,6 +39,7 @@ internal class NewItemFlows(
 @Composable
 internal fun rememberNewItemActions(
     repository: LibraryRepository,
+    settings: SettingsRepository,
     folderId: Long?,
     onOpenDocument: (id: Long, startAction: String?) -> Unit,
     onNewFolder: () -> Unit,
@@ -43,7 +47,11 @@ internal fun rememberNewItemActions(
 ): NewItemFlows {
     val context = LocalContext.current
     val resolver = context.contentResolver
-    val title = stringResource(R.string.library_new_note_name, LocalDate.now().toString())
+    val naming by settings.settings.collectAsStateWithLifecycle()
+    val title = when (naming.newNoteName) {
+        NewNoteName.DATED -> stringResource(R.string.settings_note_dated, LocalDate.now().toString())
+        NewNoteName.UNTITLED -> stringResource(R.string.settings_note_untitled)
+    }
     val open: (Long) -> Unit = { onOpenDocument(it, null) }
     val failed = { showImportFailed(context) }
     fun addPhotos(uris: List<Uri>, layout: PhotoLayout) {
@@ -86,8 +94,8 @@ internal fun rememberNewItemActions(
 
     return NewItemFlows(
         panel = NewItemActions(
-            text = { repository.createNote(title, folderId) { onOpenDocument(it, MainActivity.START_TYPING) } },
-            canvas = { repository.createCanvas(title, folderId, open) },
+            text = { repository.createText(title, folderId, open) },
+            canvas = { repository.createNote(title, folderId, open) },
             audio = { repository.createNote(title, folderId) { onOpenDocument(it, MainActivity.START_RECORDING) } },
             fileOrDoc = { filePicker.launch(arrayOf("application/pdf", "audio/*", "image/*")) },
             takePhoto = { openCamera(PhotoLayout.ON_PAGE) },

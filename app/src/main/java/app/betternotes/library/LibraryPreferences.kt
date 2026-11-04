@@ -8,8 +8,10 @@ import androidx.core.content.edit
 import app.betternotes.core.library.LibrarySort
 import app.betternotes.ui.theme.ThemeMode
 
-/** Small choices on the home screen, kept between runs. Observable from Compose. */
-class LibraryPreferences(context: Context) {
+enum class LibraryLayout { GRID, LIST }
+
+/** Small choices on the home screen, kept between runs. Observable from Compose. Use from the main thread. */
+class LibraryPreferences private constructor(context: Context) {
     private val preferences = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     var theme by mutableStateOf(enumOrDefault(preferences.getString(KEY_THEME, null), ThemeMode.DARK))
@@ -18,9 +20,17 @@ class LibraryPreferences(context: Context) {
     var sort by mutableStateOf(enumOrDefault(preferences.getString(KEY_SORT, null), LibrarySort.MODIFIED))
         private set
 
+    var layout by mutableStateOf(enumOrDefault(preferences.getString(KEY_LAYOUT, null), LibraryLayout.GRID))
+        private set
+
     /** What the greeting calls the owner. Null until they have been asked, since there is no account. */
     var userName by mutableStateOf(preferences.getString(KEY_NAME, null))
         private set
+
+    fun updateLayout(value: LibraryLayout) {
+        layout = value
+        preferences.edit { putString(KEY_LAYOUT, value.name) }
+    }
 
     fun updateUserName(name: String) {
         userName = name
@@ -40,9 +50,16 @@ class LibraryPreferences(context: Context) {
     private inline fun <reified E : Enum<E>> enumOrDefault(name: String?, default: E): E =
         enumValues<E>().firstOrNull { it.name == name } ?: default
 
-    private companion object {
-        const val KEY_THEME = "theme"
-        const val KEY_SORT = "library_sort"
-        const val KEY_NAME = "user_name"
+    companion object {
+        private const val KEY_THEME = "theme"
+        private const val KEY_SORT = "library_sort"
+        private const val KEY_LAYOUT = "library_layout"
+        private const val KEY_NAME = "user_name"
+
+        private var instance: LibraryPreferences? = null
+
+        /** One instance, so a choice made in settings shows at once on the screen behind it. */
+        fun get(context: Context): LibraryPreferences =
+            instance ?: LibraryPreferences(context.applicationContext).also { instance = it }
     }
 }

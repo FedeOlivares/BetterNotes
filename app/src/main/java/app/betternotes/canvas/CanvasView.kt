@@ -810,15 +810,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
         /** What the eraser end of a stylus does when the tool in hand is not the eraser. */
         val DEFAULT_ERASER = CanvasTool.Eraser(EraseMode.PARTIAL, radiusPt = 6f)
-
-        /**
-         * The screen's real density, which zoom 1 relies on to show true size. It reads the panel's
-         * values rather than densityDpi, which is a rounded size for the UI. Some devices report these
-         * wrongly, so [AppSettings.calibration] can replace it.
-         */
-        fun physicalDpi(context: Context): Float {
-            val metrics = context.resources.displayMetrics
-            return (metrics.xdpi + metrics.ydpi) / 2f
-        }
     }
+}
+
+/**
+ * The screen's real density, which zoom 1 relies on to show true size. It reads the panel's values
+ * rather than densityDpi, which is a rounded size for the UI. Some devices report these wrongly, so
+ * [AppSettings.calibration] can replace it.
+ */
+internal fun physicalDpi(context: Context): Float {
+    val metrics = context.resources.displayMetrics
+    return (metrics.xdpi + metrics.ydpi) / 2f
 }

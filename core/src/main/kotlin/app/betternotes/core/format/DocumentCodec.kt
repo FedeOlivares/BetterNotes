@@ -38,7 +38,7 @@ private const val ELEMENT_RULED = 3
 private const val SOURCE_BLANK = 0
 private const val SOURCE_PDF = 1
 
-internal val DOCUMENT_KINDS = WireEnum(DocumentKind.NOTE, DocumentKind.CANVAS, DocumentKind.PDF)
+internal val DOCUMENT_KINDS = WireEnum(DocumentKind.NOTE, DocumentKind.CANVAS, DocumentKind.PDF, DocumentKind.TEXT)
 internal val LENGTH_UNITS = WireEnum(LengthUnit.PT, LengthUnit.INCH, LengthUnit.CM, LengthUnit.MM, LengthUnit.PX)
 
 /** The file describing a document and listing its pages in order. */

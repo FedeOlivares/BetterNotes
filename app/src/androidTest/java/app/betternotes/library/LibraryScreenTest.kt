@@ -2,6 +2,8 @@ package app.betternotes.library
 
 import android.app.Instrumentation
 import android.content.Context
+import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
@@ -18,15 +20,21 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.core.content.edit
 import androidx.core.graphics.createBitmap
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.betternotes.core.library.LibraryStore
 import app.betternotes.core.library.LibraryView
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.DocumentKind
+import app.betternotes.R
 import app.betternotes.core.model.ImageItem
+import app.betternotes.core.model.TextItem
 import app.betternotes.ui.MainActivity
 import app.betternotes.ui.library.LibraryActivity
+import app.betternotes.ui.text.TextNoteActivity
+import app.betternotes.ui.theme.ThemeMode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -43,6 +51,7 @@ import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.time.LocalDate
+import java.util.Locale
 
 /** Runs the real home screen and repository on a device, with touches sent through Compose's test tools. */
 @OptIn(ExperimentalTestApi::class)
@@ -112,10 +121,14 @@ class LibraryScreenTest {
         compose.onNodeWithText("0 items").assertExists()
 
         compose.onNodeWithText("Surgery").performClick()
-        // Inside, its name replaces the greeting, and back returns to the top.
-        compose.waitUntilAtLeastOneExists(hasContentDescription("Back"), TIMEOUT_MS)
-        compose.onNodeWithContentDescription("Back").performClick()
+        // Inside, the greeting stays, and a house and the folder's name take the place of "All".
+        compose.waitUntilAtLeastOneExists(hasContentDescription("Home"), TIMEOUT_MS)
+        compose.onNodeWithText("All").assertDoesNotExist()
+        compose.onNodeWithText("Test", substring = true).assertExists()
+        compose.onNodeWithText("Surgery").assertExists()
+        compose.onAllNodesWithContentDescription("Home")[0].performClick()
         waitForText("0 items")
+        compose.onNodeWithText("All").assertExists()
     }
 
     @Test
@@ -202,28 +215,72 @@ class LibraryScreenTest {
 
     @Test
     fun theThemePersists() {
-        compose.onNodeWithContentDescription("Options").performClick()
-        compose.onNodeWithText("Light theme").performClick()
-        compose.onNodeWithContentDescription("Options").performClick()
-        compose.onNodeWithText("Dark theme").assertExists()
+        compose.runOnUiThread { LibraryPreferences.get(context).updateTheme(ThemeMode.LIGHT) }
         assertEquals("LIGHT", preferences().getString("theme", null))
+        compose.runOnUiThread { LibraryPreferences.get(context).updateTheme(ThemeMode.DARK) }
     }
 
     @Test
-    fun aNewNoteOpensTheEditor() {
+    fun theTextTileOpensATypedNotebook() {
         val monitor: Instrumentation.ActivityMonitor =
-            instrumentation.addMonitor(MainActivity::class.java.name, null, true)
+            instrumentation.addMonitor(TextNoteActivity::class.java.name, null, true)
         compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithText("Text").performClick()
         compose.waitUntil(TIMEOUT_MS) { monitor.hits == 1 }
         instrumentation.removeMonitor(monitor)
         val note = library()!!.entries.first { it.document != null }
         assertEquals("New note " + LocalDate.now(), note.name)
-        assertEquals(DocumentKind.NOTE, note.document!!.kind)
+        assertEquals(DocumentKind.TEXT, note.document!!.kind)
     }
 
     @Test
-    fun theCanvasTileMakesAnInfiniteCanvas() {
+    fun theOptionsMenuSwitchesToAListAndSelects() {
+        compose.runOnUiThread { repository.createFolder("Surgery", null) }
+        waitForText("Surgery")
+        compose.onNodeWithContentDescription("Options").performClick()
+        compose.onNodeWithText("Last modified").assertExists()
+        compose.onNodeWithText("List").performClick()
+        assertEquals("LIST", preferences().getString("library_layout", null))
+        waitForText("0 items")
+
+        compose.onNodeWithContentDescription("Options").performClick()
+        compose.onNodeWithText("Select").performClick()
+        compose.onNodeWithText("Surgery").performClick()
+        waitForText("1 selected")
+        compose.onNodeWithContentDescription("Move to bin").performClick()
+        waitGone("Surgery")
+        assertTrue(library()!!.entries.single().trashedAtMs != null)
+
+        compose.runOnUiThread { LibraryPreferences.get(context).updateLayout(LibraryLayout.GRID) }
+    }
+
+    @Test
+    fun everyLibraryTextHasASpanishVersion() {
+        val config = Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag("es-419")) }
+        val spanish = context.createConfigurationContext(config)
+        assertEquals("Empecemos", spanish.getString(R.string.library_new_title))
+        assertEquals("Ajustes", spanish.getString(R.string.settings_title))
+    }
+
+    @Test
+    fun aTypedNotebookSavesItsText() {
+        var created = 0L
+        compose.runOnUiThread { repository.createText("Lecture", null) { created = it } }
+        compose.waitUntil(TIMEOUT_MS) { created != 0L }
+        val store = repository.documentStore(created)
+        val intent = Intent(context, TextNoteActivity::class.java).putExtra(TextNoteActivity.EXTRA_DOCUMENT_ID, created)
+        ActivityScenario.launch<TextNoteActivity>(intent).use { scenario ->
+            compose.onNodeWithText("Start typing").performTextInput("Hello")
+            compose.waitForIdle()
+            scenario.moveToState(Lifecycle.State.CREATED)
+        }
+        val document = store.readDocument()
+        val item = store.readPage(document.pages[0].id).single() as TextItem
+        assertEquals("Hello", item.text)
+    }
+
+    @Test
+    fun theCanvasTileMakesADrawingNote() {
         val monitor = instrumentation.addMonitor(MainActivity::class.java.name, null, true)
         compose.onNodeWithContentDescription("Add").performClick()
         compose.onNodeWithText("Let's get started").assertExists()
@@ -231,7 +288,8 @@ class LibraryScreenTest {
         compose.onNodeWithText("Canvas").performClick()
         compose.waitUntil(TIMEOUT_MS) { monitor.hits == 1 }
         instrumentation.removeMonitor(monitor)
-        assertEquals(DocumentKind.CANVAS, library()!!.entries.first { it.document != null }.document!!.kind)
+        // A drawing canvas with pages, not an infinite one.
+        assertEquals(DocumentKind.NOTE, library()!!.entries.first { it.document != null }.document!!.kind)
         compose.onNodeWithText("Let's get started").assertDoesNotExist()
     }
 

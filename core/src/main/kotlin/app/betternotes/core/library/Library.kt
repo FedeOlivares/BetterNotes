@@ -121,6 +121,10 @@ class Library(entries: Collection<LibraryEntry> = emptyList()) {
         }
     }
 
+    /** The folders from the top of the library down to [folderId], for its breadcrumb. */
+    fun pathTo(folderId: Long): List<LibraryEntry> =
+        generateSequence(byId[folderId]) { entry -> entry.parentId?.let { byId[it] } }.toList().asReversed()
+
     fun lastActivityMs(entry: LibraryEntry): Long = lastActivity[entry.id] ?: entry.modifiedAtMs
 
     fun plus(entry: LibraryEntry) = Library(byId.values + entry)
@@ -144,10 +148,11 @@ class Library(entries: Collection<LibraryEntry> = emptyList()) {
         return true
     }
 
-    /** The folders [id] can move to, by name. */
-    fun moveTargets(id: Long): List<LibraryEntry> =
-        byId.values.filter { it.isFolder && it.id != byId[id]?.parentId && canMove(id, it.id) }
-            .sortedBy { foldForSearch(it.name) }
+    /** The folders all of [ids] can move to, by name. */
+    fun moveTargets(ids: Collection<Long>): List<LibraryEntry> =
+        byId.values.filter { folder ->
+            folder.isFolder && ids.all { folder.id != byId[it]?.parentId && canMove(it, folder.id) }
+        }.sortedBy { foldForSearch(it.name) }
 
     fun moved(id: Long, folderId: Long?): Library {
         require(canMove(id, folderId)) { "Cannot move $id into $folderId" }

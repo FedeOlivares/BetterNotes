@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -56,19 +59,25 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.betternotes.R
+import app.betternotes.canvas.physicalDpi
 import app.betternotes.core.library.Library
 import app.betternotes.core.library.LibraryEntry
 import app.betternotes.core.library.LibrarySort
 import app.betternotes.core.library.LibraryView
+import app.betternotes.library.LibraryLayout
 import app.betternotes.library.LibraryPreferences
 import app.betternotes.library.LibraryRepository
 import app.betternotes.pdf.PdfImportResult
+import app.betternotes.settings.SettingsRepository
+import app.betternotes.ui.settings.SettingsScreen
+import app.betternotes.ui.settings.SettingsTheme
 import app.betternotes.ui.theme.AppColors
 import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.ThemeMode
@@ -85,12 +94,16 @@ private val HeaderHeight = 324.dp
 private val Top = LibraryView.InFolder(null)
 
 private const val LATE_NIGHT_END_HOUR = 5
+private const val BREADCRUMB_FOLDERS = 3
+
+private val BreadcrumbMaxWidth = 620.dp
+private val RowGap = 12.dp
 
 /** Everything a tile or menu can ask for that needs a dialog first. */
 private sealed interface PendingDialog {
     data object NewFolder : PendingDialog
     class Rename(val entry: LibraryEntry) : PendingDialog
-    class Move(val entry: LibraryEntry) : PendingDialog
+    class Move(val ids: Set<Long>) : PendingDialog
     class Tags(val entry: LibraryEntry) : PendingDialog
     class DeleteForever(val entry: LibraryEntry) : PendingDialog
     data object EmptyBin : PendingDialog
@@ -123,9 +136,12 @@ private val ViewSaver = Saver<LibraryView, String>(
 internal fun LibraryScreen(
     repository: LibraryRepository,
     preferences: LibraryPreferences,
+    settings: SettingsRepository,
     onOpenDocument: (id: Long, startAction: String?) -> Unit,
 ) {
     val colors = LocalAppColors.current
+    var showingSettings by rememberSaveable { mutableStateOf(false) }
+    var selection by remember { mutableStateOf<Set<Long>?>(null) }
     val library by repository.library.collectAsStateWithLifecycle()
     var shelf by rememberSaveable(stateSaver = ViewSaver) { mutableStateOf<LibraryView>(Top) }
     var query by rememberSaveable { mutableStateOf<String?>(null) }
@@ -150,8 +166,11 @@ internal fun LibraryScreen(
     }
 
     val view = query?.let { LibraryView.Search(it) } ?: shelf
-    BackHandler(view != Top) {
+    // Whatever was selected belongs to the items being shown.
+    LaunchedEffect(view) { selection = null }
+    BackHandler(view != Top || selection != null) {
         when {
+            selection != null -> selection = null
             query != null -> query = null
             shelf is LibraryView.InFolder -> shelf = LibraryView.InFolder(openFolder?.parentId)
             else -> shelf = Top
@@ -165,6 +184,7 @@ internal fun LibraryScreen(
     BackHandler(adding) { adding = false }
     val flows = rememberNewItemActions(
         repository,
+        settings,
         folderForNewItems,
         onOpenDocument,
         onNewFolder = { dialog = PendingDialog.NewFolder },
@@ -185,8 +205,9 @@ internal fun LibraryScreen(
         val entries = remember(current, view, preferences.sort) {
             current?.list(view, preferences.sort).orEmpty()
         }
+        val listed = preferences.layout == LibraryLayout.LIST
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(MinCardWidth),
+            columns = if (listed) GridCells.Fixed(1) else GridCells.Adaptive(MinCardWidth),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
             contentPadding = PaddingValues(
                 start = SideMargin,
@@ -198,7 +219,6 @@ internal fun LibraryScreen(
             item(span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
                 Header(
                     shelf = shelf,
-                    openFolder = openFolder,
                     query = query,
                     onQuery = { query = it },
                     onShelf = {
@@ -208,33 +228,51 @@ internal fun LibraryScreen(
                     library = current,
                     preferences = preferences,
                     onEmptyBin = { dialog = PendingDialog.EmptyBin },
-                    onChangeName = { dialog = PendingDialog.AskName },
+                    onSelect = { selection = emptySet() },
+                    onSettings = { showingSettings = true },
                     nowMs = nowMs,
                 )
             }
-            items(entries, key = { it.id }, contentType = { it.isFolder }) { entry ->
+            items(entries, key = { it.id }, contentType = { if (listed) "row" else it.isFolder }) { entry ->
                 val inBin = view == LibraryView.Bin
                 val actions: @Composable () -> List<CardAction> = {
                     cardActions(entry, inBin, repository) { dialog = it }
                 }
-                Box(Modifier.padding(bottom = CardGap)) {
+                val picked = selection?.let { entry.id in it }
+                val open = {
+                    val chosen = selection
+                    when {
+                        chosen != null -> selection = if (entry.id in chosen) chosen - entry.id else chosen + entry.id
+                        inBin -> Unit
+                        entry.isFolder -> {
+                            query = null
+                            shelf = LibraryView.InFolder(entry.id)
+                        }
+                        else -> onOpenDocument(entry.id, null)
+                    }
+                }
+                val count = current?.itemCount(entry.id) ?: 0
+                Box(Modifier.padding(bottom = if (listed) RowGap else CardGap)) {
                     val info = entry.document
-                    if (info != null) {
-                        DocumentCard(entry, info, nowMs, repository.thumbnails, actions) {
-                            if (!inBin) onOpenDocument(entry.id, null)
-                        }
-                    } else {
-                        FolderCard(entry, current?.itemCount(entry.id) ?: 0, actions) {
-                            if (!inBin) {
-                                query = null
-                                shelf = LibraryView.InFolder(entry.id)
-                            }
-                        }
+                    when {
+                        listed -> LibraryRow(entry, count, nowMs, repository.thumbnails, picked, actions, open)
+                        info != null -> DocumentCard(entry, info, nowMs, repository.thumbnails, picked, actions, open)
+                        else -> FolderCard(entry, count, picked, actions, open)
                     }
                 }
             }
         }
         BottomScrim(colors, Modifier.align(Alignment.BottomCenter))
+        selection?.let { chosen ->
+            SelectionBar(
+                chosen,
+                view == LibraryView.Bin,
+                repository,
+                onMove = { dialog = PendingDialog.Move(chosen) },
+                onDone = { selection = null },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 17.dp),
+            )
+        }
         HomePill(
             selected = view == Top,
             onClick = {
@@ -256,7 +294,17 @@ internal fun LibraryScreen(
         )
     }
 
-    ShowDialog(dialog, library, repository, preferences, folderForNewItems, flows.importPdfWithPassword) { dialog = null }
+    ShowDialog(dialog, library, repository, preferences, folderForNewItems, flows.importPdfWithPassword) {
+        dialog = null
+        // A move ends the selection it was made for.
+        if (selection?.isNotEmpty() == true) selection = null
+    }
+    if (showingSettings) {
+        val current by settings.settings.collectAsStateWithLifecycle()
+        SettingsTheme(preferences.theme == ThemeMode.DARK) {
+            SettingsScreen(current, physicalDpi(context), settings::update, { showingSettings = false })
+        }
+    }
 }
 
 @Composable
@@ -292,10 +340,10 @@ private fun ShowDialog(
             onDismiss = dismiss,
         )
         is PendingDialog.Move -> MoveDialog(
-            canMoveToTop = pending.entry.parentId != null,
-            targets = library?.moveTargets(pending.entry.id).orEmpty(),
-            onMove = {
-                repository.move(pending.entry.id, it)
+            canMoveToTop = pending.ids.any { library?.get(it)?.parentId != null },
+            targets = library?.moveTargets(pending.ids).orEmpty(),
+            onMove = { folder ->
+                pending.ids.forEach { repository.move(it, folder) }
                 dismiss()
             },
             onDismiss = dismiss,
@@ -367,7 +415,7 @@ private fun cardActions(
         CardAction(stringResource(R.string.library_rename)) { ask(PendingDialog.Rename(entry)) },
         CardAction(stringResource(star)) { repository.setStarred(entry.id, !entry.starred) },
         CardAction(stringResource(R.string.library_tags)) { ask(PendingDialog.Tags(entry)) },
-        CardAction(stringResource(R.string.library_move_to)) { ask(PendingDialog.Move(entry)) },
+        CardAction(stringResource(R.string.library_move_to)) { ask(PendingDialog.Move(setOf(entry.id))) },
         CardAction(stringResource(R.string.library_move_to_bin)) { repository.trash(entry.id) },
     )
 }
@@ -376,55 +424,20 @@ private fun cardActions(
 @Composable
 private fun Header(
     shelf: LibraryView,
-    openFolder: LibraryEntry?,
     query: String?,
     onQuery: (String?) -> Unit,
     onShelf: (LibraryView) -> Unit,
     library: Library?,
     preferences: LibraryPreferences,
     onEmptyBin: () -> Unit,
-    onChangeName: () -> Unit,
+    onSelect: () -> Unit,
+    onSettings: () -> Unit,
     nowMs: Long,
 ) {
     val colors = LocalAppColors.current
     Box(Modifier.fillMaxWidth().height(HeaderHeight)) {
-        if (openFolder != null) {
-            FolderTitle(openFolder.name) { onShelf(LibraryView.InFolder(openFolder.parentId)) }
-        } else {
-            Text(
-                greeting(preferences.userName, nowMs),
-                color = colors.greeting,
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 41.sp,
-                lineHeight = 56.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.offset(y = 144.dp),
-            )
-            Text(
-                stringResource(if (isLateNight(nowMs)) R.string.library_subtitle_night else R.string.library_subtitle),
-                color = colors.subtitle,
-                fontSize = 18.sp,
-                lineHeight = 24.sp,
-                letterSpacing = 0.05.em,
-                maxLines = 1,
-                modifier = Modifier.offset(y = 206.dp),
-            )
-        }
-        SearchControl(query, onQuery, Modifier.align(Alignment.TopEnd).offset(y = 62.dp))
-        FilterRow(shelf, query != null, onShelf, library, Modifier.offset(y = 257.dp))
-        OptionsMenu(shelf, preferences, onEmptyBin, onChangeName, Modifier.align(Alignment.TopEnd).offset(x = (-11).dp, y = 257.dp))
-    }
-}
-
-@Composable
-private fun FolderTitle(name: String, onBack: () -> Unit) {
-    val colors = LocalAppColors.current
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.offset(y = 144.dp)) {
-        IconButton(LibraryIcons.Back, stringResource(R.string.library_back), colors.greeting, 44.dp, onBack)
         Text(
-            name,
+            greeting(preferences.userName, nowMs),
             color = colors.greeting,
             fontFamily = FontFamily.Serif,
             fontWeight = FontWeight.SemiBold,
@@ -432,7 +445,26 @@ private fun FolderTitle(name: String, onBack: () -> Unit) {
             lineHeight = 56.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(start = 8.dp, end = 80.dp),
+            modifier = Modifier.offset(y = 144.dp),
+        )
+        Text(
+            stringResource(if (isLateNight(nowMs)) R.string.library_subtitle_night else R.string.library_subtitle),
+            color = colors.subtitle,
+            fontSize = 18.sp,
+            lineHeight = 24.sp,
+            letterSpacing = 0.05.em,
+            maxLines = 1,
+            modifier = Modifier.offset(y = 206.dp),
+        )
+        SearchControl(query, onQuery, Modifier.align(Alignment.TopEnd).offset(y = 62.dp))
+        FilterRow(shelf, query != null, onShelf, library, Modifier.offset(y = 257.dp))
+        OptionsMenu(
+            shelf,
+            preferences,
+            onEmptyBin,
+            onSelect,
+            onSettings,
+            Modifier.align(Alignment.TopEnd).offset(x = (-11).dp, y = 257.dp),
         )
     }
 }
@@ -498,19 +530,25 @@ private fun FilterRow(
     var tagsOpen by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.height(49.dp)) {
         val allSelected = !searching && shelf is LibraryView.InFolder
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(88.dp, 49.dp)
-                .clip(RoundedCornerShape(25.dp))
-                .then(if (allSelected) Modifier.background(colors.accentContainer) else Modifier)
-                .clickable { onShelf(Top) },
-        ) {
-            Text(
-                stringResource(R.string.library_filter_all),
-                color = if (allSelected) colors.onAccentContainer else colors.icon,
-                fontSize = 20.sp,
-            )
+        val folderId = (shelf as? LibraryView.InFolder)?.id
+        val path = if (!searching && folderId != null) library?.pathTo(folderId).orEmpty() else emptyList()
+        if (path.isNotEmpty()) {
+            Breadcrumb(path, onShelf)
+        } else {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(88.dp, 49.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .then(if (allSelected) Modifier.background(colors.accentContainer) else Modifier)
+                    .clickable { onShelf(Top) },
+            ) {
+                Text(
+                    stringResource(R.string.library_filter_all),
+                    color = if (allSelected) colors.onAccentContainer else colors.icon,
+                    fontSize = 20.sp,
+                )
+            }
         }
         FilterIcon(LibraryIcons.Star, R.string.library_filter_starred, !searching && shelf == LibraryView.Starred) {
             onShelf(LibraryView.Starred)
@@ -540,6 +578,40 @@ private fun FilterRow(
     }
 }
 
+/** Inside a folder, in place of "All": a house, then each folder down to this one. */
+@Composable
+private fun Breadcrumb(path: List<LibraryEntry>, onShelf: (LibraryView) -> Unit) {
+    val colors = LocalAppColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .height(49.dp)
+            .widthIn(max = BreadcrumbMaxWidth)
+            .clip(RoundedCornerShape(25.dp))
+            .background(colors.accentContainer)
+            .padding(horizontal = 14.dp),
+    ) {
+        Icon(
+            LibraryIcons.Home,
+            stringResource(R.string.library_home),
+            tint = colors.onAccentContainer,
+            modifier = Modifier.size(28.dp).clip(CircleShape).clickable { onShelf(Top) },
+        )
+        // A deep path keeps its last folders, which are the ones that say where this is.
+        for (folder in path.takeLast(BREADCRUMB_FOLDERS)) {
+            Icon(LibraryIcons.Chevron, null, tint = colors.onAccentContainer, modifier = Modifier.padding(horizontal = 4.dp).size(20.dp))
+            Text(
+                folder.name,
+                color = colors.onAccentContainer,
+                fontSize = 20.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).clickable { onShelf(LibraryView.InFolder(folder.id)) },
+            )
+        }
+    }
+}
+
 @Composable
 private fun FilterIcon(icon: ImageVector, label: Int, selected: Boolean, onClick: () -> Unit) {
     val colors = LocalAppColors.current
@@ -561,55 +633,150 @@ private fun FilterIcon(icon: ImageVector, label: Int, selected: Boolean, onClick
     }
 }
 
-/** No screenshot shows what the reference's circled "..." holds, so this is a plain stand-in. */
+/** Measured from `... on home.jpg`. Settings is added, since the avatar that led there is gone. */
 @Composable
 private fun OptionsMenu(
     shelf: LibraryView,
     preferences: LibraryPreferences,
     onEmptyBin: () -> Unit,
-    onChangeName: () -> Unit,
+    onSelect: () -> Unit,
+    onSettings: () -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalAppColors.current
     var open by remember { mutableStateOf(false) }
+    fun choose(action: () -> Unit): () -> Unit = {
+        open = false
+        action()
+    }
     Box(modifier) {
         IconButton(LibraryIcons.MoreCircled, stringResource(R.string.library_options), colors.strongIcon, 49.dp) {
             open = true
         }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        DropdownMenu(
+            expanded = open,
+            onDismissRequest = { open = false },
+            offset = DpOffset(19.dp, 26.dp),
+            shape = RoundedCornerShape(24.dp),
+            containerColor = colors.surface,
+            modifier = Modifier.width(274.dp),
+        ) {
+            OptionRow(LibraryIcons.CheckCircle, stringResource(R.string.library_select), onClick = choose(onSelect))
+            OptionDivider()
+            val grid = preferences.layout == LibraryLayout.GRID
+            OptionRow(
+                LibraryIcons.GridView,
+                stringResource(R.string.library_grid),
+                chosen = grid,
+                onClick = choose { preferences.updateLayout(LibraryLayout.GRID) },
+            )
+            OptionRow(
+                LibraryIcons.ListView,
+                stringResource(R.string.library_list),
+                chosen = !grid,
+                onClick = choose { preferences.updateLayout(LibraryLayout.LIST) },
+            )
+            OptionDivider()
             val byName = preferences.sort == LibrarySort.NAME
-            DropdownMenuItem(
-                text = { Text(stringResource(if (byName) R.string.library_sort_by_date else R.string.library_sort_by_name)) },
-                onClick = {
-                    open = false
-                    preferences.updateSort(if (byName) LibrarySort.MODIFIED else LibrarySort.NAME)
-                },
+            OptionRow(
+                LibraryIcons.SortDown,
+                stringResource(R.string.library_sort_by),
+                detail = stringResource(if (byName) R.string.library_sort_name else R.string.library_sort_modified),
+                onClick = choose { preferences.updateSort(if (byName) LibrarySort.MODIFIED else LibrarySort.NAME) },
             )
-            val dark = preferences.theme == ThemeMode.DARK
-            DropdownMenuItem(
-                text = { Text(stringResource(if (dark) R.string.library_theme_light else R.string.library_theme_dark)) },
-                onClick = {
-                    open = false
-                    preferences.updateTheme(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.library_change_name)) },
-                onClick = {
-                    open = false
-                    onChangeName()
-                },
-            )
+            OptionDivider()
             if (shelf == LibraryView.Bin) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.library_empty_bin)) },
-                    onClick = {
-                        open = false
-                        onEmptyBin()
-                    },
-                )
+                OptionRow(LibraryIcons.Bin, stringResource(R.string.library_empty_bin), onClick = choose(onEmptyBin))
+            }
+            OptionRow(LibraryIcons.Settings, stringResource(R.string.library_settings), onClick = choose(onSettings))
+        }
+    }
+}
+
+@Composable
+private fun OptionRow(
+    icon: ImageVector,
+    label: String,
+    detail: String? = null,
+    chosen: Boolean = false,
+    onClick: () -> Unit,
+) {
+    val colors = LocalAppColors.current
+    val tint = if (chosen) colors.onRaisedAccent else colors.title
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(if (detail == null) 58.dp else 66.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
+        Column(Modifier.padding(start = 16.dp).weight(1f)) {
+            Text(label, color = tint, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            if (detail != null) Text(detail, color = colors.subtitle, fontSize = 16.sp, maxLines = 1)
+        }
+        if (chosen) Icon(LibraryIcons.Check, null, tint = tint, modifier = Modifier.size(24.dp))
+    }
+}
+
+@Composable
+private fun OptionDivider() {
+    Box(
+        Modifier
+            .padding(horizontal = 14.dp)
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(LocalAppColors.current.border),
+    )
+}
+
+/** No screenshot shows selecting, so this is a plain bar. */
+@Composable
+private fun SelectionBar(
+    chosen: Set<Long>,
+    inBin: Boolean,
+    repository: LibraryRepository,
+    onMove: () -> Unit,
+    onDone: () -> Unit,
+    modifier: Modifier,
+) {
+    val colors = LocalAppColors.current
+    val onAll = { action: (Long) -> Unit ->
+        chosen.forEach(action)
+        onDone()
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .height(66.dp)
+            .clip(RoundedCornerShape(33.dp))
+            .background(colors.surface)
+            .border(1.5.dp, colors.pillBorder, RoundedCornerShape(33.dp))
+            .padding(horizontal = 12.dp),
+    ) {
+        Text(
+            stringResource(R.string.library_selected_count, chosen.size),
+            color = colors.title,
+            fontSize = 19.sp,
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp),
+        )
+        if (chosen.isNotEmpty()) {
+            if (inBin) {
+                IconButton(LibraryIcons.Back, stringResource(R.string.library_restore), colors.title, 52.dp) {
+                    onAll(repository::restore)
+                }
+            } else {
+                IconButton(LibraryIcons.Star, stringResource(R.string.library_star), colors.title, 52.dp) {
+                    onAll { repository.setStarred(it, true) }
+                }
+                IconButton(LibraryIcons.Folder, stringResource(R.string.library_move_to), colors.title, 52.dp, onMove)
+                IconButton(LibraryIcons.Bin, stringResource(R.string.library_move_to_bin), colors.title, 52.dp) {
+                    onAll(repository::trash)
+                }
             }
         }
+        IconButton(LibraryIcons.Close, stringResource(R.string.library_end_selection), colors.title, 52.dp, onDone)
     }
 }
 

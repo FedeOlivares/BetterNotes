@@ -8,10 +8,13 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
+import app.betternotes.core.model.DocumentKind
 import app.betternotes.library.LibraryPreferences
 import app.betternotes.library.LibraryRepository
+import app.betternotes.settings.SettingsRepository
 import app.betternotes.ui.MainActivity
 import app.betternotes.ui.requestHighestRefreshRate
+import app.betternotes.ui.text.TextNoteActivity
 import app.betternotes.ui.theme.AppTheme
 import app.betternotes.ui.theme.ReferenceScale
 import app.betternotes.ui.theme.ThemeMode
@@ -23,7 +26,8 @@ class LibraryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestHighestRefreshRate()
-        val preferences = LibraryPreferences(this)
+        val preferences = LibraryPreferences.get(this)
+        val settings = SettingsRepository(this)
         setContent {
             val mode = preferences.theme
             LaunchedEffect(mode) {
@@ -36,7 +40,7 @@ class LibraryActivity : ComponentActivity() {
             }
             AppTheme(mode) {
                 ReferenceScale {
-                    LibraryScreen(repository, preferences, ::openDocument)
+                    LibraryScreen(repository, preferences, settings, ::openDocument)
                 }
             }
         }
@@ -49,6 +53,10 @@ class LibraryActivity : ComponentActivity() {
     }
 
     private fun openDocument(id: Long, startAction: String?) {
+        if (repository.library.value?.get(id)?.document?.kind == DocumentKind.TEXT) {
+            startActivity(Intent(this, TextNoteActivity::class.java).putExtra(TextNoteActivity.EXTRA_DOCUMENT_ID, id))
+            return
+        }
         startActivity(
             Intent(this, MainActivity::class.java)
                 .putExtra(MainActivity.EXTRA_DOCUMENT_ID, id)

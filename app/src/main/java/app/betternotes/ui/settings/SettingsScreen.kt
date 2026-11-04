@@ -55,6 +55,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.library.LibraryPreferences
+import app.betternotes.ui.library.TextDialog
+import app.betternotes.ui.theme.AppLanguage
+import app.betternotes.ui.theme.ThemeMode
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.settings.AppSettings
 import app.betternotes.core.settings.EditorAction
@@ -138,6 +142,7 @@ private fun SettingsPageFrame(title: String, onBack: () -> Unit, modifier: Modif
 @Composable
 private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSettings) -> Unit, open: (SettingsPage) -> Unit) {
     val canvas = settings.canvas
+    GeneralCard()
     SettingsCard {
         CardTitle(stringResource(R.string.settings_notes))
         DropdownRow(
@@ -165,6 +170,44 @@ private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
     HandwritingCard()
     StorageCard()
     Spacer(Modifier.height(12.dp))
+}
+
+/** No screenshot shows these, since Notewise's account screen held them. They share its cards' style. */
+@Composable
+private fun GeneralCard() {
+    val context = LocalContext.current
+    val preferences = remember { LibraryPreferences.get(context) }
+    var askingName by remember { mutableStateOf(false) }
+    val darkLabel = stringResource(R.string.library_theme_dark)
+    val lightLabel = stringResource(R.string.library_theme_light)
+    SettingsCard {
+        CardTitle(stringResource(R.string.library_general))
+        DropdownRow(
+            stringResource(R.string.library_language),
+            AppLanguage.current(context),
+            AppLanguage.entries,
+            { it.nativeName },
+        ) { it.apply(context) }
+        DropdownRow(
+            stringResource(R.string.library_theme),
+            preferences.theme,
+            ThemeMode.entries,
+            { if (it == ThemeMode.DARK) darkLabel else lightLabel },
+        ) { preferences.updateTheme(it) }
+        LinkRow(stringResource(R.string.library_change_name), preferences.userName) { askingName = true }
+    }
+    if (askingName) {
+        TextDialog(
+            stringResource(R.string.library_ask_name),
+            initial = preferences.userName.orEmpty(),
+            confirmLabel = stringResource(R.string.library_save),
+            onConfirm = {
+                preferences.updateUserName(it)
+                askingName = false
+            },
+            onDismiss = { askingName = false },
+        )
+    }
 }
 
 @Composable

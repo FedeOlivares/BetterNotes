@@ -206,9 +206,8 @@ class MainActivity : ComponentActivity() {
         /** The library's id of the document to open. */
         const val EXTRA_DOCUMENT_ID = "document_id"
 
-        /** What the user came to do in a new document, if anything: [START_TYPING] or [START_RECORDING]. */
+        /** What the user came to do in a new document, if anything. So far only [START_RECORDING]. */
         const val EXTRA_START_ACTION = "start_action"
-        const val START_TYPING = "typing"
         const val START_RECORDING = "recording"
 
         /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */

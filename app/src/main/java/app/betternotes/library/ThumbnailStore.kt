@@ -7,6 +7,8 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.util.Log
 import android.util.LruCache
 import androidx.core.graphics.createBitmap
@@ -24,6 +26,7 @@ import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.model.TextItem
 import app.betternotes.core.template.draw
 import app.betternotes.pdf.PdfThumbnails
 import kotlinx.coroutines.Dispatchers
@@ -178,7 +181,7 @@ internal object ThumbnailRenderer {
         sink.flush()
     }
 
-    /** Only ink and pictures for now. New item types need adding here as well as in the canvas's painter. */
+    /** Only ink, pictures and typed text for now. New item types need adding here as well as in the canvas's painter. */
     private fun drawItems(canvas: Canvas, store: DocumentStore, items: List<PageItem>, scale: Float) {
         val renderer = CanvasStrokeRenderer.create()
         val strokeToBitmap = Matrix().apply { setScale(scale, scale) }
@@ -186,9 +189,20 @@ internal object ThumbnailRenderer {
             when (item) {
                 is StrokeItem -> renderer.draw(canvas, item.toInkStroke(), strokeToBitmap)
                 is ImageItem -> drawImage(canvas, store, item, scale)
+                is TextItem -> drawText(canvas, item)
                 else -> Unit
             }
         }
+    }
+
+    private fun drawText(canvas: Canvas, item: TextItem) {
+        val frame = item.frame
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = item.color
+            textSize = item.textSize
+        }
+        val layout = StaticLayout.Builder.obtain(item.text, 0, item.text.length, paint, frame.width.toInt().coerceAtLeast(1)).build()
+        canvas.withTranslation(frame.left, frame.top) { layout.draw(this) }
     }
 
     private fun drawImage(canvas: Canvas, store: DocumentStore, item: ImageItem, scale: Float) {

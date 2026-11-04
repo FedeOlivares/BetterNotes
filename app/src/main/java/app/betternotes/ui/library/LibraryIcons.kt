@@ -77,6 +77,14 @@ internal object LibraryIcons {
         "folder",
         outline = "M3.5 7a2 2 0 0 1 2-2h4.2l2.3 2.5h6.500a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z",
     )
+    val CheckCircle = icon("checkCircle", outline = "M12 3.200a8.800 8.800 0 1 0 0 17.600a8.800 8.800 0 0 0 0-17.600zM8 12.300l2.800 2.800 5.200-5.600")
+    val EmptyCircle = icon("emptyCircle", outline = "M12 3.200a8.800 8.800 0 1 0 0 17.600a8.800 8.800 0 0 0 0-17.600z")
+    val Check = icon("check", outline = "M4.500 12.800l5 5 10-11")
+    val GridView = icon("grid", outline = "M4.500 5h15a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3.500 12h17M9.300 5v14M14.700 5v14")
+    val ListView = icon("list", outline = "M8.500 6h12M8.500 12h12M8.500 18h12", filled = dot(4.500f, 6f, 1.200f) + dot(4.500f, 12f, 1.200f) + dot(4.500f, 18f, 1.200f))
+    val SortDown = icon("sortDown", outline = "M12 4v16M6.500 14.500L12 20l5.500-5.500")
+    val Settings = icon("settings", outline = "M12 2.800l8 4.600v9.200l-8 4.600-8-4.600V7.400zM12 8.800a3.200 3.200 0 1 0 0 6.400a3.200 3.200 0 0 0 0-6.400z")
+    val Chevron = icon("chevron", outline = "M9.500 6l6 6-6 6")
     val MoreCircled = icon(
         "more",
         outline = "M12 3.2a8.8 8.8 0 1 0 0 17.6a8.8 8.8 0 0 0 0-17.6z",

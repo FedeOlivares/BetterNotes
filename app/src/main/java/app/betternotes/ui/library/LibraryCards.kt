@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +54,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private val CardShape = RoundedCornerShape(25.dp)
+private val RowShape = RoundedCornerShape(18.dp)
 private val HeaderHeight = 92.dp
 private const val CARD_RATIO = 319f / 320f
 private const val DAYS_SHOWN_BY_NAME = 7L
@@ -65,6 +68,7 @@ internal fun DocumentCard(
     info: DocumentInfo,
     nowMs: Long,
     thumbnails: ThumbnailStore,
+    selected: Boolean?,
     actions: @Composable () -> List<CardAction>,
     onClick: () -> Unit,
 ) {
@@ -96,17 +100,21 @@ internal fun DocumentCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 14.dp, top = 37.dp, end = 44.dp),
             )
-            CardMenu(actions, colors.secondaryText, Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 4.dp))
+            if (selected == null) {
+                CardMenu(actions, colors.secondaryText, Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 4.dp))
+            }
         }
         Thumbnail(entry.id, info, thumbnails, Modifier.fillMaxWidth().weight(1f))
     }
     CardBorder()
+    SelectionMark(selected)
 }
 
 @Composable
 internal fun FolderCard(
     entry: LibraryEntry,
     itemCount: Int,
+    selected: Boolean?,
     actions: @Composable () -> List<CardAction>,
     onClick: () -> Unit,
 ) {
@@ -126,7 +134,9 @@ internal fun FolderCard(
             lineHeight = 20.sp,
             modifier = Modifier.padding(start = 14.dp, top = 17.dp),
         )
-        CardMenu(actions, colors.folderDots, Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp))
+        if (selected == null) {
+            CardMenu(actions, colors.folderDots, Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp))
+        }
         Text(
             entry.name,
             color = colors.folderText,
@@ -136,6 +146,60 @@ internal fun FolderCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.align(Alignment.BottomStart).padding(start = 19.dp, end = 19.dp, bottom = 19.dp),
+        )
+    }
+    SelectionMark(selected)
+}
+
+/** The rows of the list layout. No screenshot shows them, so they borrow the quick switcher's look. */
+@Composable
+internal fun LibraryRow(
+    entry: LibraryEntry,
+    itemCount: Int,
+    nowMs: Long,
+    thumbnails: ThumbnailStore,
+    selected: Boolean?,
+    actions: @Composable () -> List<CardAction>,
+    onClick: () -> Unit,
+) {
+    val colors = LocalAppColors.current
+    val info = entry.document
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(92.dp)
+            .clip(RowShape)
+            .background(if (selected == true) colors.accentContainer else colors.surface)
+            .clickable(onClick = onClick)
+            .padding(start = 12.dp, end = 8.dp),
+    ) {
+        val pictureModifier = Modifier.size(68.dp).clip(RoundedCornerShape(10.dp))
+        if (info != null) Thumbnail(entry.id, info, thumbnails, pictureModifier) else FolderArt(pictureModifier)
+        Column(Modifier.padding(start = 16.dp).weight(1f)) {
+            Text(entry.name, color = colors.title, fontSize = 19.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (info != null) formatDate(entry.modifiedAtMs, nowMs) else pluralStringResource(R.plurals.library_folder_items, itemCount, itemCount),
+                color = colors.secondaryText,
+                fontSize = 16.sp,
+                maxLines = 1,
+            )
+        }
+        if (selected == null) CardMenu(actions, colors.secondaryText, Modifier)
+    }
+}
+
+/** No screenshot shows selecting, so this is a plain mark. [selected] is null when not selecting. */
+@Composable
+private fun SelectionMark(selected: Boolean?) {
+    if (selected == null) return
+    val colors = LocalAppColors.current
+    Box(Modifier.fillMaxWidth().aspectRatio(CARD_RATIO).then(if (selected) Modifier.border(3.dp, colors.accent, CardShape) else Modifier)) {
+        Icon(
+            if (selected) LibraryIcons.CheckCircle else LibraryIcons.EmptyCircle,
+            null,
+            tint = if (selected) colors.accent else colors.secondaryText,
+            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).size(32.dp),
         )
     }
 }

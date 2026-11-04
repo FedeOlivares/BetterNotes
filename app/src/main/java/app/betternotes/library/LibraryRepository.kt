@@ -78,9 +78,9 @@ class LibraryRepository private constructor(context: Context) {
         Document.newNote(title, PageSize.A4, newPageBackground(), now)
     }
 
-    /** Creates an infinite canvas, and passes its id on once it is on the disk. */
-    fun createCanvas(title: String, folderId: Long?, onCreated: (Long) -> Unit) = create(folderId, onCreated) { now ->
-        Document.newCanvas(title, newPageBackground(), now)
+    /** Creates a typed notebook, and passes its id on once it is on the disk. */
+    fun createText(title: String, folderId: Long?, onCreated: (Long) -> Unit) = create(folderId, onCreated) { now ->
+        Document.newText(title, PageSize.A4, PageBackground(), now)
     }
 
     fun createFolder(name: String, parentId: Long?) {

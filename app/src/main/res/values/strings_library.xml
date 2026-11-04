@@ -7,7 +7,7 @@
     <string name="library_today">Today, %1$s</string>
     <string name="library_greeting_named">%1$s, %2$s</string>
     <string name="library_ask_name">What should we call you?</string>
-    <string name="library_change_name">Change name</string>
+    <string name="library_change_name">Your name</string>
     <string name="library_subtitle">A moment to gather your thoughts.</string>
     <plurals name="library_folder_items">
         <item quantity="one">%d item</item>
@@ -20,10 +20,20 @@
     <string name="library_filter_bin">Bin</string>
     <string name="library_no_tags">No tags yet</string>
     <string name="library_options">Options</string>
-    <string name="library_sort_by_name">Sort by name</string>
-    <string name="library_sort_by_date">Sort by date</string>
-    <string name="library_theme_light">Light theme</string>
-    <string name="library_theme_dark">Dark theme</string>
+    <string name="library_select">Select</string>
+    <string name="library_selected_count">%1$d selected</string>
+    <string name="library_end_selection">End selection</string>
+    <string name="library_grid">Grid</string>
+    <string name="library_list">List</string>
+    <string name="library_sort_by">Sort by</string>
+    <string name="library_sort_modified">Last modified</string>
+    <string name="library_sort_name">Name</string>
+    <string name="library_settings">Settings</string>
+    <string name="library_theme">Theme</string>
+    <string name="library_theme_dark">Dark</string>
+    <string name="library_theme_light">Light</string>
+    <string name="library_language">Language</string>
+    <string name="library_general">General</string>
     <string name="library_empty_bin">Empty bin</string>
     <string name="library_empty_bin_confirm">Delete everything in the bin for good?</string>
     <string name="library_search">Search</string>
@@ -47,7 +57,6 @@
     <string name="library_new_folder_row">Folder</string>
     <string name="library_new_folder">New folder</string>
     <string name="library_import_pdf">Import PDF</string>
-    <string name="library_new_note_name">New note %1$s</string>
     <string name="library_import_failed">Could not import that file</string>
     <string name="library_no_camera">The camera needs permission to take a photo</string>
     <string name="library_pdf_password">This PDF needs a password</string>
@@ -65,4 +74,6 @@
     <string name="library_create">Create</string>
     <string name="library_save">Save</string>
     <string name="library_cancel">Cancel</string>
+    <string name="text_note_title">Title</string>
+    <string name="text_note_body">Start typing</string>
 </resources>
