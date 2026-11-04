@@ -108,12 +108,12 @@
 - **Themes:** light and dark, with dark as the default. No light-mode reference screenshots exist.
 
 ### Decided by the owner (2026-11-04)
-- **Handwriting model download:** a one-time download of the ML Kit Digital Ink models for English and Spanish (about 20 MB each) is accepted. It is the only exception to "nothing online", and it needs the internet permission, which the app does not request yet.
+- **Handwriting model download:** a one-time download of the ML Kit Digital Ink models for English and Spanish (about 20 MB each) is accepted. It is the only exception to "nothing online". If the models ever go missing, the app reports it and does not download them again by itself.
 - **Greeting:** the app asks for a name only, and the library greeting uses it.
 - **`minSdk`:** stays at 35. The owner's tablet runs Android 16 (API 36), which meets it.
 
 ### Still to verify
-- ML Kit's docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Test recognition with no connection once the models are downloaded.
+- That recognition works on the Pad 7 with no network: run `.\scripts\verify-handwriting-offline.ps1 -Serial <serial>`. On an x86_64 emulator (API 37) it worked in airplane mode and with no `INTERNET` permission, with the models surviving that update and 0 bytes of the app's traffic while recognizing. `TrafficStats` sees only the app's own traffic, not Google Play services'.
 
 ## 4. UI reference
 Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
@@ -183,7 +183,7 @@ Checked on 2026-11-03.
 - Android 16 (API 36), HyperOS `OS3.0.304.0.WOZMIXM`.
 - Display 2136 x 3200, density bucket 440. It reports xdpi 332.441 and ydpi 340.511.
 - It lists refresh rates of 30, 48, 50, 60, 90, 120 and 144 Hz. That list doesn't show what the app actually gets.
-- The reported dpi average about 336.5, some 2.5% below the spec's 345 ppi. `CanvasView` uses that average, so real size may come out about 2.5% small. Nobody has measured this on the glass, and a calibration setting would fix it.
+- The reported dpi average about 336.5, some 2.5% below the spec's 345 ppi. `CanvasView` uses that average, so real size may come out about 2.5% small. Nobody has measured this on the glass. `AppSettings.calibration` can correct it, but no screen sets it yet.
 
 ### Real-size implications at 345 ppi
 - 1 cm is about 135.8 px, so A4 width (210 mm) is about 2852 px.
@@ -218,7 +218,8 @@ Location: `D:\code\better-notes`, a local git repository with no remote. **The f
 - All checks (unit tests, lint, debug and release builds): `.\scripts\check.ps1`
 - Core unit tests: `.\gradlew.bat :core:test`
 - Debug APK: `.\gradlew.bat :app:assembleDebug`
-- Canvas tests on a connected device or emulator: `.\gradlew.bat :app:connectedDebugAndroidTest`
+- Device tests on a connected device or emulator: `.\gradlew.bat :app:connectedDebugAndroidTest`. Tests that need the handwriting models skip without them, and the test run uninstalls the app, which deletes them. Add `-Pandroid.testInstrumentationRunnerArguments.downloadInk=true` to fetch them first.
+- Handwriting with no network, and installing the everyday build: `.\scripts\verify-handwriting-offline.ps1 [-Serial <serial>]`
 - Measure on a device: `.\scripts\measure-device.ps1 [-Serial <serial>] [-Strokes 3000] [-HandSeconds 60]`
 
 Toolchain in use: Gradle 9.6.0 with a pinned checksum, AGP 9.5.0, Kotlin 2.4.21, JDK 25 (JBR) targeting Java 17. `local.properties` is git-ignored and holds the SDK path.
@@ -228,7 +229,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 
 ### Files that exist
 - Gradle config and wrapper, `.gitignore`, `.gitattributes`, `scripts/check.ps1`
-- `app/`: the canvas, the measuring tools, and a temporary way in. See "Canvas" below.
+- `app/`: the canvas, the measuring tools, and a temporary way in. See "Canvas" below. Also settings, export and search. See "Settings, export and search" below.
 - `core/` (`app.betternotes.core`), pure Kotlin with JVM tests. See "Core" below.
 - `reference/notewise/`: the owner's screenshots (git-ignored)
 
@@ -240,6 +241,10 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
 - `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
+- Settings, export, search, the model download and calibration have logic and tests but no screens, because no reference screenshots exist. Nothing in the app calls the download yet, except the check script.
+- Search does not cover PDF text yet.
+- Export paints what `PagePainter` paints, so it has the same gap as the canvas: only strokes, paper and templates for now.
+- ML Kit's native libraries make the APK large: about 73 MB for debug and 39 MB for offline, with every ABI included. Only arm64-v8a is needed on the tablet.
 
 ### Core
 - `geometry`: bounds, affine, rotated `Frame`, convex clipping (`Capsule`, `RectClipper`), units, viewport.
@@ -275,6 +280,25 @@ Choices in the canvas that have no reference and may need the owner's input:
 - The infinite canvas stops about 18 m from the origin in each direction, to keep float coordinates accurate at 1500%.
 - The stylus's eraser end erases partially, with a 6 pt radius.
 - Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
+
+### Settings, export and search
+- `core/.../settings`: `AppSettings` (two-finger tap timings, scroll direction, new page defaults, custom layouts, shortcuts, screen calibration), `SettingsCodec` (tagged sections, so a setting can be added without a format version) and `SettingsStore`. The theme is not here: the library keeps it in SharedPreferences. `app/.../settings/SettingsRepository` holds the current value and saves in the background. `CanvasView.applySettings` applies them.
+- Shortcuts: `KeyBindings` maps `EditorAction` to `KeyChord`. `MainActivity.onKeyDown` gets only keys no view took, and passes them to `CanvasView.perform`. That handles undo, redo, zoom, page moves, finger mode and view-only, and returns false for the rest, which the toolbars must handle.
+- `core/.../template`: `PageAppearance` (template kinds, density and line weight, undoable background and custom layout edits) and `CustomLayoutBuilder`.
+- Export: `core/.../export/ExportPlan` holds the math and file names. `app/.../export/DocumentExporter` writes PDFs (vector, one point per point) and PNG or JPEG images (300 dpi by default) from the saved files on a background thread. `NoteEditor.exporter()` saves first.
+- `PagePainter` draws from a `PaintSource`, so that export can use it off the main thread. New item types and PDF backgrounds added there reach exports too, if what they need is on `PaintSource`.
+- Search: `core/.../search` has the `HandwritingRecognizer` interface, `groupInkLines`, `SearchIndex` and `SearchIndexer`, which saves `search.bni` in the document's folder and only recognizes lines that changed. `app/.../search` has `MlKitRecognizer`, `InkModels` and `DocumentSearch`, which refreshes after each save on a low-priority thread.
+- The `offline` build type has no `INTERNET` permission. It uses the same package and key as debug, so it installs over a debug build that has downloaded the models. Debug and profile keep the permission, and so does release, which is not used yet. ML Kit needs the keep rules in `app/proguard-rules.pro`, or minified builds crash at startup.
+- `perf/HandwritingCheck` and `SyntheticInk` run the check script's recognition. The words are drawn by program, so they show the pipeline works, not how well it reads real writing.
+
+Choices here that have no reference and may need the owner's input:
+- All default shortcuts. Single letters choose tools, and Ctrl combinations do the rest.
+- Undo's tap window can be set from 100 to 1000 ms, and the default stays 300 ms.
+- Templates' density can be set from 4 to 96 pt, and line weight from 0.1 to 4 pt.
+- A custom layout resizes the page to its own size, and can't go on a PDF page or a canvas. Changing the template of a PDF page does nothing.
+- An exported canvas shows its items plus a 24 pt margin, and an empty one is left out. Images stop at 64 million pixels, and a canvas larger than a PDF page shrinks to fit.
+- Search needs all the query's words on one line, ignores case and accents, and lets handwriting differ by one letter from 4 letters up, and two from 8 up. Those near matches are flagged `exact = false`.
+- Highlighter strokes, and strokes over 5 times the median height, are not read as writing.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 
