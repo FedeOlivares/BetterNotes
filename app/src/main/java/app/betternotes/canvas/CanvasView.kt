@@ -1942,9 +1942,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         // Everything above the removed line moves down one place.
         val indices = picked.map { inside.indices[it].let { index -> if (index > own) index - 1 else index } }
         val items = picked.map { inside.items[it] }
-        lasso.select(pageIndex, Selection(pageId, indices.toIntArray(), items))
-        onLassoRequested()
-        syncChanges()
+        // The circle turns into marching ants before the selection takes over.
+        val chosen = Selection(pageId, indices.toIntArray(), items)
+        lasso.selectAfterAnts(pageIndex, StrokeGestures.polygon(loop.item.points), chosen) {
+            onLassoRequested()
+            syncChanges()
+        }
         return true
     }
 

@@ -2,6 +2,7 @@ package app.betternotes.canvas
 
 import android.graphics.Canvas
 import android.graphics.DashPathEffect
+import android.os.SystemClock
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -122,9 +123,47 @@ internal class LassoController(
     fun clear() {
         if (drag == Drag.MOVE || drag == Drag.RESIZE || drag == Drag.PARAM) cancel()
         selection = null
+        ants = null
+        antsSelection = null
+        antsDone = null
         drag = Drag.NONE
         polygon.clear()
         redraw()
+    }
+
+    private var ants: FloatArray? = null
+    private var antsStartMs = 0L
+    private var antsSelection: Selection? = null
+    private var antsDone: (() -> Unit)? = null
+
+    /**
+     * Shows the circle that was drawn turning into a marching-ants outline, then selects [selected]
+     * and calls [done]. [polygon] is the circle in page points.
+     */
+    fun selectAfterAnts(pageIndex: Int, polygon: FloatArray, selected: Selection, done: () -> Unit) {
+        this.pageIndex = pageIndex
+        ants = polygon
+        antsStartMs = SystemClock.uptimeMillis()
+        antsSelection = selected
+        antsDone = done
+        drag = Drag.NONE
+        redraw()
+    }
+
+    private fun drawAnts(canvas: Canvas, polygon: FloatArray, elapsedMs: Long) {
+        outline.reset()
+        for (i in polygon.indices step 2) {
+            if (i == 0) outline.moveTo(polygon[i], polygon[i + 1]) else outline.lineTo(polygon[i], polygon[i + 1])
+        }
+        outline.close()
+        outline.transform(pageToScreen)
+        // The line gives way to dashes that run along it.
+        val dash = DASH_DP * density
+        marquee.pathEffect = DashPathEffect(floatArrayOf(dash, dash), elapsedMs * ANT_SPEED_DP_PER_MS * density)
+        marquee.alpha = (255 * (0.4f + 0.6f * (elapsedMs.toFloat() / ANTS_MS).coerceIn(0f, 1f))).toInt()
+        canvas.drawPath(outline, marquee)
+        marquee.alpha = 255
+        marquee.pathEffect = DashPathEffect(floatArrayOf(dash, dash), 0f)
     }
 
     /** Shows [selected], found elsewhere, with its handles. */
@@ -289,6 +328,24 @@ internal class LassoController(
         val scale = viewport.pxPerPt
         pageToScreen.setScale(scale, scale)
         pageToScreen.postTranslate(viewport.toScreenX(pageOriginX(pageIndex)), viewport.toScreenY(pageOriginY(pageIndex)))
+        val walking = ants
+        if (walking != null) {
+            val elapsed = SystemClock.uptimeMillis() - antsStartMs
+            if (elapsed < ANTS_MS) {
+                drawAnts(canvas, walking, elapsed)
+                redraw()
+                return
+            }
+            val chosen = antsSelection
+            val done = antsDone
+            ants = null
+            antsSelection = null
+            antsDone = null
+            if (chosen != null) {
+                selection = chosen
+                done?.invoke()
+            }
+        }
         when (drag) {
             Drag.RECTANGLE, Drag.FREEFORM -> drawMarquee(canvas)
             Drag.MOVE, Drag.RESIZE -> {
@@ -549,6 +606,8 @@ internal class LassoController(
         const val HANDLE_FILL = 0xFFFFFFFF.toInt()
         const val MARQUEE_WIDTH_DP = 1.2f
         const val DASH_DP = 3f
+        const val ANTS_MS = 450L
+        const val ANT_SPEED_DP_PER_MS = 0.04f
         const val SELECTION_WIDTH_DP = 1f
         const val GUIDE_COLOR = 0xFFE5408F.toInt()
         const val SNAP_REACH_DP = 6f

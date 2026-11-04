@@ -541,7 +541,8 @@ class CanvasViewTest {
         // A touch on the line of the circle.
         val onLine = worldToScreen(260f, 200f)
         stylusStroke(onLine, onLine.first to onLine.second + 1f)
-        waitForIdle()
+        // The circle walks as ants for a moment before it becomes the selection.
+        waitUntil { onMain { requested } }
         assertTrue("The lasso was not asked for", onMain { requested })
         assertTrue("Nothing was selected", onMain { canvas.hasSelection })
         // The circle's own line is gone, and only the stroke inside it is selected.
