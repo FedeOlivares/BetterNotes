@@ -221,7 +221,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         }
         state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
         if (state.moreMenuOpen) EditorMenu(state, actions) { state.moreMenuOpen = false }
-        if (state.sidebarMenuOpen) SidebarMenu(state, notices)
+        if (state.sourcesOpen) SourcesColumn(state, actions, sources, recorder, notices) { state.sourcesOpen = false }
         state.scanPhoto?.let { ScanCrop(state, it) }
         if (state.pagesOpen) AllPagesPanel(state, notices)
         if (state.quickSwitchOpen) QuickSwitch(state, actions, notices)
@@ -254,7 +254,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
 private fun LeftPill(state: EditorState, actions: EditorActions, notices: Notices, modifier: Modifier) {
     Pill(modifier) {
         ToolbarIcon(EditorIcons.Back, stringResource(R.string.editor_back), onClick = actions.onBack)
-        ToolbarIcon(EditorIcons.Sidebar, stringResource(R.string.editor_sidebar), onClick = { state.sidebarMenuOpen = true })
+        ToolbarIcon(EditorIcons.Sidebar, stringResource(R.string.editor_sidebar), onClick = { state.sourcesOpen = true })
         ToolbarIcon(EditorIcons.PageGrid, stringResource(R.string.editor_page_grid), onClick = { state.pagesOpen = true })
         ToolbarIcon(EditorIcons.PageStack, stringResource(R.string.editor_page_stack)) {
             state.quickSwitchOpen = true

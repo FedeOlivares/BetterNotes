@@ -153,4 +153,23 @@
     <string name="menu_page_count">%1$d páginas</string>
     <string name="menu_modified">Última modificación: %1$s</string>
     <string name="menu_created">Creado: %1$s</string>
+    <string name="sources_tabs">Pestañas</string>
+    <string name="sources_count">%1$d fuente</string>
+    <string name="sources_add">Añadir una fuente</string>
+    <string name="sources_pages">%1$d páginas</string>
+    <string name="add_title">Añadir a la nota</string>
+    <string name="add_text">Texto</string>
+    <string name="add_text_detail">Escribe o pega texto</string>
+    <string name="add_audio">Audio</string>
+    <string name="add_audio_detail">Graba audio</string>
+    <string name="add_canvas">Lienzo</string>
+    <string name="add_canvas_detail">Crea un lienzo libre</string>
+    <string name="add_photos">Fotos</string>
+    <string name="add_photos_detail">Elige fotos de tu dispositivo</string>
+    <string name="add_take_photo">Tomar foto</string>
+    <string name="add_take_photo_detail">Captura una foto al instante</string>
+    <string name="add_scan">Escanear documentos</string>
+    <string name="add_scan_detail">Escanea papeles y documentos</string>
+    <string name="add_file">Archivo y documento</string>
+    <string name="add_file_detail">Imágenes de tus archivos</string>
 </resources>

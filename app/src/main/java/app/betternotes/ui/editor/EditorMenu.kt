@@ -92,6 +92,10 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
                 }
                 Spacer(Modifier.height(8.dp))
             }
+            Entry(EditorIcons.Search, R.string.menu_search) {
+                onClose()
+                actions.onOpenOverlay(SettingsOverlay.SEARCH)
+            }
             Entry(EditorIcons.Template, R.string.menu_change_template) {
                 onClose()
                 actions.onOpenOverlay(SettingsOverlay.TEMPLATE)

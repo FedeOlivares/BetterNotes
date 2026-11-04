@@ -152,4 +152,23 @@
     <string name="menu_page_count">%1$d pages</string>
     <string name="menu_modified">Last modified: %1$s</string>
     <string name="menu_created">Created at: %1$s</string>
+    <string name="sources_tabs">Tabs</string>
+    <string name="sources_count">%1$d Source</string>
+    <string name="sources_add">Add a source</string>
+    <string name="sources_pages">%1$d pages</string>
+    <string name="add_title">Add to Note</string>
+    <string name="add_text">Text</string>
+    <string name="add_text_detail">Type or paste text</string>
+    <string name="add_audio">Audio</string>
+    <string name="add_audio_detail">Record audio</string>
+    <string name="add_canvas">Canvas</string>
+    <string name="add_canvas_detail">Create a freeform canvas</string>
+    <string name="add_photos">Photos</string>
+    <string name="add_photos_detail">Choose photos from your device</string>
+    <string name="add_take_photo">Take Photo</string>
+    <string name="add_take_photo_detail">Capture a photo instantly</string>
+    <string name="add_scan">Scan Documents</string>
+    <string name="add_scan_detail">Scan papers and documents</string>
+    <string name="add_file">File &amp; Doc</string>
+    <string name="add_file_detail">Pictures from your files</string>
 </resources>

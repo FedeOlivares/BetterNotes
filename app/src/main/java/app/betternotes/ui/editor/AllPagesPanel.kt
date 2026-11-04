@@ -201,55 +201,6 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
     }
 }
 
-/** The menu under the sidebar button, with a sheet behind it that closes it on a tap anywhere else. */
-@Composable
-internal fun SidebarMenu(state: EditorState, notices: Notices) {
-    val colors = LocalEditorColors.current
-    Box(
-        Modifier
-            .fillMaxSize()
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                state.sidebarMenuOpen = false
-            },
-    ) {
-        Column(
-            Modifier
-                .padding(start = 82.dp, top = 60.dp)
-                .width(220.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(colors.panel)
-                .padding(vertical = 6.dp),
-        ) {
-            SidebarEntry(EditorIcons.Insert, R.string.menu_insert) {
-                state.sidebarMenuOpen = false
-                // Insert is the picture tool's panel: camera, gallery, files, scan and recent pictures.
-                state.select(ActiveTool.IMAGE)
-                state.panelOpen = true
-            }
-            SidebarEntry(EditorIcons.Search, R.string.menu_search) {
-                state.sidebarMenuOpen = false
-                notices.notBuilt()
-            }
-        }
-    }
-}
-
-@Composable
-private fun SidebarEntry(icon: androidx.compose.ui.graphics.vector.ImageVector, label: Int, onClick: () -> Unit) {
-    val colors = LocalEditorColors.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-    ) {
-        Icon(icon, null, tint = colors.icon, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(14.dp))
-        Text(stringResource(label), color = colors.title, fontSize = 15.sp)
-    }
-}
-
 private val SCRIM = Color(0x66000000)
 private val PANEL_SIDE_MARGIN = 86.dp
 private val PANEL_END_MARGIN = 29.dp

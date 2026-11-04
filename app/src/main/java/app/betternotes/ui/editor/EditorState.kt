@@ -89,7 +89,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var playingVideo by mutableStateOf<VideoPlayRequest?>(null)
     var pagesOpen by mutableStateOf(false)
-    var sidebarMenuOpen by mutableStateOf(false)
+    var sourcesOpen by mutableStateOf(false)
+    var sourcesAddOpen by mutableStateOf(false)
 
     /** A photo taken in scan mode, waiting for its corners to be set. */
     var scanPhoto by mutableStateOf<Uri?>(null)
