@@ -106,12 +106,14 @@
 - **Online features:** nothing online at all: no cloud, sync, sharing, AI or account. Leave out the cloud button, avatar and people filter.
 - **Distribution:** personal use. Still do not copy Notewise's assets.
 - **Themes:** light and dark, with dark as the default. No light-mode reference screenshots exist.
-- **Greeting:** the app asks for a name once, and the greeting is "Good evening, [name]".
 
-### Still open
-Do not assume answers to these.
-1. **Handwriting model download:** ML Kit Digital Ink downloads its model on demand, about 20 MB per language, which conflicts with "nothing online". Is a one-time download of the English and Spanish models acceptable, or is another approach needed?
-   - Its docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Verify this.
+### Decided by the owner (2026-11-04)
+- **Handwriting model download:** a one-time download of the ML Kit Digital Ink models for English and Spanish (about 20 MB each) is accepted. It is the only exception to "nothing online", and it needs the internet permission, which the app does not request yet.
+- **Greeting:** the app asks for a name only, and the library greeting uses it.
+- **`minSdk`:** stays at 35. The owner's tablet runs Android 16 (API 36), which meets it.
+
+### Still to verify
+- ML Kit's docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Test recognition with no connection once the models are downloaded.
 
 ## 4. UI reference
 Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
@@ -174,7 +176,14 @@ Checked on 2026-11-03.
 ### Device (Xiaomi spec page)
 - 11.2 inch, 3200 x 2136, 345 ppi, up to 144 Hz.
 - Touch sampling up to 360 Hz, 240 Hz with pen.
-- OS is HyperOS 2. Xiaomi's pages don't state the Android version, so check it on the tablet.
+- The spec page lists HyperOS 2 and doesn't state the Android version. See the next section for what the tablet runs.
+
+### Owner's tablet (read over adb, 2026-11-04)
+- Xiaomi Pad 7, model 2410CRP4CG (`uke`), arm64-v8a.
+- Android 16 (API 36), HyperOS `OS3.0.304.0.WOZMIXM`.
+- Display 2136 x 3200, density bucket 440. It reports xdpi 332.441 and ydpi 340.511.
+- It lists refresh rates of 30, 48, 50, 60, 90, 120 and 144 Hz. That list doesn't show what the app actually gets.
+- The reported dpi average about 336.5, some 2.5% below the spec's 345 ppi. `CanvasView` uses that average, so real size may come out about 2.5% small. Nobody has measured this on the glass, and a calibration setting would fix it.
 
 ### Real-size implications at 345 ppi
 - 1 cm is about 135.8 px, so A4 width (210 mm) is about 2852 px.
@@ -224,7 +233,6 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - `reference/notewise/`: the owner's screenshots (git-ignored)
 
 ### Known gaps
-- `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
 - The editor's UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match. `MainActivity` is the editor, and opens a scratch note or canvas when started without a document, as the tests and measuring scripts do.
@@ -295,7 +303,7 @@ Open to challenge. These are one agent's suggestions, not validated by a build.
 - **Modules:** a pure Kotlin `:core` (model, geometry, erase, lasso, gestures, templates, file format) with JVM tests, plus an Android `:app`.
 - **Coordinates:** world units in PDF points (1/72 inch), so PDFs and notes share one space. Zoom 1.0 equals physical size via screen DPI.
 - **Storage:** one binary file per page, so long documents only load the pages on screen.
-- **PDF:** platform `PdfRenderer`. Setting `minSdk` to 35 adds its text extraction, but only if the tablet runs Android 15, so confirm that first.
+- **PDF:** platform `PdfRenderer`. `minSdk` 35 adds its text extraction, and the tablet's Android 16 meets that.
 - **Undo:** immutable items with reversible edits.
 
 ## 8. Suggested workstreams
