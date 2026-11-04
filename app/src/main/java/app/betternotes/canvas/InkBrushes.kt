@@ -74,6 +74,14 @@ internal object InkBrushes {
     private fun vary(target: TargetNode.Target, from: Float, to: Float, input: ValueNode) =
         BrushBehavior(TargetNode(target, from, to, input))
 
+    /** Grows from a point to full size over [length] brush sizes of travel. */
+    private fun startPoint(length: Float) = vary(
+        TargetNode.Target.SIZE_MULTIPLIER,
+        0.1f,
+        1f,
+        SourceNode(SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, length),
+    )
+
     private fun aimedAtDirection() = vary(
         TargetNode.Target.ROTATION_OFFSET_IN_RADIANS,
         0f,
@@ -121,13 +129,22 @@ internal object InkBrushes {
                     }
                 },
             )
-            // Dense bristle lanes whose ink pulses dark and light along the stroke, leaving thin gaps.
+            // A thin wash (30% of the stroke opacity) with eight bristles on it at full opacity. Each bristle
+            // wanders sideways, swells and thins, and starts at a point, later the further out it sits.
             BrushKind.OIL -> brushFamily(
-                *lanes(-0.45f, 0.45f, 0.1f) { lane, i ->
+                tip {
                     setCornerRounding(0.3f)
-                    setScaleY(0.13f)
+                    setScaleY(1f)
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.3f, ConstantNode(1f)))
+                    addBehavior(startPoint(1f))
+                },
+                *lanes(-0.42f, 0.42f, 0.12f) { lane, i ->
+                    setCornerRounding(0.4f)
+                    setScaleY(0.07f)
                     addBehavior(lane)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 1f, noise(30 + i, 0.06f + 0.01f * (i % 3))))
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.25f)))
+                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1.2f, noise(40 + i, 0.18f)))
+                    addBehavior(startPoint(1f + 0.5f * (i % 4)))
                 },
             )
             BrushKind.SPILL -> brushFamily(
@@ -146,19 +163,21 @@ internal object InkBrushes {
             )
             // Wet washes: big translucent blobs that overlap into darker patches.
             BrushKind.WATERCOLOR -> brushFamily(
-                tip {
-                    setCornerRounding(0.85f)
-                    setScaleX(0.9f)
-                    setScaleY(0.9f)
-                    setParticleGapDistanceScale(0.25f)
-                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(62, 0.2f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.25f, noise(9, 0.15f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(60, 0.1f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(61, 0.1f)))
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.12f, 0.35f, noise(10, 0.2f)))
+                // Two rotated, slightly different blobs per stamp, so the union has a ragged edge.
+                *Array(2) { c ->
+                    tip {
+                        setCornerRounding(0.6f + 0.2f * c)
+                        setScaleX(0.9f - 0.08f * c)
+                        setScaleY(0.9f)
+                        setParticleGapDistanceScale(0.25f)
+                        addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(62 + c, 0.2f)))
+                        addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.25f, noise(9 + c, 0.15f)))
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(60 + c, 0.1f)))
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(66 + c, 0.1f)))
+                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.08f, 0.2f, noise(10 + c, 0.2f)))
+                    }
                 },
             )
-            // Sparse thin hatch marks, like shading lines in a comic.
             BrushKind.COMICS -> brushFamily(
                 tip {
                     setScaleX(0.03f)
