@@ -58,6 +58,7 @@ internal val BRUSH_KINDS = WireEnum(
     BrushKind.CROSS,
     BrushKind.GLOW,
     BrushKind.SINGLE_DOTS,
+    BrushKind.SCRATCHES,
 )
 internal val LINE_KINDS = WireEnum(LineKind.SOLID, LineKind.DOTTED, LineKind.DASHED)
 internal val SHAPE_KINDS =

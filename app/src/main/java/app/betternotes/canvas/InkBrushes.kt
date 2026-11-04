@@ -169,6 +169,18 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.6f, 1.2f, noise(21, 0.08f)))
                 },
             )
+            // Beaded lines that drift apart and together, each a different weight.
+            BrushKind.SCRATCHES -> brushFamily(
+                *lanes(-0.9f, 0.9f, 0.3f) { lane, i ->
+                    setCornerRounding(1f)
+                    setScaleX(0.07f)
+                    setScaleY(0.04f + 0.03f * ((i * 5) % 4))
+                    setParticleGapDistanceScale(0.5f)
+                    addBehavior(lane)
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(70 + i, 0.4f)))
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.6f, 1f, noise(80 + i, 0.2f)))
+                },
+            )
             // Parallel dotted lines of different weight.
             BrushKind.STRIPES -> brushFamily(
                 *lanes(-0.5f, 0.5f, 0.2f) { lane, i ->

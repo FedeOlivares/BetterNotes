@@ -53,6 +53,7 @@ private fun BrushKind.label() = when (this) {
     BrushKind.SPILL -> R.string.brush_spill
     BrushKind.WATERCOLOR -> R.string.brush_watercolor
     BrushKind.COMICS -> R.string.brush_comics
+    BrushKind.SCRATCHES -> R.string.brush_scratches
     BrushKind.STRIPES -> R.string.brush_stripes
     BrushKind.SINGLE_DOTS -> R.string.brush_single_dots
     BrushKind.DOTS -> R.string.brush_dots
