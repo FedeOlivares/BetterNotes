@@ -6,11 +6,13 @@ import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.HorizontalAlign
+import app.betternotes.core.model.ImageShape
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.TipShape
 import app.betternotes.core.tools.EraserOptions
+import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.LassoOptions
@@ -174,6 +176,25 @@ internal class ToolStore(context: Context) {
         prefs.edit { putString(KEY_TABLE, json.toString()) }
     }
 
+    fun image(): ImageOptions = read(KEY_IMAGE, ImageOptions()) { json ->
+        ImageOptions(
+            shape = ImageShape.valueOf(json.getString("shape")),
+            cornerRadius = json.getInt("cornerRadius"),
+            borderWidth = json.getInt("borderWidth"),
+            borderColor = json.getInt("borderColor"),
+        )
+    }
+
+    fun save(options: ImageOptions) {
+        val json = JSONObject().apply {
+            put("shape", options.shape.name)
+            put("cornerRadius", options.cornerRadius)
+            put("borderWidth", options.borderWidth)
+            put("borderColor", options.borderColor)
+        }
+        prefs.edit { putString(KEY_IMAGE, json.toString()) }
+    }
+
     /** Anything saved by an older build that no longer reads back gives way to [fallback]. */
     private inline fun <T> read(key: String, fallback: T, decode: (JSONObject) -> T): T {
         val saved = prefs.getString(key, null) ?: return fallback
@@ -237,6 +258,7 @@ internal class ToolStore(context: Context) {
         const val KEY_LASSO = "lasso"
         const val KEY_SHAPE = "shape"
         const val KEY_NOTE = "note"
+        const val KEY_IMAGE = "image"
         const val KEY_TABLE = "table"
     }
 }

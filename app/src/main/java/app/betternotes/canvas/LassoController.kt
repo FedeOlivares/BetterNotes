@@ -51,7 +51,7 @@ internal class LassoController(
     private val polygon = ArrayList<Float>()
 
     private val renderer = CanvasStrokeRenderer.create()
-    private val itemPainter = ItemPainter { canvas, stroke ->
+    private val itemPainter = ItemPainter({ editor?.imageOrLoad(it) }) { canvas, stroke ->
         editor?.strokes?.get(stroke)?.let { renderer.draw(canvas, it, strokeToScreen) }
     }
     private val pageToScreen = Matrix()

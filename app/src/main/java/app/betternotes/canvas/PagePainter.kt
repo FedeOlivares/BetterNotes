@@ -20,7 +20,7 @@ internal class PagePainter(private val editor: NoteEditor) {
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
-    private val items = ItemPainter { canvas, stroke ->
+    private val items = ItemPainter(editor::imageOrLoad) { canvas, stroke ->
         renderer.draw(canvas, editor.strokes.get(stroke), strokeToTile)
     }
 

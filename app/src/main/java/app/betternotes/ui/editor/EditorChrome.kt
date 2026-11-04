@@ -84,7 +84,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     val notices = rememberNotices()
     val preset = state.preset
 
-    LaunchedEffect(preset, state.eraser, state.lasso, state.shape, state.note, state.table) {
+    LaunchedEffect(preset, state.eraser, state.lasso, state.shape, state.note, state.table, state.image) {
         delay(SAVE_DELAY_MS)
         state.saveTools()
     }
@@ -98,6 +98,8 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
 
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
+    val sources = rememberImageSources(state)
+    state.say = notices::say
     Box(Modifier.fillMaxSize()) {
         Layout(
             content = {
@@ -121,6 +123,8 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                         NoteRow(state, state.note, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW), state.activeTool == ActiveTool.STICKY)
                     } else if (state.activeTool == ActiveTool.TABLE) {
                         TableRow(state, state.table, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.IMAGE) {
+                        ImageRow(state, state.image, sources, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     }
                 }
             },
@@ -173,6 +177,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 state.activeTool == ActiveTool.STICKY -> NotePanel(state, state.note, sheet, sticky = true)
                 state.activeTool == ActiveTool.TEXT -> NotePanel(state, state.note, sheet, sticky = false)
                 state.activeTool == ActiveTool.TABLE -> TablePanel(state, state.table, sheet)
+                state.activeTool == ActiveTool.IMAGE -> ImagePanel(state, sources, notices, sheet)
             }
         }
     }
@@ -202,7 +207,7 @@ private val StripItems by lazy {
         StripItem(EditorIcons.Eraser, R.string.tool_eraser, ActiveTool.ERASER),
         StripItem(EditorIcons.Tape, R.string.tool_tape),
         StripItem(EditorIcons.Shapes, R.string.tool_shapes, ActiveTool.SHAPE),
-        StripItem(EditorIcons.Image, R.string.tool_image),
+        StripItem(EditorIcons.Image, R.string.tool_image, ActiveTool.IMAGE),
         StripItem(EditorIcons.Text, R.string.tool_text, ActiveTool.TEXT),
         StripItem(EditorIcons.StickyNote, R.string.tool_sticky, ActiveTool.STICKY),
         StripItem(EditorIcons.Sticker, R.string.tool_sticker),
@@ -245,6 +250,7 @@ private fun CenterPill(state: EditorState, notices: Notices, modifier: Modifier)
                         when {
                             tool != null -> state.select(tool)
                             item.label == R.string.tool_ruler -> state.toggleRuler()
+                            item.label == R.string.tool_clipboard -> state.paste()
                             else -> notices.notBuilt()
                         }
                     },

@@ -1,5 +1,8 @@
 package app.betternotes.canvas
 
+import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -27,6 +30,12 @@ class NoteEditor(
 
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
+
+    /** Called on the main thread when a picture has been decoded and can now be painted. */
+    var onImageLoaded: () -> Unit = {}
+
+    private val images = ImageAssets(store)
+    private val decoding = HashSet<String>()
 
     /** Called whenever what can be undone or redone may have changed. */
     var onHistoryChanged: () -> Unit = {}
@@ -101,6 +110,30 @@ class NoteEditor(
     private fun historyStepped() {
         scheduleSave()
         onHistoryChanged()
+    }
+
+    /** The picture if it is decoded. If it is not, starts decoding it and returns null. */
+    fun imageOrLoad(assetId: String): Bitmap? {
+        val bitmap = images.cached(assetId)
+        if (bitmap != null || closed || images.isMissing(assetId) || !decoding.add(assetId)) return bitmap
+        background.execute {
+            val decoded = images.decode(assetId)
+            main.post {
+                decoding.remove(assetId)
+                if (decoded != null) images.install(assetId, decoded) else images.markMissing(assetId)
+                onImageLoaded()
+            }
+        }
+        return null
+    }
+
+    /** Copies a picture into the document, off the main thread, and answers on the main thread. */
+    internal fun importImage(resolver: ContentResolver, uri: Uri, done: (ImportedImage?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val imported = images.import(resolver, uri)
+            main.post { done(imported) }
+        }
     }
 
     private fun scheduleSave() {

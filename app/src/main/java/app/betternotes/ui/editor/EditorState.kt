@@ -1,18 +1,23 @@
 package app.betternotes.ui.editor
 
+import android.content.ClipboardManager
 import android.graphics.RectF
+import android.net.Uri
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import app.betternotes.R
 import app.betternotes.canvas.CanvasTool
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.TextEditRequest
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.TextStyle
+import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.EraserOptions
+import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.NoteOptions
@@ -31,6 +36,7 @@ internal enum class ActiveTool(val ink: InkTool?) {
     STICKY(null),
     TEXT(null),
     TABLE(null),
+    IMAGE(null),
 }
 
 private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.LASER
@@ -61,6 +67,11 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var textEdit by mutableStateOf<TextEditRequest?>(null)
         private set
+    var image by mutableStateOf(store.image())
+        private set
+
+    /** Says something short to the user. Set by the controls, which have the means to. */
+    var say: (Int) -> Unit = {}
     var panelOpen by mutableStateOf(false)
     var toolRowCollapsed by mutableStateOf(false)
     var colorTarget by mutableStateOf<ColorTarget?>(null)
@@ -168,6 +179,26 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
     }
 
+    fun updateImage(change: (ImageOptions) -> ImageOptions) {
+        image = change(image)
+    }
+
+    fun importImage(uri: Uri) = canvas.importImage(uri, image) { say(R.string.notice_image_failed) }
+
+    /** Pastes a picture or text from outside the app, or says there is nothing to paste. */
+    fun paste() {
+        val clipboard = canvas.context.getSystemService(ClipboardManager::class.java)
+        val clip = clipboard.primaryClip
+        val item = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
+        val uri = item?.uri
+        val text = item?.text?.toString()
+        when {
+            uri != null && clip.description.hasMimeType("image/*") -> importImage(uri)
+            !text.isNullOrEmpty() -> canvas.pasteText(text, note)
+            else -> say(R.string.notice_nothing_to_paste)
+        }
+    }
+
     /** The color the wheel opens on. */
     val colorStart: Int
         get() = when (colorTarget) {
@@ -189,6 +220,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         store.save(shape)
         store.save(note)
         store.save(table)
+        store.save(image)
     }
 
     fun applyColor(color: Int) {
@@ -265,6 +297,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             activeTool == ActiveTool.STICKY -> CanvasTool.Sticky(note)
             activeTool == ActiveTool.TEXT -> CanvasTool.Text(note)
             activeTool == ActiveTool.TABLE -> CanvasTool.Table(table)
+            activeTool == ActiveTool.IMAGE -> CanvasTool.Lasso(rectangle = true, ALL_ITEM_KINDS, fullOnly = false)
             else -> CanvasTool.Eraser(eraser.mode, eraser.radiusPt, eraser.kinds)
         }
     }

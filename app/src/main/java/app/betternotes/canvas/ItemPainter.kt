@@ -1,9 +1,11 @@
 package app.betternotes.canvas
 
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.text.Layout
 import android.text.StaticLayout
@@ -17,6 +19,7 @@ import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.ImageItem
+import app.betternotes.core.model.ImageShape
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.LineStyle
 import app.betternotes.core.model.PageItem
@@ -32,7 +35,13 @@ import kotlin.math.roundToInt
  * Paints every item except ink, in page coordinates: the canvas is already scaled to the page. Ink goes
  * through its renderer. Images and notes' ink are added by [paint]'s callers as those tools arrive.
  */
-internal class ItemPainter(private val paintStroke: (Canvas, StrokeItem) -> Unit = { _, _ -> }) {
+internal class ItemPainter(
+    private val image: (assetId: String) -> Bitmap? = { null },
+    private val paintStroke: (Canvas, StrokeItem) -> Unit = { _, _ -> },
+) {
+    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val box = RectF()
+
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -50,7 +59,7 @@ internal class ItemPainter(private val paintStroke: (Canvas, StrokeItem) -> Unit
                 paintText(canvas, item.text, item.textSize, item.color, item.frame.width, item.frame.height, item.style)
             }
             is StickyNoteItem -> paintSticky(canvas, item)
-            is ImageItem -> inFrame(canvas, item.frame) { paintImagePlaceholder(canvas, item) }
+            is ImageItem -> inFrame(canvas, item.frame) { paintImage(canvas, item) }
             is AudioItem -> inFrame(canvas, item.frame) { paintAudio(canvas, item) }
         }
     }
@@ -197,9 +206,30 @@ internal class ItemPainter(private val paintStroke: (Canvas, StrokeItem) -> Unit
         }
     }
 
-    private fun paintImagePlaceholder(canvas: Canvas, item: ImageItem) {
-        fill.color = IMAGE_PLACEHOLDER
-        canvas.drawRect(0f, 0f, item.frame.width, item.frame.height, fill)
+    /** Shows a tint until the picture is decoded, which then repaints it. */
+    private fun paintImage(canvas: Canvas, item: ImageItem) {
+        val width = item.frame.width
+        val height = item.frame.height
+        box.set(0f, 0f, width, height)
+        path.reset()
+        if (item.shape == ImageShape.ELLIPSE) {
+            path.addOval(box, Path.Direction.CW)
+        } else {
+            path.addRoundRect(box, item.cornerRadius, item.cornerRadius, Path.Direction.CW)
+        }
+        val bitmap = image(item.assetId)
+        canvas.withClip(path) {
+            if (bitmap != null) {
+                drawBitmap(bitmap, null, box, bitmapPaint)
+            } else {
+                fill.color = IMAGE_PLACEHOLDER
+                drawRect(box, fill)
+            }
+        }
+        if (item.borderWidth > 0f) {
+            applyLine(item.borderColor, item.borderWidth, LineStyle.Solid)
+            canvas.drawPath(path, line)
+        }
     }
 
     private fun paintAudio(canvas: Canvas, item: AudioItem) {

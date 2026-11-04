@@ -51,6 +51,13 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="panel_image_library">Pictures</string>
+    <string name="panel_image_shape">Picture shape</string>
+    <string name="panel_add_image">Add a picture</string>
+    <string name="panel_from_files">From files</string>
+    <string name="panel_scan">Scan</string>
+    <string name="notice_image_failed">That picture could not be read</string>
+    <string name="notice_nothing_to_paste">Nothing to paste</string>
     <string name="panel_font_size">Font size</string>
     <string name="panel_style">Style</string>
     <string name="panel_horizontal_alignment">Horizontal alignment</string>

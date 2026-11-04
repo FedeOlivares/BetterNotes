@@ -75,6 +75,11 @@ internal object EditorIcons {
     val AlignTop by lazy { line("align-top", "M5 4h14 M12 20V8 M7.500 12.500L12 8l4.500 4.500") }
     val AlignMiddle by lazy { line("align-middle", "M5 12h14 M12 3v5 M9.500 6L12 8.500 14.500 6 M12 21v-5 M9.500 18l2.500-2.500 2.500 2.500") }
     val AlignBottom by lazy { line("align-bottom", "M5 20h14 M12 4v12 M7.500 11.500L12 16l4.500-4.500") }
+    val AddImage by lazy { line("add-image", "M13 4H6a2.500 2.500 0 0 0-2.500 2.500v11A2.500 2.500 0 0 0 6 20h12a2.500 2.500 0 0 0 2.500-2.500V11 M3.500 16l5-5 5 5 2-2 5 4 M18 2.500v6 M15 5.500h6") }
+    val Folder by lazy { line("folder", "M3.500 7A2 2 0 0 1 5.500 5H10l2 2.500h6.500a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z") }
+    val Scan by lazy { line("scan", "M3.500 8V5.500a2 2 0 0 1 2-2H8 M16 3.500h2.500a2 2 0 0 1 2 2V8 M20.500 16v2.500a2 2 0 0 1-2 2H16 M8 20.500H5.500a2 2 0 0 1-2-2V16 M8.500 8h5l2 2v6h-7z") }
+    val ImageRound by lazy { line("image-round", "M12 3a9 9 0 1 0 .01 0") }
+    val ImageSquare by lazy { line("image-square", rrect(3.5f, 3.5f, 17f, 17f, 2f)) }
     val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
     val Insert by lazy { line("insert", rrect(4f, 4f, 16f, 16f, 2.5f) + "M12 8v8 M8 12h8") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }

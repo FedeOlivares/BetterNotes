@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Path
 import android.graphics.RectF
+import android.net.Uri
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -48,6 +49,7 @@ import app.betternotes.core.tools.EraseSession
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
+import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
@@ -339,6 +341,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         painter = PagePainter(editor)
         editor.onPageLoaded = ::redrawPage
         editor.onHistoryChanged = { onHistoryChanged() }
+        editor.onImageLoaded = { tiles.invalidateAll() }
         onHistoryChanged()
         hasPlacedPage = false
         rebuildLayout()
@@ -351,6 +354,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun close() {
         editor?.onPageLoaded = {}
         editor?.onHistoryChanged = {}
+        editor?.onImageLoaded = {}
         lasso.open(null)
         editor = null
         onHistoryChanged()
@@ -880,6 +884,54 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         onTextEdit(request)
     }
 
+    /** Copies a picture into the document and puts it in the middle of the view. */
+    fun importImage(uri: Uri, options: ImageOptions, failed: () -> Unit) {
+        val open = editor ?: return
+        open.importImage(context.contentResolver, uri) { imported ->
+            if (imported == null) {
+                failed()
+            } else if (editor === open) {
+                placeInView { pageId, x, y, maxWidth, maxHeight ->
+                    options.newImage(imported.assetId, imported.width, imported.height, x, y, maxWidth, maxHeight)
+                        .also { open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), it)) }
+                }
+            }
+        }
+    }
+
+    /** Puts pasted text in the middle of the view. */
+    fun pasteText(text: String, options: NoteOptions) {
+        val open = editor ?: return
+        placeInView { pageId, x, y, maxWidth, _ ->
+            val width = minOf(maxWidth, NEW_TEXT_WIDTH_PT)
+            val item = TextItem(
+                IdSource.Random.next(),
+                Frame(x - width / 2f, y, width, NEW_TEXT_HEIGHT_PT),
+                text,
+                options.textSize.toFloat(),
+                NoteOptions.TEXT_COLOR,
+                options.style,
+            )
+            open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), item))
+        }
+    }
+
+    private inline fun placeInView(place: (pageId: Long, x: Float, y: Float, maxWidth: Float, maxHeight: Float) -> Unit) {
+        val open = editor ?: return
+        val layout = layout ?: return
+        val index = currentPage
+        val page = open.document.pages.getOrNull(index) ?: return
+        val world = viewport.visibleWorld(width, height)
+        place(
+            page.id,
+            world.centerX - layout.originX(index),
+            world.centerY - layout.originY(index),
+            world.width * PLACED_SHARE_OF_VIEW,
+            world.height * PLACED_SHARE_OF_VIEW,
+        )
+        syncChanges()
+    }
+
     /** Finishes any text being typed. */
     fun endTextEdit() {
         val request = textEdit ?: return
@@ -1234,6 +1286,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         /** How far a held pen can wander and still count as still. */
         const val HOLD_SLOP_DP = 3f
         const val MIN_HOLD_CHECK_MS = 8L
+        const val PLACED_SHARE_OF_VIEW = 0.6f
         const val NEW_TEXT_WIDTH_PT = 200f
         const val NEW_TEXT_HEIGHT_PT = 60f
         const val CELL_INSET_PT = 3f
