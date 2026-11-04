@@ -44,7 +44,7 @@ data class EditorColors(
 
 val DarkEditorColors = EditorColors(
     pill = Color(0xFF25282D),
-    pillBorder = Color(0xFF3A3D43),
+    pillBorder = Color(0xFF2D3036),
     pillDivider = Color(0xFF484B52),
     raisedButton = Color(0xFF3C3F46),
     panel = Color(0xFF1E1F24),
@@ -72,7 +72,7 @@ val DarkEditorColors = EditorColors(
 
 val LightEditorColors = EditorColors(
     pill = Color(0xFFF3F4F6),
-    pillBorder = Color(0xFFD5D7DC),
+    pillBorder = Color(0xFFE1E3E7),
     pillDivider = Color(0xFFC6C9CF),
     raisedButton = Color(0xFFDFE1E6),
     panel = Color(0xFFFBFBFC),

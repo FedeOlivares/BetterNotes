@@ -527,7 +527,7 @@ internal fun LineKind.next() = when (this) {
 internal fun WidthGlyph(thickness: Int) {
     val tint = LocalEditorColors.current.icon
     Canvas(Modifier.size(26.dp, 12.dp)) {
-        val stroke = (thickness * WIDTH_GLYPH_DP_PER_UNIT).dp.toPx().coerceIn(1.dp.toPx(), size.height)
+        val stroke = (thickness * WIDTH_GLYPH_DP_PER_UNIT).dp.toPx().coerceIn(2.dp.toPx(), size.height)
         val inset = stroke / 2f
         drawLine(
             tint,
@@ -539,7 +539,7 @@ internal fun WidthGlyph(thickness: Int) {
     }
 }
 
-private const val WIDTH_GLYPH_DP_PER_UNIT = 0.27f
+private const val WIDTH_GLYPH_DP_PER_UNIT = 0.34f
 private const val LASER_MIDDLE_GLYPH = 6
 private const val LASER_THICK_GLYPH = 12
 private const val POSITION_VISIBLE_MS = 2000L
