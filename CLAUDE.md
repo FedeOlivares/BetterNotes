@@ -107,11 +107,13 @@
 - **Distribution:** personal use. Still do not copy Notewise's assets.
 - **Themes:** light and dark, with dark as the default. No light-mode reference screenshots exist.
 
-### Still open
-Do not assume answers to these.
-1. **Handwriting model download:** ML Kit Digital Ink downloads its model on demand, about 20 MB per language, which conflicts with "nothing online". Is a one-time download of the English and Spanish models acceptable, or is another approach needed?
-   - Its docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Verify this.
-2. **Greeting:** what does the library greeting use in place of an account name?
+### Decided by the owner (2026-11-04)
+- **Handwriting model download:** a one-time download of the ML Kit Digital Ink models for English and Spanish (about 20 MB each) is accepted. It is the only exception to "nothing online", and it needs the internet permission, which the app does not request yet.
+- **Greeting:** the app asks for a name only, and the library greeting uses it.
+- **`minSdk`:** stays at 35. The owner did not give the tablet's Android version, so it is still unconfirmed.
+
+### Still to verify
+- ML Kit's docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Test recognition with no connection once the models are downloaded.
 
 ## 4. UI reference
 Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
@@ -224,7 +226,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - `reference/notewise/`: the owner's screenshots (git-ignored)
 
 ### Known gaps
-- `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
+- `minSdk = 35` assumes the tablet runs Android 15 or newer. The owner chose to keep it, but the version is unverified: if the tablet runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
 - All real UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match, and `MainActivity` opens a scratch note or canvas until the library exists.
