@@ -1,0 +1,134 @@
+package app.betternotes.ui.editor
+
+import android.graphics.RectF
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import app.betternotes.canvas.CanvasTool
+import app.betternotes.canvas.CanvasView
+import app.betternotes.core.gesture.InputMode
+import app.betternotes.core.model.InkTool
+import app.betternotes.core.tools.EraseMode
+import app.betternotes.core.tools.InkPreset
+
+/** The tools the strip can put in the pen's hand so far. */
+internal enum class ActiveTool(val ink: InkTool?) {
+    PEN(InkTool.PEN),
+    PENCIL(InkTool.PENCIL),
+    HIGHLIGHTER(InkTool.HIGHLIGHTER),
+    ERASER(null),
+}
+
+/** What the color wheel's result is for. */
+internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE }
+
+/** What the toolbars show, and the one place that passes their choices on to the canvas. */
+@Stable
+internal class EditorState(private val canvas: CanvasView, private val store: ToolStore) {
+    private val presets = mutableStateMapOf<InkTool, InkPreset>().apply {
+        for (tool in InkTool.entries) put(tool, store.preset(tool))
+    }
+    private val overlays = HashMap<String, RectF>()
+    private var drawingMode = InputMode.STYLUS_DRAW
+
+    var activeTool by mutableStateOf(ActiveTool.PEN)
+        private set
+    var panelOpen by mutableStateOf(false)
+    var toolRowCollapsed by mutableStateOf(false)
+    var colorTarget by mutableStateOf<ColorTarget?>(null)
+    var viewOnly by mutableStateOf(false)
+        private set
+    var fingerDraws by mutableStateOf(false)
+        private set
+    var canUndo by mutableStateOf(false)
+        private set
+    var canRedo by mutableStateOf(false)
+        private set
+
+    /** The settings of the ink tool in use, or null if the tool in use lays no ink. */
+    val preset: InkPreset? get() = activeTool.ink?.let { presets[it] }
+
+    val screenDpi get() = canvas.viewport.screenDpi
+
+    init {
+        canvas.onHistoryChanged = {
+            canUndo = canvas.canUndo
+            canRedo = canvas.canRedo
+        }
+        canUndo = canvas.canUndo
+        canRedo = canvas.canRedo
+        applyTool()
+    }
+
+    fun select(tool: ActiveTool) {
+        if (tool == activeTool) {
+            if (tool.ink != null) panelOpen = !panelOpen
+            return
+        }
+        activeTool = tool
+        colorTarget = null
+        if (tool.ink == null) panelOpen = false
+        applyTool()
+    }
+
+    /** Changes the ink tool in use. Saving is left to [saveTools], so a dragged slider stays cheap. */
+    fun update(change: (InkPreset) -> InkPreset) {
+        val tool = activeTool.ink ?: return
+        presets[tool] = change(presets.getValue(tool))
+        applyTool()
+    }
+
+    fun saveTools() {
+        presets.values.forEach(store::save)
+    }
+
+    fun applyColor(color: Int) {
+        when (colorTarget) {
+            ColorTarget.CUSTOM_SLOT -> update { it.withCustomColor(color) }
+            ColorTarget.SELECTED_SLOT -> update { it.withSlotColor(color) }
+            ColorTarget.PALETTE -> update { it.withPaletteColor(color).pickColor(color) }
+            null -> Unit
+        }
+        colorTarget = null
+    }
+
+    fun toggleFingerDraw() {
+        fingerDraws = !fingerDraws
+        drawingMode = if (fingerDraws) InputMode.FINGER_DRAW else InputMode.STYLUS_DRAW
+        if (!viewOnly) canvas.inputMode = drawingMode
+    }
+
+    fun toggleViewOnly() {
+        viewOnly = !viewOnly
+        canvas.inputMode = if (viewOnly) InputMode.VIEW_ONLY else drawingMode
+        if (viewOnly) {
+            panelOpen = false
+            colorTarget = null
+        }
+    }
+
+    fun undo() = canvas.undo()
+
+    fun redo() = canvas.redo()
+
+    /** Tells the canvas where a control sits, or that it has gone, so that wet ink stays out from under it. */
+    fun reportOverlay(key: String, bounds: RectF?) {
+        val changed = if (bounds == null) overlays.remove(key) != null else overlays.put(key, bounds) != bounds
+        if (changed) canvas.setOverlayBounds(overlays.values.toList())
+    }
+
+    private fun applyTool() {
+        val current = preset
+        canvas.tool = if (current != null) {
+            CanvasTool.Ink(current.style(), current.holdToLineMs)
+        } else {
+            CanvasTool.Eraser(EraseMode.PARTIAL, DEFAULT_ERASER_RADIUS_PT)
+        }
+    }
+
+    private companion object {
+        const val DEFAULT_ERASER_RADIUS_PT = 6f
+    }
+}

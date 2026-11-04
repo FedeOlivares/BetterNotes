@@ -227,7 +227,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
-- All real UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match, and `MainActivity` opens a scratch note or canvas until the library exists.
+- `MainActivity` opens a scratch note or canvas until the library exists. The editor's "..." menu holds stand-ins for that, the theme and the performance readout until its real screen has a reference.
 - The canvas paints only strokes and the page background. Shapes, images, text, sticky notes, tables, recordings and PDF pages are in the model but are not drawn yet.
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
@@ -267,6 +267,23 @@ Choices in the canvas that have no reference and may need the owner's input:
 - The infinite canvas stops about 18 m from the origin in each direction, to keep float coordinates accurate at 1500%.
 - The stylus's eraser end erases partially, with a 6 pt radius.
 - Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
+
+### Editor UI
+In `app/.../ui/`:
+- `theme/Theme.kt`: `EditorColors`, dark measured from the screenshots, light derived with no reference. `icons/EditorIcons.kt`: line icons drawn for this app.
+- `editor/EditorChrome.kt`: the left, center and right pills and the tool row. `editor/InkPanel.kt`: the pen, pencil and highlighter panel. `editor/ColorWheelPanel.kt`: a plain wheel, since no screenshot shows the real one.
+- `editor/EditorState.kt`: what the controls show, and the one place that passes their choices to `CanvasView`. `editor/ToolStore.kt`: saves tools and the theme in `SharedPreferences`.
+- Controls report their bounds with `masksInk`, because wet ink is drawn over every view in the window.
+
+In `:core`: `tools/InkPreset` holds a tool's slots and options, and `gesture/HoldDetector` notices the held pen that straightens a stroke.
+
+Choices with no reference that may need the owner's input:
+- A thickness value is tenths of a millimeter, from 1 to 100.
+- Strip order: pen, pencil, highlighter, eraser, lasso, shapes, image, photo, then the tools the screenshots show. The tray icon is assumed to be the clipboard.
+- Opacity, tip and hold-time rows copy the panel's rows. They are requirements the screenshot does not show.
+- A swatch outside the row replaces the slot in use. The chevron shows or hides the tool row. View-only keeps only the left and right pills.
+
+Saved but with no effect yet: scribble to erase, circle to lasso, stabilization. Buttons with no behavior yet say so with a toast: the left pill's page buttons, the swatch list, and every tool in the strip from the lasso on, including settings.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 
