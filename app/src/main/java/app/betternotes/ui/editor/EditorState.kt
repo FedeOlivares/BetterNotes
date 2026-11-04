@@ -89,6 +89,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var playingVideo by mutableStateOf<VideoPlayRequest?>(null)
     var pagesOpen by mutableStateOf(false)
+    var colorListOpen by mutableStateOf(false)
     var sourcesOpen by mutableStateOf(false)
     var sourcesAddOpen by mutableStateOf(false)
 

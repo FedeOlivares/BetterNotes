@@ -524,7 +524,43 @@ class CanvasViewTest {
         assertFalse(onMain { editor.content(pageId).size > 0 })
     }
 
+    @Test
+    fun touchingACircleDrawnWithCircleToLassoSelectsWhatItSurrounds() {
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), circleToLasso = true) }
+        var requested = false
+        onMain { canvas.onLassoRequested = { requested = true } }
+        // Something to be inside the circle.
+        stylusStroke(worldToScreen(190f, 200f), worldToScreen(210f, 200f))
+        waitUntil { pageContent().size == 1 }
+        val circle = (0..60).map { i ->
+            val angle = 2.0 * Math.PI * 1.05 * i / 60
+            worldToScreen((200 + 60 * Math.cos(angle)).toFloat(), (200 + 60 * Math.sin(angle)).toFloat())
+        }
+        stylusPath(circle)
+        waitUntil { pageContent().size == 2 }
+        // A touch on the line of the circle.
+        val onLine = worldToScreen(260f, 200f)
+        stylusStroke(onLine, onLine.first to onLine.second + 1f)
+        waitForIdle()
+        assertTrue("The lasso was not asked for", onMain { requested })
+        assertTrue("Nothing was selected", onMain { canvas.hasSelection })
+        assertEquals(2, pageContent().size)
+    }
+
     // ---- Helpers ----
+
+    private fun stylusPath(points: List<Pair<Float, Float>>) {
+        val tool = MotionEvent.TOOL_TYPE_STYLUS
+        val down = SystemClock.uptimeMillis() - (points.size + 1) * 8
+        var time = down
+        send(event(down, time, MotionEvent.ACTION_DOWN, tool, listOf(points.first())))
+        for (point in points.drop(1)) {
+            time += 8
+            send(event(down, time, MotionEvent.ACTION_MOVE, tool, listOf(point)))
+        }
+        time += 8
+        send(event(down, time, MotionEvent.ACTION_UP, tool, listOf(points.last())))
+    }
 
     private fun pageContent(): PageContent = onMain { editor.content(pageId) }
 

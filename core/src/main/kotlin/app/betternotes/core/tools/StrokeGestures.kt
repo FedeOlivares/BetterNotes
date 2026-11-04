@@ -17,7 +17,7 @@ object StrokeGestures {
     private const val SCRIBBLE_TURN_COS = -0.35f
     private const val MIN_SCRIBBLE_LENGTH_RATIO = 3f
     private const val MIN_LOOP_LENGTH_PT = 40f
-    private const val MAX_LOOP_GAP_RATIO = 0.22f
+    private const val MAX_LOOP_GAP_RATIO = 0.3f
     private const val MIN_LOOP_TURN = 1.6f * PI.toFloat()
     private const val TWO_PI = 2f * PI.toFloat()
 

@@ -418,7 +418,7 @@ private fun ColorSection(state: EditorState, preset: InkPreset, notices: Notices
         PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_add_swatch)) {
             state.colorTarget = ColorTarget.PALETTE
         }
-        PanelIconButton(EditorIcons.List, stringResource(R.string.panel_swatch_list), notices::notBuilt)
+        PanelIconButton(EditorIcons.List, stringResource(R.string.panel_swatch_list)) { state.colorListOpen = true }
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,

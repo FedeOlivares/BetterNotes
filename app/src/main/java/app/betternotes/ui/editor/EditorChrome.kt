@@ -221,6 +221,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         }
         state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
         if (state.moreMenuOpen) EditorMenu(state, actions) { state.moreMenuOpen = false }
+        if (state.colorListOpen && preset != null) ColorListSheet(state, preset, notices)
         if (state.sourcesOpen) SourcesColumn(state, actions, sources, recorder, notices) { state.sourcesOpen = false }
         state.scanPhoto?.let { ScanCrop(state, it) }
         if (state.pagesOpen) AllPagesPanel(state, notices)

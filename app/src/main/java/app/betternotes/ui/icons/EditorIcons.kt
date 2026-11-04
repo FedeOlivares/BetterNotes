@@ -105,6 +105,7 @@ internal object EditorIcons {
     val More by lazy { filled("more", "M5.5 10.2a1.8 1.8 0 1 0 .01 0z M12 10.2a1.8 1.8 0 1 0 .01 0z M18.5 10.2a1.8 1.8 0 1 0 .01 0z") }
     val AddColor by lazy { line("add-color", dashedCircle() + "M12 8v8 M8 12h8") }
     val EditColor by lazy { line("edit-color", "M14.5 4.5l3.5 3.5L8.5 17.5H5v-3.5z M5 21h14") }
+    val Grip by lazy { filled("grip", "M8.5 5a1.4 1.4 0 1 0 .01 0z M15.5 5a1.4 1.4 0 1 0 .01 0z M8.5 10.6a1.4 1.4 0 1 0 .01 0z M15.5 10.6a1.4 1.4 0 1 0 .01 0z M8.5 16.2a1.4 1.4 0 1 0 .01 0z M15.5 16.2a1.4 1.4 0 1 0 .01 0z") }
     val Export by lazy { line("export", "M12 15V4 M8 8l4-4 4 4 M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5") }
     val GoToPage by lazy { line("go-to-page", "M12 3a9 9 0 1 0 .01 0 M8 12h8 M13 9l3 3-3 3") }
     val Template by lazy { line("template", rrect(4f, 4f, 16f, 6f, 1.5f) + "M4 14h6 M4 18h6 M14 14h6 M14 18h6") }

@@ -172,4 +172,6 @@
     <string name="add_scan_detail">Escanea papeles y documentos</string>
     <string name="add_file">Archivo y documento</string>
     <string name="add_file_detail">Imágenes de tus archivos</string>
+    <string name="info_color_list">Toca un color para usarlo. Arrastra los puntos para ordenar los colores.</string>
+    <string name="color_list_drag">Mover color</string>
 </resources>

@@ -28,7 +28,7 @@ object ShapeTips {
     fun params(kind: ShapeKind): Set<ShapeParam> = when (kind) {
         ShapeKind.ARROW, ShapeKind.BLOCK_ARROW, ShapeKind.AXES ->
             setOf(ShapeParam.STROKE_WIDTH, ShapeParam.TIP_LENGTH, ShapeParam.TIP_WIDTH)
-        ShapeKind.CYLINDER, ShapeKind.CUBE, ShapeKind.PIE, ShapeKind.PRISM, ShapeKind.SPEECH_ROUND ->
+        ShapeKind.CYLINDER, ShapeKind.CUBE, ShapeKind.PIE, ShapeKind.PRISM, ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT ->
             setOf(ShapeParam.STROKE_WIDTH, ShapeParam.TIP_LENGTH)
         ShapeKind.TAPE -> emptySet()
         else -> setOf(ShapeParam.STROKE_WIDTH)
@@ -47,6 +47,7 @@ object ShapeTips {
             ShapeKind.PIE -> PIE_BITE_DEGREES
             ShapeKind.PRISM -> h * WEDGE_BODY
             ShapeKind.SPEECH_ROUND -> w * SPEECH_TAIL_X
+            ShapeKind.THOUGHT -> w * THOUGHT_TAIL_X
             else -> 0f
         }
     }
@@ -59,11 +60,12 @@ object ShapeTips {
             ShapeKind.AXES -> length(kind, w, h, tipLength) * 2f
             ShapeKind.BLOCK_ARROW -> h
             ShapeKind.SPEECH_ROUND -> h
+            ShapeKind.THOUGHT -> h * THOUGHT_TAIL_Y
             else -> 0f
         }
     }
 
-    /** The point where a speech bubble's tail ends, in its frame. */
+    /** The point where a speech or thought bubble's tail ends, in its frame. */
     fun speechTip(item: ShapeItem): FloatArray {
         val w = item.frame.width
         val h = item.frame.height
@@ -85,7 +87,7 @@ object ShapeTips {
                     floatArrayOf(w / 2f + w / 2f * cos(sweep).toFloat(), h / 2f + h / 2f * sin(sweep).toFloat())
                 }
                 ShapeKind.PRISM -> floatArrayOf(w / 2f, h)
-                ShapeKind.SPEECH_ROUND -> speechTip(item)
+                ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT -> speechTip(item)
                 ShapeKind.CYLINDER -> floatArrayOf(w / 2f, length * 2f)
                 ShapeKind.CUBE -> floatArrayOf(0f, length)
                 else -> floatArrayOf(w - length, axis)
@@ -114,7 +116,11 @@ object ShapeTips {
                     item.copy(frame = item.frame.copy(height = height), tipLength = height - top)
                 }
                 ShapeKind.SPEECH_ROUND -> {
-                    val tip = outsideEllipse(w, h, x.coerceIn(0f, w), y.coerceIn(0f, h))
+                    val tip = outsideEllipse(w / 2f, h * SPEECH_ELLIPSE / 2f, w / 2f, h * SPEECH_ELLIPSE / 2f, x.coerceIn(0f, w), y.coerceIn(0f, h))
+                    item.copy(tipLength = tip[0], tipWidth = tip[1])
+                }
+                ShapeKind.THOUGHT -> {
+                    val tip = outsideEllipse(w * 0.52f, h * 0.36f, w * 0.48f, h * 0.36f, x.coerceIn(0f, w), y.coerceIn(0f, h))
                     item.copy(tipLength = tip[0], tipWidth = tip[1])
                 }
                 ShapeKind.CYLINDER -> item.copy(tipLength = (y / 2f).coerceIn(MIN_TIP_PT, h * 0.4f))
@@ -126,11 +132,7 @@ object ShapeTips {
     }
 
     /** A point inside the bubble's ellipse is pushed out to its edge, so the tail always sticks out. */
-    private fun outsideEllipse(w: Float, h: Float, x: Float, y: Float): FloatArray {
-        val cx = w / 2f
-        val cy = h * SPEECH_ELLIPSE / 2f
-        val rx = w / 2f
-        val ry = h * SPEECH_ELLIPSE / 2f
+    private fun outsideEllipse(cx: Float, cy: Float, rx: Float, ry: Float, x: Float, y: Float): FloatArray {
         val nx = (x - cx) / rx
         val ny = (y - cy) / ry
         val reach = hypot(nx, ny)
@@ -143,6 +145,8 @@ object ShapeTips {
     const val MIN_BITE_DEGREES = 15f
     const val WEDGE_BODY = 0.7f
     const val SPEECH_TAIL_X = 0.38f
+    const val THOUGHT_TAIL_X = 0.82f
+    const val THOUGHT_TAIL_Y = 0.95f
     const val SPEECH_ELLIPSE = 0.75f
     const val ARROW_HEAD_MAX = 24f
     const val ARROW_SPREAD = 0.6f

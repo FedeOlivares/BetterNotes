@@ -177,9 +177,24 @@ internal object ShapePaths {
                     cloud.addOval(box, Path.Direction.CW)
                     if (i == 0) path.set(cloud) else path.op(cloud, Path.Op.UNION)
                 }
+                thoughtTail(path, w, h, tipLength, tipWidth)
             }
             ShapeKind.TAPE -> tape(path, w, h)
             else -> Unit
+        }
+    }
+
+    /** Two small circles leading from the cloud toward the tip, which can be dragged anywhere around it. */
+    private fun thoughtTail(path: Path, w: Float, h: Float, tipLength: Float, tipWidth: Float) {
+        val tipX = ShapeTips.length(ShapeKind.THOUGHT, w, h, tipLength)
+        val tipY = ShapeTips.width(ShapeKind.THOUGHT, w, h, tipLength, tipWidth)
+        val fromX = w * 0.52f
+        val fromY = h * 0.36f
+        for ((along, size) in THOUGHT_TAIL) {
+            val cx = fromX + (tipX - fromX) * along
+            val cy = fromY + (tipY - fromY) * along
+            box.set(cx - w * size, cy - h * size, cx + w * size, cy + h * size)
+            path.addOval(box, Path.Direction.CW)
         }
     }
 
@@ -268,6 +283,9 @@ internal object ShapePaths {
     }
 
     private const val SPEECH_MOUTH_DEGREES = 14f
+
+    /** How far along from the cloud to the tip each tail circle sits, and its size as a part of the frame. */
+    private val THOUGHT_TAIL = arrayOf(0.72f to 0.045f, 0.92f to 0.03f)
     private const val CURVE_STEPS = 40
     private const val TAPE_TEETH = 5
     private val CLOUD_BUMPS = arrayOf(
@@ -275,8 +293,6 @@ internal object ShapePaths {
         floatArrayOf(0.55f, 0.22f, 0.22f),
         floatArrayOf(0.75f, 0.38f, 0.2f),
         floatArrayOf(0.45f, 0.5f, 0.22f),
-        floatArrayOf(0.72f, 0.82f, 0.05f),
-        floatArrayOf(0.82f, 0.95f, 0.03f),
     )
     private const val HEAD_RATIO = 0.25f
     private const val HEAD_MAX = 24f
