@@ -40,4 +40,15 @@ class ViewportTest {
         assertEquals(300f, viewport.toScreenX(worldX), 0.01f)
         assertEquals(500f, viewport.toScreenY(worldY), 0.01f)
     }
+
+    @Test
+    fun `changing the density keeps the focal point and rescales`() {
+        val viewport = Viewport(72f)
+        viewport.panX = 10f
+        viewport.panY = 20f
+        val worldX = viewport.toWorldX(100f)
+        viewport.changeDpi(144f, 100f, 200f)
+        assertEquals(2f, viewport.pxPerPt, 0.0001f)
+        assertEquals(worldX, viewport.toWorldX(100f), 0.001f)
+    }
 }

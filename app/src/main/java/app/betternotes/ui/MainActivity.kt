@@ -2,6 +2,7 @@ package app.betternotes.ui
 
 import android.os.Bundle
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
@@ -13,6 +14,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
 import app.betternotes.BuildConfig
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
@@ -24,7 +26,13 @@ import app.betternotes.core.template.PageBackground
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.library.LibraryRepository
 import app.betternotes.perf.CanvasBenchmark
+import app.betternotes.perf.HandwritingCheck
 import app.betternotes.perf.PerfProbe
+import app.betternotes.search.DocumentSearch
+import app.betternotes.search.MlKitRecognizer
+import app.betternotes.settings.SettingsRepository
+import app.betternotes.settings.actionFor
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -35,6 +43,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var canvas: CanvasView
     private var editor: NoteEditor? = null
     private var probe: PerfProbe? = null
+    private var search: DocumentSearch? = null
+    private lateinit var settings: SettingsRepository
     private val readout = mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -43,6 +53,8 @@ class MainActivity : ComponentActivity() {
         goFullscreen()
 
         canvas = CanvasView(this)
+        settings = SettingsRepository(this)
+        lifecycleScope.launch { settings.settings.collect(canvas::applySettings) }
         if (BuildConfig.PERF_TOOLS) {
             val perf = PerfProbe(window)
             perf.onSummary = { readout.value = it }
@@ -74,6 +86,13 @@ class MainActivity : ComponentActivity() {
             intent.hasExtra(EXTRA_DOCUMENT_ID) -> openDocument(intent.getLongExtra(EXTRA_DOCUMENT_ID, 0L))
             else -> openScratch(canvasKind = false)
         }
+        if (BuildConfig.DEV_CHECKS) HandwritingCheck.runIfAsked(intent)
+    }
+
+    /** Keys get here only if no view took them, so typing in a text field never fires a shortcut. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val action = settings.settings.value.keyBindings.actionFor(event)
+        return (action != null && canvas.perform(action)) || super.onKeyDown(keyCode, event)
     }
 
     override fun onStop() {
@@ -86,6 +105,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         canvas.close()
         editor?.close()
+        search?.close()
         probe?.close()
     }
 
@@ -115,8 +135,13 @@ class MainActivity : ComponentActivity() {
     private fun show(next: NoteEditor) {
         canvas.close()
         editor?.close()
+        search?.close()
         editor = next
         canvas.open(next)
+        val nextSearch = DocumentSearch(next.store, MlKitRecognizer())
+        search = nextSearch
+        next.onSaved = { nextSearch.refresh(next.document.pages) }
+        nextSearch.refresh(next.document.pages)
     }
 
     private fun runBenchmark(strokes: Int) {

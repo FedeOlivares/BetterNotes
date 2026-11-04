@@ -172,6 +172,12 @@ internal class ByteReader(bytes: ByteArray, offset: Int, end: Int) {
         return value
     }
 
+    /** Skips [size] bytes, for a section this version of the app does not know. */
+    fun skip(size: Int) {
+        if (size > remaining) throw CorruptFileException("Skipping $size bytes, $remaining left")
+        buffer.position(buffer.position() + size)
+    }
+
     fun floats(count: Int): FloatArray {
         val byteCount = count.toLong() * Float.SIZE_BYTES
         if (byteCount > remaining) throw CorruptFileException("$count floats, $remaining bytes left")

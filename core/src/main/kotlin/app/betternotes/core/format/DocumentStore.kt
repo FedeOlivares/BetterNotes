@@ -69,9 +69,19 @@ class DocumentStore(val root: File) {
         }
     }
 
+    /**
+     * Changes whenever the page's file does, so a reader can tell if what it derived from the page is
+     * stale without decoding it. A page with no file has stamp 0.
+     */
+    fun pageStamp(pageId: Long): Long {
+        val file = pageFile(pageId)
+        return file.lastModified() * 31 + file.length()
+    }
+
     private fun pageFile(pageId: Long) = File(pagesDir, java.lang.Long.toHexString(pageId) + ".bnp")
 }
 
+/** The new bytes reach the disk under a temporary name and only then replace the old file. */
 internal fun writeAtomically(file: File, bytes: ByteArray) {
     file.parentFile.mkdirs()
     val temp = File(file.parentFile, file.name + ".tmp")
