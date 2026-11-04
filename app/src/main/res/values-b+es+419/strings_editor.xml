@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">Better Notes</string>
     <string name="editor_not_built">Todavía no está disponible</string>
     <string name="editor_back">Atrás</string>
     <string name="editor_sidebar">Panel lateral</string>
