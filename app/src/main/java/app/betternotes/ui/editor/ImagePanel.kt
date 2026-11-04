@@ -68,15 +68,19 @@ internal class ImageSources(
     val pickPhoto: () -> Unit,
     val pickFile: () -> Unit,
     val pickVideo: () -> Unit,
+    val scan: () -> Unit,
 )
 
 @Composable
 internal fun rememberImageSources(state: EditorState): ImageSources {
     val context = LocalContext.current
     var pendingPhoto by remember { mutableStateOf<Uri?>(null) }
+    var scanning by remember { mutableStateOf(false) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         val uri = pendingPhoto
-        if (saved && uri != null) state.importImage(uri)
+        if (saved && uri != null) {
+            if (scanning) state.scanPhoto = uri else state.importImage(uri)
+        }
     }
     val openCamera = {
         val photo = newPhotoUri(context)
@@ -98,7 +102,16 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
     return remember {
         ImageSources(
             takePhoto = {
+                scanning = false
                 // An app that declares the camera permission must hold it even to use another app's camera.
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    openCamera()
+                } else {
+                    cameraPermission.launch(Manifest.permission.CAMERA)
+                }
+            },
+            scan = {
+                scanning = true
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                     openCamera()
                 } else {
@@ -189,7 +202,7 @@ internal fun ImagePanel(state: EditorState, sources: ImageSources, notices: Noti
             SourceButton(EditorIcons.Camera, R.string.tool_camera, sources.takePhoto)
             SourceButton(EditorIcons.AddImage, R.string.panel_add_image, sources.pickPhoto)
             SourceButton(EditorIcons.Folder, R.string.panel_from_files, sources.pickFile)
-            SourceButton(EditorIcons.Scan, R.string.panel_scan, notices::notBuilt)
+            SourceButton(EditorIcons.Scan, R.string.panel_scan, sources.scan)
         }
         Spacer(Modifier.height(8.dp))
         for (row in recents.chunked(RECENTS_PER_ROW)) {

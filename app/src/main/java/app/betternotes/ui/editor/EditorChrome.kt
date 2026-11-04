@@ -198,6 +198,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         }
         state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
         if (state.sidebarMenuOpen) SidebarMenu(state, notices)
+        state.scanPhoto?.let { ScanCrop(state, it) }
         if (state.pagesOpen) AllPagesPanel(state, notices)
         if (state.quickSwitchOpen) QuickSwitch(state, actions, notices)
 

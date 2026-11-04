@@ -139,4 +139,7 @@
     <string name="quick_switch_title">Quick switch</string>
     <string name="quick_switch_pin">Pin your notes for quick access</string>
     <string name="quick_switch_recents">Recents</string>
+    <string name="scan_done">Done</string>
+    <string name="scan_cancel">Cancel</string>
+    <string name="scan_loading">Loading the photo</string>
 </resources>
