@@ -32,6 +32,16 @@ class TextSearchTest {
     }
 
     @Test
+    fun `letters reported one per line still match`() {
+        assertEquals(listOf("m\r\na\r\nr"), find("x m\r\na\r\nr y", "mar"))
+    }
+
+    @Test
+    fun `a match ends at its last character, not at the next word`() {
+        assertEquals(listOf("word"), find("a word  here", "word"))
+    }
+
+    @Test
     fun `a query's own spacing at the ends is ignored`() {
         assertEquals(listOf("word"), find("a word here", "  word "))
     }

@@ -228,7 +228,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
 - All real UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match, and `MainActivity` opens a scratch note or canvas until the library exists.
-- The canvas paints only strokes and the page background. Shapes, images, text, sticky notes, tables, recordings and PDF pages are in the model but are not drawn yet.
+- The canvas paints only strokes, the page background and PDF pages. Shapes, images, text, sticky notes, tables and recordings are in the model but are not drawn yet.
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
 - `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
@@ -267,6 +267,34 @@ Choices in the canvas that have no reference and may need the owner's input:
 - The infinite canvas stops about 18 m from the origin in each direction, to keep float coordinates accurate at 1500%.
 - The stylus's eraser end erases partially, with a 6 pt radius.
 - Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
+
+### PDF
+In `app/.../pdf/`, plus `SearchableText` in `:core`'s `search` package:
+- `PdfImporter`: copies a PDF into a new document folder, `documentsDir/<id hex>`, built in a temporary folder and renamed at the end. An encrypted file is stored decrypted, so the password is never kept. Off the main thread.
+- `PdfWorker`: the one thread that talks to `PdfRenderer`, because the platform serializes PDF work anyway. It keeps the last page open. Previews go first, then tiles nearest the middle of the view, then one search page at a time.
+- `PdfPages`: paints a PDF page into a tile without ever waiting. A tile uses its own raster if ready, otherwise the zoom before stretched, otherwise a whole-page preview (512 px on the long side), and is redrawn when its raster arrives. Rasters sit on the tile's own pixels, so text stays as sharp as PDFium drew it. A pinch asks for no sharp tiles until it ends.
+- `PdfThumbnails`: a one-off render of a page, for the library and the page switcher.
+- Search: `NoteEditor.searchPdfText` streams `TextMatch`es, and `CanvasView.showMatches` and `reveal` mark and scroll to them. These take any `TextMatch`, so handwriting search can use them too.
+- `ui/PdfDevChrome.kt` is a plain stand-in for import and search, with no reference to match, like `DevChrome`.
+
+`PdfTest` runs on a device or emulator and checks real pixels. `PdfSpeedTest` times a generated 300-page PDF and logs under `BetterNotesPerf`. With more than one device attached, set `ANDROID_SERIAL` or Gradle runs on all of them.
+
+Measured on the x86_64 phone emulator only, so these say little about the Pad 7: import 1.1 to 1.6 s, opening the saved document 8 to 14 ms, first pixels of page 1 190 to 390 ms, jumping to page 201 240 to 410 ms, first search 1.9 to 3 s, a repeat search 19 ms.
+
+Known gaps:
+- Tested only on PDFs generated with Android's `PdfDocument` and with pypdf, never on a real-world file such as a scanned or very heavy book.
+- `PdfRenderer` reports page sizes in whole points, so a real A4 page (595.28 x 841.89) can lose under 1 pt at its right and bottom edges. That is about 0.05% off true size.
+- Text search reads text only, so a scanned PDF finds nothing. There is no OCR.
+- Text is read once per page and kept only in memory, so the first search after opening reads every page again. Previews and tiles are not cached on disk.
+- The bitmap caches have fixed budgets (96 MB previews, 128 MB tiles) and do not react to `onTrimMemory`.
+- `PdfDevChrome` has no way to enter a password, though `PdfImporter` accepts one.
+- Links and forms in a PDF do nothing.
+- PDF export (workstream 7) needs to draw the PDF page under the ink. `PageSource.PdfPage` says which page.
+
+Choices with no reference that may need the owner's input:
+- A PDF page is always on white paper. Its page background and template are ignored, while blank pages added to a PDF keep theirs.
+- Search matches ignore case, accents, ligatures, line wraps and all spaces, so "a si" also finds "así".
+- Highlight colors for search results.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 

@@ -128,6 +128,26 @@ class PdfTest {
         PdfThumbnails.render(imported.store, source, 50)
     }
 
+    @Test
+    fun anEncryptedPdfAsksForItsPasswordAndIsStoredOpen() {
+        // Made with pypdf: one 200 by 300 page with the usual square, user password "clave".
+        val file = File(root, "encrypted.pdf")
+        instrumentation.context.assets.open("encrypted.pdf").use { input ->
+            FileOutputStream(file).use { input.copyTo(it) }
+        }
+        val uri = Uri.fromFile(file)
+        assertEquals(PdfImportResult.NeedsPassword, PdfImporter.import(context.contentResolver, uri, documentsDir))
+        assertEquals(PdfImportResult.NeedsPassword, PdfImporter.import(context.contentResolver, uri, documentsDir, "mala"))
+        assertEquals(emptyList<String>(), documentsDir.list()!!.toList())
+
+        val imported = PdfImporter.import(context.contentResolver, uri, documentsDir, "clave") as PdfImportResult.Imported
+        assertEquals(PageSize(200f, 300f), imported.document.pages[0].size)
+        // It opens from now on with no password, which only a decrypted copy can do.
+        val bitmap = PdfThumbnails.render(imported.store, imported.document.pages[0].source as PageSource.PdfPage, 200)
+        assertTrue(Integer.toHexString(bitmap.getPixel(40, 40)), isDark(bitmap.getPixel(40, 40)))
+        assertEquals(listOf("source.pdf"), imported.store.assetFile("source.pdf").parentFile!!.list()!!.toList())
+    }
+
     // ---- Thumbnails ----
 
     @Test
@@ -165,6 +185,42 @@ class PdfTest {
             canvas.zoomTo(8f)
         }
         // A stretched preview would smear this edge over many pixels. A sharp tile keeps it to a few.
+        val scale = onMain { canvas.viewport.pxPerPt }
+        waitForPixel(60f - 3f / scale, 40f, ::isDark)
+        waitForPixel(60f + 3f / scale, 40f, ::isWhite)
+    }
+
+    @Test
+    fun aPinchEndsWithSharpEdges() {
+        openOnCanvas(import(writePdf("a.pdf", listOf(400 to 600))))
+        waitForPixel(40f, 40f, ::isDark)
+        onMain {
+            // Far enough past the stretch limit for tiles to be painted again during the pinch.
+            val x = canvas.viewport.toScreenX(60f)
+            val y = canvas.viewport.toScreenY(40f)
+            canvas.onTransform(0f, 0f, 3f, x, y)
+            canvas.onTransform(0f, 0f, 3f, x, y)
+            canvas.onTransformEnd()
+        }
+        val scale = onMain { canvas.viewport.pxPerPt }
+        waitForPixel(60f - 3f / scale, 40f, ::isDark)
+        waitForPixel(60f + 3f / scale, 40f, ::isWhite)
+    }
+
+    @Test
+    fun aFastTripThroughManyPagesStillEndsSharp() {
+        openOnCanvas(import(writePdf("a.pdf", List(60) { 400 to 600 })))
+        // Each stop at this zoom asks for dozens of tiles, which can be more than the queue holds.
+        for (page in 59 downTo 0) {
+            onMain {
+                canvas.zoomTo(8f)
+                val viewport = canvas.viewport
+                viewport.panX = canvas.width / 2f - 60f * viewport.pxPerPt
+                viewport.panY = canvas.height / 2f - (40f + page * 612f) * viewport.pxPerPt
+                canvas.zoomTo(8f)
+            }
+            SystemClock.sleep(16)
+        }
         val scale = onMain { canvas.viewport.pxPerPt }
         waitForPixel(60f - 3f / scale, 40f, ::isDark)
         waitForPixel(60f + 3f / scale, 40f, ::isWhite)
@@ -228,6 +284,30 @@ class PdfTest {
     }
 
     @Test
+    fun aMatchAcrossALineBreakGetsARectangleOnEachLine() {
+        openOnCanvas(import(writePdf("a.pdf", listOf(400 to 600), text = { "primera linea\nsegunda linea" })))
+        val rects = search("linea segunda").single().rects
+        assertEquals(2, rects.size)
+        assertTrue("$rects", rects[0].bottom <= rects[1].top + 4f)
+        assertTrue("$rects", rects[0].left > rects[1].left)
+    }
+
+    @Test
+    fun aHyphenThatOnlyBreaksALineDoesNotStopAMatch() {
+        openOnCanvas(import(writePdf("a.pdf", listOf(400 to 600), text = { "una pala-\nbra partida" })))
+        assertEquals(2, search("palabra").single().rects.size)
+    }
+
+    @Test
+    fun rectanglesAreRightAfterAnAccentAndALigature() {
+        openOnCanvas(import(writePdf("a.pdf", listOf(400 to 600), text = { "Camión ﬁno destino" })))
+        val first = search("camion").single().rects.single()
+        val last = search("destino").single().rects.single()
+        assertTrue("$first $last", first.right <= last.left)
+        assertEquals(1, search("fino").size)
+    }
+
+    @Test
     fun aSearchWithNoHitsFinishesEmpty() {
         openOnCanvas(import(writePdf("a.pdf", listOf(400 to 600), text = { "algo" })))
         assertEquals(emptyList<TextMatch>(), search("ausente"))
@@ -286,7 +366,9 @@ class PdfTest {
             val page = pdf.startPage(PdfDocument.PageInfo.Builder(width, height, index + 1).create())
             page.canvas.drawRect(20f, 20f, 60f, 60f, square)
             val words = text(index)
-            if (words.isNotEmpty()) page.canvas.drawText(words, 50f, 300f, letters)
+            words.lineSequence().forEachIndexed { line, part ->
+                if (part.isNotEmpty()) page.canvas.drawText(part, 50f, 300f + line * 30f, letters)
+            }
             pdf.finishPage(page)
         }
         FileOutputStream(out).use(pdf::writeTo)
@@ -342,6 +424,8 @@ class PdfTest {
             val viewport = canvas.viewport
             viewport.toScreenX(worldX).toInt() + location[0] to viewport.toScreenY(worldY).toInt() + location[1]
         }
+        // A copy from outside the window fails and leaves 0, which would pass for a dark pixel.
+        assertTrue("$worldX,$worldY is off screen", onMain { x in 0 until canvas.width && y in 0 until canvas.height })
         val bitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
         val done = CountDownLatch(1)
         val window = AtomicReference<Window>()

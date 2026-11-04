@@ -5,10 +5,12 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.graphics.pdf.RenderParams
+import android.graphics.pdf.models.selection.SelectionBoundary
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.core.graphics.createBitmap
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.model.PageSource
@@ -129,7 +131,7 @@ internal class PdfWorker(
         val raster = request.raster
         val bitmap = try {
             val page = open(raster.source)
-            val bitmap = Bitmap.createBitmap(raster.widthPx, raster.heightPx, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(raster.widthPx, raster.heightPx)
             // Most PDFs paint no background of their own and expect white paper.
             bitmap.eraseColor(Color.WHITE)
             matrix.setScale(raster.scale, raster.scale)
@@ -182,13 +184,12 @@ internal class PdfWorker(
         val ranges = text.find(foldedQuery)
         if (ranges.isEmpty()) return emptyList()
         val page = open(entry.source)
-        // The platform's own search has the rectangles. What it is asked for is the page's exact text,
-        // since it does not know about accents or ligatures.
-        val found = ranges.mapTo(HashSet()) { text.original.substring(it) }.flatMap { page.searchText(it) }
-        // Unknown to the platform's search, such as a match across a line break: still a hit on this page.
-        if (found.isEmpty()) return listOf(TextMatch(entry.pageId, emptyList()))
-        return found.sortedBy { it.textStartIndex }.map { match ->
-            TextMatch(entry.pageId, match.bounds.map { Bounds(it.left, it.top, it.right, it.bottom) })
+        return ranges.map { range ->
+            // Selecting by position works for any match, unlike the platform's own search, which knows
+            // nothing of accents and ligatures and stops at a line break.
+            val selection = page.selectContent(SelectionBoundary(range.first), SelectionBoundary(range.last + 1))
+            val rects = selection?.selectedTextContents.orEmpty().flatMap { it.bounds }
+            TextMatch(entry.pageId, rects.map { Bounds(it.left, it.top, it.right, it.bottom) })
         }
     }
 

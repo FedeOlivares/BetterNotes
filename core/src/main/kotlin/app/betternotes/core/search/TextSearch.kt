@@ -22,29 +22,29 @@ class SearchableText(val original: String) {
         if (foldedQuery.isEmpty()) return emptyList()
         var at = folded.indexOf(foldedQuery)
         if (at < 0) return emptyList()
-        val origins = IntArray(folded.length + 1)
+        val origins = IntArray(folded.length)
         fold(original, origins)
-        origins[folded.length] = original.length
         val found = ArrayList<IntRange>()
         while (at >= 0) {
             val end = at + foldedQuery.length
-            // Several folded characters can share one original, as "f" and "i" share "ﬁ".
-            var next = end
-            while (next < folded.length && origins[next] == origins[end - 1]) next++
-            found += origins[at] until origins[next]
+            // The last folded character gives the last original one, whatever it expanded to.
+            val last = origins[end - 1]
+            found += origins[at]..if (original[last].isHighSurrogate()) last + 1 else last
             at = folded.indexOf(foldedQuery, end)
         }
         return found
     }
 
     companion object {
-        /** The form a query must be in. Whitespace at its ends is dropped, as a user rarely means it. */
-        fun foldQuery(query: String) = fold(query.trim(), null)
+        /** The form a query must be in. */
+        fun foldQuery(query: String) = fold(query, null)
 
         /**
-         * Lowercases, strips accents, expands ligatures and turns each run of whitespace into one space.
-         * It also drops soft hyphens and a hyphen that ends a line, which PDF text is full of. If
-         * [origins] is given, it receives the index in [text] that each output character came from.
+         * Lowercases, strips accents and expands ligatures. It also drops all whitespace, soft hyphens,
+         * and any hyphen that ends a line. PDF text wraps anywhere, and PDFium can report letter-spaced
+         * text as one letter per line, so spaces are not reliable. The cost is that "a si" also finds
+         * "así", which a search can live with. If [origins] is given, it receives the index in [text]
+         * that each output character came from.
          */
         private fun fold(text: String, origins: IntArray?): String {
             val out = StringBuilder(text.length)
@@ -52,13 +52,8 @@ class SearchableText(val original: String) {
             while (i < text.length) {
                 val c = text[i]
                 when {
-                    c == SOFT_HYPHEN || c == PDF_SOFT_HYPHEN -> i++
-                    c == '-' && endsLine(text, i) -> i = skipWhitespace(text, i + 1)
-                    c.isWhitespace() -> {
-                        origins?.set(out.length, i)
-                        out.append(' ')
-                        i = skipWhitespace(text, i)
-                    }
+                    c.code == SOFT_HYPHEN || c.code == PDF_SOFT_HYPHEN || c.isWhitespace() -> i++
+                    c == '-' && endsLine(text, i) -> i++
                     c.code < 0x80 -> {
                         origins?.set(out.length, i)
                         out.append(c.lowercaseChar())
@@ -96,15 +91,9 @@ class SearchableText(val original: String) {
             return sawBreak && i < text.length && text[i].isLetter()
         }
 
-        private fun skipWhitespace(text: String, from: Int): Int {
-            var i = from
-            while (i < text.length && text[i].isWhitespace()) i++
-            return i
-        }
-
-        private const val SOFT_HYPHEN = '­'
+        private const val SOFT_HYPHEN = 0x00AD
 
         /** What PDFium reports for a hyphen it decided is only there for the line break. */
-        private const val PDF_SOFT_HYPHEN = '￾'
+        private const val PDF_SOFT_HYPHEN = 0xFFFE
     }
 }

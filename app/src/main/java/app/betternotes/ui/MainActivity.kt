@@ -1,14 +1,18 @@
 package app.betternotes.ui
 
+import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -23,8 +27,11 @@ import app.betternotes.core.model.Document
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.perf.CanvasBenchmark
+import app.betternotes.pdf.PdfImportResult
+import app.betternotes.pdf.PdfImporter
 import app.betternotes.perf.PerfProbe
 import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * For now, opens a scratch note or canvas straight on the drawing surface. The library will replace
@@ -35,6 +42,10 @@ class MainActivity : ComponentActivity() {
     private var editor: NoteEditor? = null
     private var probe: PerfProbe? = null
     private val readout = mutableStateOf("")
+    private val pdfStatus = mutableStateOf("")
+    private val pickPdf = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importPdf(uri)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +64,12 @@ class MainActivity : ComponentActivity() {
         val chrome = ComposeView(this).apply {
             setContent {
                 MaterialTheme(colorScheme = darkColorScheme()) {
-                    DevChrome(canvas, readout, ::openScratch)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        DevChrome(canvas, readout, ::openScratch)
+                        PdfDevChrome(canvas, { editor }, pdfStatus.value) {
+                            pickPdf.launch(arrayOf("application/pdf"))
+                        }
+                    }
                 }
             }
         }
@@ -99,6 +115,23 @@ class MainActivity : ComponentActivity() {
             DocumentSession.create(store, document)
         }
         show(NoteEditor(store, session))
+    }
+
+    private fun importPdf(uri: Uri) {
+        pdfStatus.value = "Importing..."
+        thread(name = "pdf-import") {
+            val result = PdfImporter.import(contentResolver, uri, File(filesDir, "documents"))
+            val session = (result as? PdfImportResult.Imported)?.let { DocumentSession.open(it.store) }
+            runOnUiThread {
+                if (isDestroyed) return@runOnUiThread
+                pdfStatus.value = when (result) {
+                    is PdfImportResult.Imported -> ""
+                    PdfImportResult.NeedsPassword -> "This PDF needs a password"
+                    is PdfImportResult.Failed -> "Could not read this PDF"
+                }
+                if (result is PdfImportResult.Imported && session != null) show(NoteEditor(result.store, session))
+            }
+        }
     }
 
     private fun show(next: NoteEditor) {
