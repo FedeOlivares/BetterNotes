@@ -31,6 +31,9 @@ class DocumentStore(val root: File) {
 
     fun readDocument(): Document = DocumentCodec.decode(documentFile.readBytes())
 
+    /** When the description was last written, or 0 if it never was. Any save rewrites it. */
+    fun descriptionModifiedMs() = documentFile.lastModified()
+
     fun writeDocument(document: Document) = writeDocumentBytes(DocumentCodec.encode(document))
 
     /** Writes a description already encoded, so the document can keep changing on another thread. */
@@ -67,14 +70,14 @@ class DocumentStore(val root: File) {
     }
 
     private fun pageFile(pageId: Long) = File(pagesDir, java.lang.Long.toHexString(pageId) + ".bnp")
+}
 
-    private fun writeAtomically(file: File, bytes: ByteArray) {
-        file.parentFile.mkdirs()
-        val temp = File(file.parentFile, file.name + ".tmp")
-        FileOutputStream(temp).use { out ->
-            out.write(bytes)
-            out.fd.sync()
-        }
-        Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+internal fun writeAtomically(file: File, bytes: ByteArray) {
+    file.parentFile.mkdirs()
+    val temp = File(file.parentFile, file.name + ".tmp")
+    FileOutputStream(temp).use { out ->
+        out.write(bytes)
+        out.fd.sync()
     }
+    Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
 }
