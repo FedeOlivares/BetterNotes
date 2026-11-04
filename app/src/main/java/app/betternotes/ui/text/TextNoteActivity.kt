@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import app.betternotes.R
+import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.IdSource
@@ -53,6 +54,7 @@ import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.ReferenceScale
 import app.betternotes.ui.theme.ThemeMode
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -69,7 +71,10 @@ private const val PAGE_MARGIN_PT = 48f
 class TextNoteActivity : ComponentActivity() {
     private lateinit var session: DocumentSession
     private var pageId = 0L
-    private var saveJob: kotlinx.coroutines.Job? = null
+    private var saveJob: Job? = null
+
+    /** What is typed but not yet on the page. Applying it once per save keeps undo from growing per letter. */
+    private var pendingBody: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -100,8 +105,13 @@ class TextNoteActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         saveJob?.cancel()
+        applyPendingBody()
         // The app may be killed from here on, and the library reads what this writes.
-        runBlocking(Dispatchers.IO) { session.prepareSave()?.let { save -> save.write().also { session.finishSave(save) } } }
+        val save = session.prepareSave()
+        if (save != null) {
+            runBlocking(Dispatchers.IO) { save.write() }
+            session.finishSave(save)
+        }
         LibraryRepository.get(this).refresh()
     }
 
@@ -111,18 +121,30 @@ class TextNoteActivity : ComponentActivity() {
     }
 
     private fun changeBody(text: String) {
-        val content = session.content(pageId)
-        val size = session.document.pages[0].size!!
-        val frame = Frame(PAGE_MARGIN_PT, PAGE_MARGIN_PT, size.widthPt - PAGE_MARGIN_PT * 2, size.heightPt - PAGE_MARGIN_PT * 2)
-        val item = TextItem(IdSource.Random.next(), frame, text)
-        content.splice(if (content.size == 0) intArrayOf() else intArrayOf(0), intArrayOf(0), listOf(item))
+        pendingBody = text
         scheduleSave()
+    }
+
+    private fun applyPendingBody() {
+        val text = pendingBody ?: return
+        pendingBody = null
+        val content = session.content(pageId)
+        val current = content.toList().firstOrNull() as? TextItem
+        val edit = if (current != null) {
+            ItemsEdit.replace(pageId, content, intArrayOf(0), listOf(current.copy(text = text)))
+        } else {
+            val size = session.document.pages[0].size!!
+            val frame = Frame(PAGE_MARGIN_PT, PAGE_MARGIN_PT, size.widthPt - PAGE_MARGIN_PT * 2, size.heightPt - PAGE_MARGIN_PT * 2)
+            ItemsEdit.addOnTop(pageId, content, TextItem(IdSource.Random.next(), frame, text))
+        }
+        session.history.perform(edit, session)
     }
 
     private fun scheduleSave() {
         saveJob?.cancel()
         saveJob = lifecycleScope.launch {
             delay(AUTOSAVE_DELAY_MS)
+            applyPendingBody()
             val save = session.prepareSave() ?: return@launch
             withContext(Dispatchers.IO) { save.write() }
             session.finishSave(save)

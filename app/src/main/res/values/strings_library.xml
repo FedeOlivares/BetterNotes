@@ -21,7 +21,10 @@
     <string name="library_no_tags">No tags yet</string>
     <string name="library_options">Options</string>
     <string name="library_select">Select</string>
-    <string name="library_selected_count">%1$d selected</string>
+    <plurals name="library_selected_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
     <string name="library_end_selection">End selection</string>
     <string name="library_grid">Grid</string>
     <string name="library_list">List</string>
@@ -47,7 +50,7 @@
     <string name="library_new_canvas">Canvas</string>
     <string name="library_new_audio">Audio</string>
     <string name="library_new_file">File &amp; Doc</string>
-    <string name="library_new_file_kinds">PDF, MP3, JPG...</string>
+    <string name="library_new_file_kinds">PDF, MP3, JPG…</string>
     <string name="library_new_photo">Take Photo</string>
     <string name="library_new_photo_hint">Capture a photo instantly</string>
     <string name="library_new_scan">Scan</string>

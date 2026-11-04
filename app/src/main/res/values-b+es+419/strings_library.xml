@@ -22,7 +22,11 @@
     <string name="library_no_tags">Todavía no hay etiquetas</string>
     <string name="library_options">Opciones</string>
     <string name="library_select">Seleccionar</string>
-    <string name="library_selected_count">%1$d seleccionados</string>
+    <plurals name="library_selected_count">
+        <item quantity="one">%d seleccionado</item>
+        <item quantity="many">%d seleccionados</item>
+        <item quantity="other">%d seleccionados</item>
+    </plurals>
     <string name="library_end_selection">Terminar la selección</string>
     <string name="library_grid">Cuadrícula</string>
     <string name="library_list">Lista</string>
@@ -48,7 +52,7 @@
     <string name="library_new_canvas">Lienzo</string>
     <string name="library_new_audio">Audio</string>
     <string name="library_new_file">Archivo y doc.</string>
-    <string name="library_new_file_kinds">PDF, MP3, JPG...</string>
+    <string name="library_new_file_kinds">PDF, MP3, JPG…</string>
     <string name="library_new_photo">Tomar foto</string>
     <string name="library_new_photo_hint">Captura una foto al instante</string>
     <string name="library_new_scan">Escanear</string>

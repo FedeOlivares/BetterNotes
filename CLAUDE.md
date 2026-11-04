@@ -288,14 +288,22 @@ The app opens on `ui/library/LibraryActivity`, which starts `MainActivity` with 
 - `ui/theme`: `AppTheme` and `AppColors`. `ReferenceScale` makes 1 dp equal 1 pixel of the 1068 px wide reference, so its measurements copy over directly. The dark colors are measured from the screenshot; the light ones have no reference.
 - To compare with the reference: seed made-up content with `LibraryDemoSeed` (see its comment), then take a screenshot. `reference/notewise/app home.jpg` is at half the Pad 7's resolution, and `add new note.jpg` at its full resolution.
 
-Library choices with no reference, which need the owner's screenshots or input:
-- What the circled "..." opens, the tiles' "..." menus, all dialogs, the search field and the inside of a folder. The circled "..." also holds the theme and name options until settings has a place for them.
-- The "+" panel matches `add new note.jpg`, without "Link". Its "Text" tile makes a paged A4 note and its "Canvas" tile an infinite canvas, which is one reading of the screenshot. "Scan" is the camera with no edge detection, because the offline-capable scanner needs Google Play services. "File & Doc" takes PDFs, sound and pictures, not PPT, which nothing here can open offline.
-- `EXTRA_START_ACTION` asks the editor to start typing or recording in a new note. Nothing reads it until the editor has those tools.
+Library decisions and references:
+- The owner chose: "Text" makes a typed notebook (`DocumentKind.TEXT`, `TextNoteActivity`), "Canvas" a drawing note with pages, not an infinite one. Nothing in the library creates an infinite canvas any more, and where it should be offered is still to ask.
+- Inside a folder the screen is the same, with a house and the folder's name in place of "All".
+- The bottom pill keeps only home, since its other icons were online features.
+- The "+" panel matches `add new note.jpg` without "Link", and the circled "..." matches `... on home.jpg` plus a Settings row, since the avatar that led there is gone.
+- UI text is English or Latin American Spanish (`values-b+es+419`), chosen under Settings > General with the theme and the name. New strings need both, which lint enforces.
+- A popup or dialog starts a new composition with the device's density. Menus measured from a reference hand in the scale, as `OptionsMenu` does. The plain dialogs and the tiles' menus stay at real dp.
+
+Library choices with no reference:
+- The tiles' "..." menus, all dialogs, the search field, selecting, the list layout's rows and the typed notebook's screen.
+- "Scan" is the camera with no edge detection, because the offline-capable scanner needs Google Play services. "File & Doc" takes PDFs, sound and pictures, not PPT, which nothing here can open offline.
+- `EXTRA_START_ACTION` asks the editor to start recording in a new note. Nothing reads it until the editor has that tool.
 - Morning and afternoon use the evening's subtitle, and "Hey" lasts until 5 AM. The screenshots only show 8:21 PM and 2:05 AM.
 - Dates for items older than this year, the tag filter's list, and landscape's 4 columns.
-- The bottom pill keeps only home: the asterisk was AI, and what the grid icon does is unknown.
 - The serif is the system's (Noto Serif), not the reference's, which only looks close.
+- `ThumbnailRenderer` draws ink, pictures and typed text with its own code. Once `PagePainter` paints those, it should go through a `PaintSource`.
 
 ### Settings, export and search
 - `core/.../settings`: `AppSettings` (two-finger tap timings, scroll direction, new page defaults, custom layouts, shortcuts, screen calibration), `SettingsCodec` (tagged sections, so a setting can be added without a format version) and `SettingsStore`. The theme is not here: the library keeps it in SharedPreferences. `app/.../settings/SettingsRepository` holds the current value and saves in the background. `CanvasView.applySettings` applies them.
