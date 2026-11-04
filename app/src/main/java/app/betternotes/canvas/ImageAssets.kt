@@ -1,3 +1,6 @@
+// The platform's version is fine from API 24, well below minSdk, and saves a dependency.
+@file:android.annotation.SuppressLint("ExifInterface")
+
 package app.betternotes.canvas
 
 import android.content.ContentResolver

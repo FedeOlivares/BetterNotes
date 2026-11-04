@@ -404,6 +404,23 @@ class CanvasViewTest {
     }
 
     @Test
+    fun inkInTheLoupeLandsSmallerOnThePage() {
+        val top = onMain {
+            canvas.setLoupeArea(0f, canvas.height / 2f, canvas.width.toFloat(), canvas.height.toFloat())
+            canvas.loupeOpen = true
+            canvas.height / 2f
+        }
+        val width = onMain { canvas.width.toFloat() }
+        val drag = 300f
+        drag(MotionEvent.TOOL_TYPE_STYLUS, width / 2f - drag / 2f to top + 200f, width / 2f + drag / 2f to top + 200f)
+        val stroke = onlyStroke()
+        val pxPerPt = onMain { canvas.viewport.pxPerPt }
+        // The box is 45% of what the view shows across, and the window shows that box across all of it.
+        val expected = drag * 0.45f / pxPerPt
+        assertEquals(expected, stroke.points.x(stroke.points.size - 1) - stroke.points.x(0), 1f)
+    }
+
+    @Test
     fun clearingThePageCanBeUndone() {
         stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
         waitUntil { pageContent().size == 1 }

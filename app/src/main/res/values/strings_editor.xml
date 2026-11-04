@@ -51,6 +51,9 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="loupe_center">Bring the box to the middle</string>
+    <string name="loupe_back">Move the box back</string>
+    <string name="loupe_forward">Move the box forward</string>
     <string name="recorder_new">New audio recording</string>
     <string name="recorder_import">Import</string>
     <string name="recorder_play_all">Play all</string>

@@ -2,9 +2,12 @@ package app.betternotes.ui.editor
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -165,9 +168,17 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             }
         }
 
-        PositionControls(state, Modifier.align(Alignment.BottomStart), Modifier.align(Alignment.CenterEnd))
+        if (state.loupeOpen && !state.viewOnly) LoupeBar(state, Modifier.align(Alignment.BottomCenter))
+        PositionControls(state)
         state.textEdit?.let { request -> TextEditOverlay(request) { request.finish(it) } }
         if (recorder.menuOpen) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        recorder.menuOpen = false
+                    },
+            )
             RecorderMenu(
                 state,
                 recorder,
@@ -268,12 +279,17 @@ private fun CenterPill(state: EditorState, recorder: RecorderState, notices: Not
                 ToolbarIcon(
                     item.icon,
                     stringResource(item.label),
-                    selected = if (item.label == R.string.tool_ruler) state.rulerOn else tool == state.activeTool,
+                    selected = when (item.label) {
+                        R.string.tool_ruler -> state.rulerOn
+                        R.string.tool_loupe -> state.loupeOpen
+                        else -> tool == state.activeTool
+                    },
                     onClick = {
                         when {
                             tool != null -> state.select(tool)
                             item.label == R.string.tool_ruler -> state.toggleRuler()
                             item.label == R.string.tool_clipboard -> state.paste()
+                            item.label == R.string.tool_loupe -> state.toggleLoupe()
                             item.label == R.string.tool_recorder -> recorder.menuOpen = !recorder.menuOpen
                             else -> notices.notBuilt()
                         }
@@ -371,7 +387,7 @@ private fun LaserRow(state: EditorState, notices: Notices, modifier: Modifier) {
  * page moves and go away soon after, as in the screenshots, where they are only sometimes there.
  */
 @Composable
-private fun PositionControls(state: EditorState, readoutModifier: Modifier, buttonsModifier: Modifier) {
+private fun BoxScope.PositionControls(state: EditorState) {
     val colors = LocalEditorColors.current
     var visible by remember { mutableStateOf(false) }
     val moves = state.viewMoves
@@ -384,7 +400,8 @@ private fun PositionControls(state: EditorState, readoutModifier: Modifier, butt
     if (!visible) return
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = readoutModifier
+        modifier = Modifier
+            .align(Alignment.BottomStart)
             .padding(start = 9.dp, bottom = 12.dp)
             .masksInk(state, "readout")
             .height(PillHeight)
@@ -410,7 +427,8 @@ private fun PositionControls(state: EditorState, readoutModifier: Modifier, butt
         )
     }
     Column(
-        modifier = buttonsModifier
+        modifier = Modifier
+            .align(Alignment.CenterEnd)
             .padding(end = 2.dp)
             .masksInk(state, "page-buttons")
             .shadow(4.dp, CircleShape, clip = false)

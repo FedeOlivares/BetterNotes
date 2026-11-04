@@ -251,8 +251,11 @@ private fun rememberRecentImages(limit: Int, refresh: Boolean): List<Uri> {
     return recents
 }
 
-private fun canReadImages(context: Context) =
-    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+/** Someone who allowed only some of their pictures still gets those, which the query returns alone. */
+private fun canReadImages(context: Context) = listOf(
+    Manifest.permission.READ_MEDIA_IMAGES,
+    Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+).any { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
 
 private fun recentImages(context: Context, limit: Int): List<Uri> {
     val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI

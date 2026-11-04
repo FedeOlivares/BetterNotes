@@ -228,7 +228,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
 - `MainActivity` opens a scratch note or canvas until the library exists. The editor's "..." menu holds stand-ins for that, the theme and the performance readout until its real screen has a reference.
-- The canvas paints only strokes and the page background. Shapes, images, text, sticky notes, tables, recordings and PDF pages are in the model but are not drawn yet.
+- PDF pages are in the model but are not drawn yet.
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
 - `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
@@ -254,7 +254,7 @@ Choices in `:core` that have no reference and may need the owner's input:
 In `app/.../canvas/`:
 - `CanvasView`: the drawing surface. Touches go to `GestureRecognizer`. The stroke in progress goes through androidx.ink's `InProgressStrokesView`, with motion prediction and unbuffered dispatch. Also handles pan, pinch, fling and the eraser.
 - `TileLayerView`: finished content as 512 px tiles, each a `RenderNode` with a GPU layer, in a fixed square of slots. Moving the page only composites textures and rasterizes the tiles it uncovers. During a pinch the tiles stretch, and they redraw past a set stretch and when the fingers lift.
-- `PagePainter`: paints paper, template and items into a tile. New item types go in `paintItems`.
+- `PagePainter`: paints paper, template and items into a tile. Items other than ink go through `ItemPainter`.
 - `NoteEditor`: the open document on the main thread, with disk work and meshing on one background thread. Meshing a page uses all cores. Saves 1 s after the last edit, and on `onStop`.
 - `StrokeCache` and `InkBrushes`: ink meshes per `StrokeItem`, and `InkStyle` to `Brush`, with stock brushes pinned to a version.
 
@@ -269,21 +269,31 @@ Choices in the canvas that have no reference and may need the owner's input:
 - Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
 
 ### Editor UI
+Reference screenshots are in `reference/notewise/`, with names saying what each shows. Sizes in `ui/editor` were read off them at 2.5 pixels per unit, and `EditorChrome` scales that to the tablet's 2.75 pixels per dp.
+
 In `app/.../ui/`:
 - `theme/Theme.kt`: `EditorColors`, dark measured from the screenshots, light derived with no reference. `icons/EditorIcons.kt`: line icons drawn for this app.
-- `editor/EditorChrome.kt`: the left, center and right pills and the tool row. `editor/InkPanel.kt`: the pen, pencil and highlighter panel. `editor/ColorWheelPanel.kt`: a plain wheel, since no screenshot shows the real one.
-- `editor/EditorState.kt`: what the controls show, and the one place that passes their choices to `CanvasView`. `editor/ToolStore.kt`: saves tools and the theme in `SharedPreferences`.
+- `editor/EditorChrome.kt`: the left, center and right pills, each tool's row, the page and zoom readout, and the panels. `editor/EditorState.kt`: what the controls show, and the one place that passes their choices to `CanvasView`. `editor/ToolStore.kt`: saves tools and the theme in `SharedPreferences`.
+- Panels: `InkPanel`, `EraserLassoPanels`, `ShapePanel`, `NotePanels` (sticky note, text, table, and the text box over the canvas), `ImagePanel`, `Recorder`, `AllPagesPanel`, `LoupeBar`, `ColorWheelPanel`.
 - Controls report their bounds with `masksInk`, because wet ink is drawn over every view in the window.
 
-In `:core`: `tools/InkPreset` holds a tool's slots and options, and `gesture/HoldDetector` notices the held pen that straightens a stroke.
+In `app/.../canvas/`: `CanvasOverlayView` (laser tail, ruler), `LassoController`, `ShapeController`, `ItemPainter` and `ShapePaths` (everything but ink), `ImageAssets`, `LoupeView`. A picture paints as a tint until decoded.
+
+In `:core`: `tools/` has each tool's options (`InkPreset`, `EraserOptions`, `LassoOptions`, `ShapeOptions`, `NoteOptions`, `TableOptions`, `ImageOptions`), `ItemKind`, `FadingTrail`, `Ruler`, and `gesture/HoldDetector` notices the held pen that straightens a stroke. The file format gained tags for styled text and tables and new shape values at the end of their list. Plain items keep their bytes, so `FORMAT_VERSION` is still 1.
+
+Owner decisions: the laser shows where you touch and leaves a tail, and writes nothing. Two fingers on the ruler carry it like a real ruler.
 
 Choices with no reference that may need the owner's input:
-- A thickness value is tenths of a millimeter, from 1 to 100.
-- Strip order: pen, pencil, highlighter, eraser, lasso, shapes, image, photo, then the tools the screenshots show. The tray icon is assumed to be the clipboard.
-- Opacity, tip and hold-time rows copy the panel's rows. They are requirements the screenshot does not show.
-- A swatch outside the row replaces the slot in use. The chevron shows or hides the tool row. View-only keeps only the left and right pills.
+- A thickness value is tenths of a millimeter, from 1 to 100. The ruler's marks are the page's real centimeters, so they follow the zoom. The screenshot's spacing suggests Notewise's may not.
+- A stroke starting within 14 dp of the ruler's edge runs along it. Selection handles are provisional, with no screenshot. A sticky note opens when the pen lands on it closed, and closes from its folded corner. The stack button is assumed to open quick switch and the sidebar button the Insert and Search menu.
+- Opacity, tip and hold-time rows copy the pen panel's rows. They are requirements the screenshot does not show. The color wheel, the laser's options and text tool's row have no reference either.
+- A recording has no mark on the page and shows only in the recorder's menu. Its name is its position in that list.
 
-Saved but with no effect yet: scribble to erase, circle to lasso, stabilization. Buttons with no behavior yet say so with a toast: the left pill's page buttons, the swatch list, and every tool in the strip from the lasso on, including settings.
+Saved but with no effect yet: scribble to erase, circle to lasso, stabilization, erase locked objects, auto deselect, select locked objects, take screenshot.
+
+Not built yet, and the button says so:
+- Quick switch between notes, which needs the library's document list. Search and Insert in the sidebar menu. Tape, sticker and add element, which need the owner to say what they do. Scan. The chevrons on the left pill. Selecting several pages in All pages, and the second page of shapes.
+- `MainActivity`'s `EXTRA_START_ACTION` from the library, the settings screens behind the toolbar's gear, and `canvas.onToolAction` from settings: all to wire after merging.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 

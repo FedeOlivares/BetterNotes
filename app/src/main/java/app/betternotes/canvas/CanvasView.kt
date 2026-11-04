@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.media.MediaMetadataRetriever
@@ -16,6 +17,7 @@ import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.OverScroller
 import androidx.core.graphics.createBitmap
+import androidx.core.view.isVisible
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
@@ -139,6 +141,73 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private var textEdit: TextEditRequest? = null
 
+    /** Whether the loupe is showing. */
+    var loupeOpen: Boolean
+        get() = loupe.isVisible
+        set(value) {
+            if (value == loupeOpen) return
+            loupe.isVisible = value
+            if (value) {
+                loupe.pageIndex = currentPage
+                recenterLoupe()
+            } else {
+                maskIsCurrent = false
+            }
+            overlay.invalidate()
+        }
+
+    /** Where the loupe's window goes on screen, from whoever lays out its controls. */
+    fun setLoupeArea(left: Float, top: Float, right: Float, bottom: Float) {
+        loupe.area.set(left, top, right, bottom)
+        if (loupeOpen && loupe.box.isEmpty) recenterLoupe()
+        loupe.invalidate()
+    }
+
+    /** Puts the loupe's box in the middle of the view. */
+    fun recenterLoupe() {
+        val layout = layout ?: return
+        if (width == 0 || loupe.area.isEmpty) return
+        loupe.pageIndex = currentPage
+        val world = viewport.visibleWorld(width, height)
+        val boxWidth = world.width * LOUPE_BOX_SHARE
+        val boxHeight = boxWidth * loupe.area.height() / loupe.area.width()
+        val left = world.centerX - boxWidth / 2f - layout.originX(loupe.pageIndex)
+        val top = world.centerY - boxHeight / 2f - layout.originY(loupe.pageIndex)
+        loupe.box.set(left, top, left + boxWidth, top + boxHeight)
+        overlay.invalidate()
+        loupe.invalidate()
+    }
+
+    /** Moves the loupe's box along the line of writing, by its own width. At the page's edge it starts the next line. */
+    fun stepLoupe(forward: Boolean) {
+        val size = pages.getOrNull(loupe.pageIndex)?.size
+        val step = loupe.box.width() * LOUPE_STEP_SHARE * if (forward) 1f else -1f
+        loupe.box.offset(step, 0f)
+        if (size != null) {
+            if (forward && loupe.box.left >= size.widthPt) {
+                loupe.box.offsetTo(0f, loupe.box.top + loupe.box.height())
+            } else if (!forward && loupe.box.right <= 0f) {
+                loupe.box.offsetTo((size.widthPt - loupe.box.width()).coerceAtLeast(0f), loupe.box.top - loupe.box.height())
+            }
+        }
+        overlay.invalidate()
+        loupe.invalidate()
+    }
+
+    private fun drawLoupeBox(canvas: Canvas) {
+        val layout = layout
+        if (!loupeOpen || layout == null || loupe.box.isEmpty) return
+        val x = layout.originX(loupe.pageIndex)
+        val y = layout.originY(loupe.pageIndex)
+        canvas.drawRect(
+            viewport.toScreenX(x + loupe.box.left),
+            viewport.toScreenY(y + loupe.box.top),
+            viewport.toScreenX(x + loupe.box.right),
+            viewport.toScreenY(y + loupe.box.bottom),
+            loupeBoxPaint,
+        )
+    }
+
     /** Called whenever the page moves under the view, for the page and zoom indicator. */
     var onViewMoved: () -> Unit = {}
 
@@ -232,6 +301,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private val tiles = TileLayerView(context, viewport, ::paintTile, backdropColor)
     private val wet = InProgressStrokesView(context)
     private val overlay = CanvasOverlayView(context, viewport)
+    private val loupe = LoupeView(context).apply {
+        visibility = GONE
+        layoutOf = { layout }
+    }
     private val predictor = MotionEventPredictor.newInstance(this)
     private val recognizer = GestureRecognizer(
         GestureConfig(touchSlopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat()),
@@ -298,6 +371,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private var laserPointer = -1
     private var lassoPointer = -1
+
+    // The stroke in progress is in the loupe's window, or the pen is dragging its box on the page.
+    private var drawingInLoupe = false
+    private var loupeBoxPointer = -1
+    private var loupeBoxGrabX = 0f
+    private var loupeBoxGrabY = 0f
+    private val loupeBoxPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = LOUPE_BOX_COLOR
+        strokeWidth = LOUPE_BOX_WIDTH_DP * resources.displayMetrics.density
+    }
     private var shapePointer = -1
 
     private val shapes by lazy {
@@ -337,9 +421,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         addView(tiles, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(loupe, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         overlay.extraDraw = { canvas ->
             lasso.draw(canvas)
             shapes.draw(canvas)
+            drawLoupeBox(canvas)
         }
         wet.addFinishedStrokesListener(this)
     }
@@ -349,6 +435,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         this.editor = editor
         lasso.open(editor)
         painter = PagePainter(editor)
+        loupe.painter = painter
         editor.onPageLoaded = ::redrawPage
         editor.onHistoryChanged = { onHistoryChanged() }
         editor.onImageLoaded = { tiles.invalidateAll() }
@@ -602,7 +689,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         val editor = editor ?: return
         val layout = layout ?: return
-        val index = layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
+        drawingInLoupe = loupeOpen && loupe.contains(x, y)
+        if (loupeOpen && !drawingInLoupe && startDraggingLoupeBox(pointerId, x, y)) return
+        val index = if (drawingInLoupe) loupe.pageIndex else layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
         if (index < 0) return
         val page = editor.document.pages[index]
         drawPointerId = pointerId
@@ -628,7 +717,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
             val reach = RULER_EDGE_REACH_DP * resources.displayMetrics.density
-            strokeEdge = overlay.ruler?.edgeNear(x, y, reach) ?: Ruler.NO_EDGE
+            strokeEdge = if (drawingInLoupe) Ruler.NO_EDGE else overlay.ruler?.edgeNear(x, y, reach) ?: Ruler.NO_EDGE
             // A stroke that starts when a tap times out has no event yet, and ink needs one.
             val event = currentEvent
             if (event != null) startStroke(event) else strokeWaitingForEvent = true
@@ -636,6 +725,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawMove(pointerId: Int, x: Float, y: Float) {
+        if (pointerId == loupeBoxPointer) {
+            val layout = layout ?: return
+            val index = loupe.pageIndex
+            loupe.box.offsetTo(
+                viewport.toWorldX(x) - layout.originX(index) - loupeBoxGrabX,
+                viewport.toWorldY(y) - layout.originY(index) - loupeBoxGrabY,
+            )
+            overlay.invalidate()
+            loupe.invalidate()
+            return
+        }
         if (pointerId == laserPointer) {
             overlay.laserMove(x, y)
             return
@@ -652,6 +752,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawEnd(pointerId: Int) {
+        if (pointerId == loupeBoxPointer) {
+            loupeBoxPointer = -1
+            return
+        }
         if (pointerId == laserPointer) {
             laserPointer = -1
             return
@@ -686,6 +790,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawCancel(pointerId: Int) {
+        if (pointerId == loupeBoxPointer) {
+            loupeBoxPointer = -1
+            return
+        }
         if (pointerId == laserPointer) {
             laserPointer = -1
             return
@@ -1054,9 +1162,23 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         onTextEdit(null)
     }
 
-    private fun pageX(screenX: Float, index: Int) = viewport.toWorldX(screenX) - (layout?.originX(index) ?: 0f)
+    private fun pageX(screenX: Float, index: Int) =
+        if (drawingInLoupe) loupe.pageX(screenX) else viewport.toWorldX(screenX) - (layout?.originX(index) ?: 0f)
 
-    private fun pageY(screenY: Float, index: Int) = viewport.toWorldY(screenY) - (layout?.originY(index) ?: 0f)
+    private fun pageY(screenY: Float, index: Int) =
+        if (drawingInLoupe) loupe.pageY(screenY) else viewport.toWorldY(screenY) - (layout?.originY(index) ?: 0f)
+
+    /** The pen on the loupe's box, away from anything else, carries the box along. */
+    private fun startDraggingLoupeBox(pointerId: Int, x: Float, y: Float): Boolean {
+        val layout = layout ?: return false
+        val pageX = viewport.toWorldX(x) - layout.originX(loupe.pageIndex)
+        val pageY = viewport.toWorldY(y) - layout.originY(loupe.pageIndex)
+        if (!loupe.box.contains(pageX, pageY)) return false
+        loupeBoxPointer = pointerId
+        loupeBoxGrabX = pageX - loupe.box.left
+        loupeBoxGrabY = pageY - loupe.box.top
+        return true
+    }
 
     private fun startWaitingStroke(event: MotionEvent) {
         strokeWaitingForEvent = false
@@ -1069,9 +1191,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val page = editor.document.pages[drawPageIndex]
         val scale = viewport.pxPerPt
         // Stroke coordinates are the page's own, so a page can move without touching its ink.
-        screenToPage.setTranslate(-viewport.panX, -viewport.panY)
-        screenToPage.postScale(1f / scale, 1f / scale)
-        screenToPage.postTranslate(-layout.originX(drawPageIndex), -layout.originY(drawPageIndex))
+        if (drawingInLoupe) {
+            loupe.screenToPage(screenToPage)
+        } else {
+            screenToPage.setTranslate(-viewport.panX, -viewport.panY)
+            screenToPage.postScale(1f / scale, 1f / scale)
+            screenToPage.postTranslate(-layout.originX(drawPageIndex), -layout.originY(drawPageIndex))
+        }
         updateWetMask(layout, drawPageIndex)
         if (strokeEdge != Ruler.NO_EDGE) {
             startStrokeAlongRuler(event, editor, page.id)
@@ -1196,8 +1322,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     private fun eraseAt(x: Float, y: Float) {
-        val layout = layout ?: return
-        erase?.eraseTo(viewport.toWorldX(x) - layout.originX(drawPageIndex), viewport.toWorldY(y) - layout.originY(drawPageIndex))
+        erase?.eraseTo(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
         redrawChanges(drawPageIndex)
     }
 
@@ -1207,7 +1332,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
      */
     private fun updateWetMask(layout: DocumentLayout, index: Int) {
         val size = editor?.document?.pages?.get(index)?.size
-        val page = size?.let {
+        val page = if (drawingInLoupe) RectF(loupe.area) else size?.let {
             val originX = layout.originX(index)
             val originY = layout.originY(index)
             RectF(
@@ -1353,6 +1478,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val x = layout.originX(pageIndex)
         val y = layout.originY(pageIndex)
         tiles.invalidateRegion(Bounds(changed.left + x, changed.top + y, changed.right + x, changed.bottom + y))
+        if (loupeOpen) loupe.invalidate()
     }
 
     /** A page's ink arrived from the disk, which an empty tile is still waiting for. */
@@ -1401,6 +1527,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val HOLD_SLOP_DP = 3f
         const val MIN_HOLD_CHECK_MS = 8L
         const val PLACED_SHARE_OF_VIEW = 0.6f
+        const val LOUPE_BOX_SHARE = 0.45f
+        const val LOUPE_STEP_SHARE = 0.8f
+        const val LOUPE_BOX_COLOR = 0xFF4A9BF5.toInt()
+        const val LOUPE_BOX_WIDTH_DP = 1.2f
         const val NEW_TEXT_WIDTH_PT = 200f
         const val NEW_TEXT_HEIGHT_PT = 60f
         const val CELL_INSET_PT = 3f

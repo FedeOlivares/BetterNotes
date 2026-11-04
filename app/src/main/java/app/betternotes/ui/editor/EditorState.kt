@@ -5,6 +5,8 @@ import android.graphics.RectF
 import android.net.Uri
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -70,11 +72,13 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var image by mutableStateOf(store.image())
         private set
+    var loupeOpen by mutableStateOf(false)
+        private set
     var pagesOpen by mutableStateOf(false)
     var sidebarMenuOpen by mutableStateOf(false)
 
     /** Bumped by every edit, so lists drawn from the document know to look again. */
-    var historyVersion by mutableStateOf(0)
+    var historyVersion by mutableIntStateOf(0)
         private set
 
     /** Says something short to the user. Set by the controls, which have the means to. */
@@ -88,16 +92,16 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var rulerOn by mutableStateOf(false)
         private set
-    var laserWidthSlot by mutableStateOf(1)
-    var currentPage by mutableStateOf(0)
+    var laserWidthSlot by mutableIntStateOf(1)
+    var currentPage by mutableIntStateOf(0)
         private set
-    var pageCount by mutableStateOf(0)
+    var pageCount by mutableIntStateOf(0)
         private set
-    var zoom by mutableStateOf(1f)
+    var zoom by mutableFloatStateOf(1f)
         private set
 
     /** Bumped each time the page moves, which shows the indicator for a while. */
-    var viewMoves by mutableStateOf(0)
+    var viewMoves by mutableIntStateOf(0)
         private set
     var canUndo by mutableStateOf(false)
         private set
@@ -293,6 +297,18 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         rulerOn = !rulerOn
         canvas.rulerVisible = rulerOn
     }
+
+    fun toggleLoupe() {
+        loupeOpen = !loupeOpen
+        canvas.loupeOpen = loupeOpen
+        if (loupeOpen) panelOpen = false
+    }
+
+    fun setLoupeArea(left: Float, top: Float, right: Float, bottom: Float) = canvas.setLoupeArea(left, top, right, bottom)
+
+    fun recenterLoupe() = canvas.recenterLoupe()
+
+    fun stepLoupe(forward: Boolean) = canvas.stepLoupe(forward)
 
     fun selectLaserWidth(slot: Int) {
         laserWidthSlot = slot
