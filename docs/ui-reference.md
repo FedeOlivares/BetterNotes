@@ -14,7 +14,7 @@ Also available: Play Store marketing images and the help site at help.notewise.d
 - Portrait layout is a 3-column grid of rounded cards with a thin light border.
 - Document card: dark header (date, title up to 2 lines, "..."), with the first-page thumbnail filling the rest.
 - Folder card: solid blue folder illustration, "18 items" at top, "..." and the folder name at bottom.
-- Bottom left: floating pill with home (selected, blue), an asterisk (AI?) and a grid icon (?).
+- Bottom left: floating pill with home (selected, blue), an asterisk (AI) and a grid icon (layout market). (The last two are online features and are omitted.)
 - Bottom right: round blue "+" floating button.
 
 ## Editor toolbars
