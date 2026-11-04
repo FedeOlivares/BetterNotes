@@ -14,13 +14,27 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "PERF_TOOLS", "true")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            buildConfigField("boolean", "PERF_TOOLS", "false")
+        }
+        // Runs like a release, so its timings mean something, but can be installed and measured.
+        create("profile") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            applicationIdSuffix = ".profile"
+            signingConfig = signingConfigs.getByName("debug")
+            isProfileable = true
+            buildConfigField("boolean", "PERF_TOOLS", "true")
         }
     }
 
@@ -30,6 +44,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
@@ -52,4 +67,8 @@ dependencies {
     implementation(libs.ink.rendering)
     implementation(libs.ink.strokes)
     implementation(libs.motion.prediction)
+
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
 }

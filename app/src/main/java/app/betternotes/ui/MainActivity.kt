@@ -1,26 +1,134 @@
 package app.betternotes.ui
 
 import android.os.Bundle
+import android.view.Gravity
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import app.betternotes.BuildConfig
+import app.betternotes.canvas.CanvasView
+import app.betternotes.canvas.NoteEditor
+import app.betternotes.core.format.DocumentSession
+import app.betternotes.core.format.DocumentStore
+import app.betternotes.core.geometry.PageSize
+import app.betternotes.core.model.Document
+import app.betternotes.core.template.PageBackground
+import app.betternotes.core.template.PageTemplate
+import app.betternotes.perf.CanvasBenchmark
+import app.betternotes.perf.PerfProbe
+import java.io.File
 
+/**
+ * For now, opens a scratch note or canvas straight on the drawing surface. The library will replace
+ * this as the way in.
+ */
 class MainActivity : ComponentActivity() {
+    private lateinit var canvas: CanvasView
+    private var editor: NoteEditor? = null
+    private var probe: PerfProbe? = null
+    private val readout = mutableStateOf("")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestHighestRefreshRate()
-        setContent {
-            MaterialTheme {
-                Text("Better Notes")
+        goFullscreen()
+
+        canvas = CanvasView(this)
+        if (BuildConfig.PERF_TOOLS) {
+            val perf = PerfProbe(window)
+            perf.onSummary = { readout.value = it }
+            perf.logDisplay(display, canvas.viewport.screenDpi)
+            canvas.observer = perf
+            probe = perf
+        }
+
+        val chrome = ComposeView(this).apply {
+            setContent {
+                MaterialTheme(colorScheme = darkColorScheme()) {
+                    DevChrome(canvas, readout, ::openScratch)
+                }
             }
+        }
+        setContentView(
+            FrameLayout(this).apply {
+                addView(canvas, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(
+                    chrome,
+                    FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL),
+                )
+            },
+        )
+
+        val benchmarkStrokes = if (BuildConfig.PERF_TOOLS) intent.getIntExtra(EXTRA_BENCHMARK_STROKES, 0) else 0
+        if (benchmarkStrokes > 0) runBenchmark(benchmarkStrokes) else openScratch(canvasKind = false)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        editor?.saveNow()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        canvas.close()
+        editor?.close()
+        probe?.close()
+    }
+
+    private fun openScratch(canvasKind: Boolean) {
+        val name = if (canvasKind) "scratch-canvas" else "scratch-note"
+        val store = DocumentStore(File(filesDir, "documents/$name"))
+        val session = if (store.exists()) {
+            DocumentSession.open(store)
+        } else {
+            val background = PageBackground(template = PageTemplate.Dotted())
+            val now = System.currentTimeMillis()
+            val document = if (canvasKind) {
+                Document.newCanvas("Scratch canvas", background, now)
+            } else {
+                Document.newNote("Scratch note", PageSize.A4, background, now)
+            }
+            DocumentSession.create(store, document)
+        }
+        show(NoteEditor(store, session))
+    }
+
+    private fun show(next: NoteEditor) {
+        canvas.close()
+        editor?.close()
+        editor = next
+        canvas.open(next)
+    }
+
+    private fun runBenchmark(strokes: Int) {
+        val perf = probe ?: return
+        val store = DocumentStore(File(cacheDir, "benchmark"))
+        store.root.deleteRecursively()
+        val document = CanvasBenchmark.writeDocument(store, strokes)
+        CanvasBenchmark.logMeshCost(store, document)
+        val next = NoteEditor(store, DocumentSession.open(store))
+        show(next)
+        canvas.post { CanvasBenchmark.run(canvas, perf) { finish() } }
+    }
+
+    private fun goFullscreen() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
 
-    /** Asks for the fastest mode at the current resolution: 144 Hz on the Pad 7. */
+    /** Asks for the fastest mode at the current resolution: 144 Hz on the Pad 7. The system may refuse. */
     private fun requestHighestRefreshRate() {
-        val display = display ?: return
         val current = display.mode
         val best = display.supportedModes
             .filter {
@@ -29,5 +137,11 @@ class MainActivity : ComponentActivity() {
             }
             .maxByOrNull { it.refreshRate } ?: return
         window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
+        window.isFrameRatePowerSavingsBalanced = false
+    }
+
+    private companion object {
+        /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */
+        const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"
     }
 }
