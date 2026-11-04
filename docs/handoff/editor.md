@@ -27,3 +27,6 @@ Toolbars and tool rows from the screenshots, dark and light. Pen, pencil, highli
 - `ItemPainter` handles every item but ink. PDF and export use `PagePainter` through `PaintSource`; anything new it needs goes on `PaintSource` (`image()` is there).
 - Emulator: my AVD `Ws6_Pad7` (port 5580) froze once with other emulators running; only one at a time is safe on this 16 GB PC. Drive it with `adb -s`.
 - Don't use the Pad 7 (`f9ea56c5`) without asking the coordinator.
+
+## Toolbar restyle (2026-11-04)
+ws6-editor is merged into `main` (twice; the second merge adds Scan). `check.ps1` passes. Installed on the Pad 7 and compared with `toolbar.jpg`, `full note screen.jpg` and `pen and pencil optins.jpg`: pill sizes, icon order, selected circle and dots already matched. Changed: a subtler pill border (dark and light) and thicker width glyphs (min 2 dp). Not done: the light theme and the panels were not looked at on screen after the change, and the highlighter's extra row icons (eyedropper, pattern) were not compared. The scratch note shows a dark strip left of and above the page; that is the page's pan, not the toolbar.
