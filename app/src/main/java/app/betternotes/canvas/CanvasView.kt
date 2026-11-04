@@ -342,6 +342,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (!layout.isInfinite || width == 0) return null
         val content = open.contentOrLoad(open.document.pages[0].id) ?: return null
         val all = content.toList()
+        // It is only of use when something is out of sight, and still would be if the view were zoomed out by a fifth.
+        val left = viewport.toWorldX(0f)
+        val top = viewport.toWorldY(0f)
+        val right = viewport.toWorldX(width.toFloat())
+        val bottom = viewport.toWorldY(height.toFloat())
+        val growX = (right - left) * MINIMAP_ZOOM_OUT / 2f
+        val growY = (bottom - top) * MINIMAP_ZOOM_OUT / 2f
+        val wider = Bounds(left - growX, top - growY, right + growX, bottom + growY)
+        if (all.none { !it.bounds.intersects(wider) }) return null
         // A map has no use for every item of a huge page, so it shows an even sample of them.
         val step = (all.size / MINIMAP_MAX_ITEMS).coerceAtLeast(1)
         val boxes = ArrayList<Float>()
@@ -352,13 +361,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             boxes += b.right
             boxes += b.bottom
         }
-        return Minimap(
-            boxes.toFloatArray(),
-            viewport.toWorldX(0f),
-            viewport.toWorldY(0f),
-            viewport.toWorldX(width.toFloat()),
-            viewport.toWorldY(height.toFloat()),
-        )
+        return Minimap(boxes.toFloatArray(), left, top, right, bottom)
     }
 
     /** The open document, for changes made from outside the canvas. */
@@ -2148,6 +2151,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val RULER_EDGE_REACH_DP = 14f
         const val STRAIGHT_LINE_PRESSURE = 0.5f
         const val MINIMAP_MAX_ITEMS = 400
+
+        /** A fifth of zooming out shows a quarter more of the page, which is that much growth over the view's size. */
+        const val MINIMAP_ZOOM_OUT = 0.25f
         const val SCRIBBLE_REACH_PT = 2f
         const val LOOP_TAP_REACH_DP = 14f
         /** What one press of a zoom shortcut multiplies the zoom by. */
