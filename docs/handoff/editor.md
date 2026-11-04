@@ -3,17 +3,18 @@
 Branch `ws6-editor` in `D:\code\better-notes-ws6` (a clone, not a worktree). It has main (e051d17) and integration merged in. It is not merged into `main`. Reference screenshots are read from `D:\code\better-notes\reference\notewise\`.
 
 ## State
-Builds, `:core:test` and lint pass (lint: `DataExtractionRules`, `DrawAllocation`, `MissingApplicationIcon` fixed on main since). On an emulator at the Pad 7's size and density, 134 of 137 on-device tests passed before the last merge: all of `CanvasViewTest` (31). The 3 failures are in `LibraryScreenTest` (text input in a wiped emulator), not in editor code, but I did not rule out the merge. Nothing has run on the Pad 7: no latency or frame numbers.
+Builds, `:core:test` and lint pass (lint: `DataExtractionRules`, `DrawAllocation`, `MissingApplicationIcon` fixed on main since). On an emulator at the Pad 7's size and density, 134 of 137 on-device tests passed before the last merge: all of `CanvasViewTest` (31). The 3 failures are in `LibraryScreenTest` (not re-checked this round: no emulator was running) (text input in a wiped emulator), not in editor code, but I did not rule out the merge. Nothing has run on the Pad 7: no latency or frame numbers.
 
 ## Done (all in `app/.../ui/editor`, `ui/theme`, `ui/icons`, `canvas/`, `:core tools/`)
 Toolbars and tool rows from the screenshots, dark and light. Pen, pencil, highlighter with panel, laser (tail, no ink), ruler (two fingers, strokes follow its edge), eraser, lasso (Word-style handles, move, resize, snap to align), shapes (two pages), tape, emoji, sticky note, text, table, images (camera, gallery, files, paste), video, recorder, loupe, all pages with drag to reorder, page and zoom readout. Strings in `values` and `values-b+es+419`. Theme comes from `LibraryPreferences`.
 
 ## Left
-- Insert and quick note switching (sidebar menu entries just say "not available"; quick switch needs `LibraryRepository`). The stack button is assumed to open quick switch.
+- Insert: no reference screenshot, so the sidebar's Insert entry still says "not available". Ask the owner for one. Search is the same.
+- Quick switch (stack button) is built from `quick navigation (between notes).jpg`: recents list, tap opens the note. Pinning and the per-row "..." menu are not built (no screenshot of them); the info icon and "..." say "not built". Not run on a device.
 - `EXTRA_START_ACTION` (`START_TYPING`, `START_RECORDING`) is not read in `MainActivity`.
 - `canvas.onToolAction`: stylus buttons and shortcuts send tool actions that the toolbars should act on (PEN, ERASER, LASSO...). Not wired.
 - Language: the picker is the library's; check the editor follows it.
-- Laser options panel: match `reference/notewise/laser options.png` (row has color and three sizes only).
+- Laser panel (`LaserPanel.kt`) is built from `laser options.png`: Dot/Line/Delay, length 1-5, colors. Not persisted across restarts, the swatch list icon is absent, the length slider ticks are evenly spaced (the screenshot's are not), and it has not been seen on screen.
 - Saved but inert: scribble to erase, circle to lasso, stabilization, locked-object switches, auto deselect, take screenshot.
 - Scan, left-pill chevrons, selecting several pages, the swatch list. Tape, emoji, video, shapes page 2 and the lasso handles were never looked at on screen (emulator froze); video playback and photo capture never run.
 - Unverified: ruler with two real fingers; speed of the overlay views on the tablet.

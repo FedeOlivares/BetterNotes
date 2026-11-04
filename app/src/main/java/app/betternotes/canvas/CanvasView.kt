@@ -263,6 +263,24 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             overlay.laserScale = value
         }
 
+    var laserMode: LaserMode
+        get() = overlay.laserMode
+        set(value) {
+            overlay.laserMode = value
+        }
+
+    var laserLength: Int
+        get() = overlay.laserLength
+        set(value) {
+            overlay.laserLength = value
+        }
+
+    var laserColor: Int
+        get() = overlay.laserColor
+        set(value) {
+            overlay.laserColor = value
+        }
+
     /** Brings a page to the view at the current zoom. */
     fun goToPage(index: Int) {
         val layout = layout ?: return
@@ -991,6 +1009,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (pointerId == laserPointer) {
             laserPointer = -1
+            overlay.laserEnd()
             return
         }
         if (pointerId == lassoPointer) {
@@ -1029,6 +1048,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (pointerId == laserPointer) {
             laserPointer = -1
+            overlay.laserEnd()
             return
         }
         if (pointerId == lassoPointer) {

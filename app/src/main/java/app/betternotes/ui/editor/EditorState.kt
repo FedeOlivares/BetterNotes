@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import app.betternotes.R
 import app.betternotes.canvas.CanvasTool
 import app.betternotes.canvas.CanvasView
+import app.betternotes.canvas.LaserMode
 import app.betternotes.canvas.TextEditRequest
 import app.betternotes.canvas.VideoPlayRequest
 import app.betternotes.core.gesture.InputMode
@@ -46,10 +47,10 @@ internal enum class ActiveTool(val ink: InkTool?) {
     EMOJI(null),
 }
 
-private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.LASER && this != ActiveTool.TAPE
+private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.TAPE
 
 /** What the color wheel's result is for. */
-internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL }
+internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, LASER }
 
 /** What the toolbars show, and the one place that passes their choices on to the canvas. */
 @Stable
@@ -89,6 +90,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     var playingVideo by mutableStateOf<VideoPlayRequest?>(null)
     var pagesOpen by mutableStateOf(false)
     var sidebarMenuOpen by mutableStateOf(false)
+    var quickSwitchOpen by mutableStateOf(false)
 
     /** Bumped by every edit, so lists drawn from the document know to look again. */
     var historyVersion by mutableIntStateOf(0)
@@ -106,6 +108,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     var rulerOn by mutableStateOf(false)
         private set
     var laserWidthSlot by mutableIntStateOf(1)
+    var laserMode by mutableStateOf(LaserMode.LINE)
+        private set
+    var laserLength by mutableIntStateOf(canvas.laserLength)
+        private set
+    var laserColor by mutableIntStateOf(canvas.laserColor)
+        private set
     var currentPage by mutableIntStateOf(0)
         private set
     var pageCount by mutableIntStateOf(0)
@@ -278,6 +286,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.SHAPE_FILL, ColorTarget.TABLE_FILL -> DEFAULT_FILL
             ColorTarget.NOTE -> note.color
             ColorTarget.TABLE_BORDER -> table.color
+            ColorTarget.LASER -> laserColor
             else -> preset?.color ?: DEFAULT_FILL
         }
 
@@ -306,6 +315,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.NOTE -> updateNote { it.withColor(color) }
             ColorTarget.TABLE_BORDER -> updateTable { it.withColor(color) }
             ColorTarget.TABLE_FILL -> updateTable { it.copy(fillColor = color) }
+            ColorTarget.LASER -> selectLaserColor(color)
             null -> Unit
         }
         colorTarget = null
@@ -346,6 +356,21 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     fun selectLaserWidth(slot: Int) {
         laserWidthSlot = slot
         canvas.laserScale = LASER_SCALES[slot]
+    }
+
+    fun selectLaserMode(mode: LaserMode) {
+        laserMode = mode
+        canvas.laserMode = mode
+    }
+
+    fun selectLaserLength(length: Int) {
+        laserLength = length.coerceIn(MIN_LASER_LENGTH, MAX_LASER_LENGTH)
+        canvas.laserLength = laserLength
+    }
+
+    fun selectLaserColor(color: Int) {
+        laserColor = color
+        canvas.laserColor = color
     }
 
     fun previousPage() = canvas.goToPage(canvas.currentPage - 1)
@@ -390,6 +415,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     }
 
     companion object {
+        const val MIN_LASER_LENGTH = 1
+        const val MAX_LASER_LENGTH = 5
         const val MIN_EMOJI = 12
         const val MAX_EMOJI = 96
         val LASER_SCALES = floatArrayOf(0.5f, 1f, 1.6f)

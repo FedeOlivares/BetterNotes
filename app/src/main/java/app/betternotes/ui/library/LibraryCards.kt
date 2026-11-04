@@ -255,7 +255,7 @@ private fun CardBorder() {
 }
 
 @Composable
-private fun Thumbnail(id: Long, info: DocumentInfo, thumbnails: ThumbnailStore, modifier: Modifier) {
+internal fun Thumbnail(id: Long, info: DocumentInfo, thumbnails: ThumbnailStore, modifier: Modifier) {
     // Keeps showing the old picture while a changed document's new one is drawn.
     val bitmap by produceState(thumbnails.cached(id, info.savedAtMs), id, info.savedAtMs) {
         thumbnails.load(id, info.savedAtMs)?.let { value = it }

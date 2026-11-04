@@ -16,6 +16,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.roundToInt
 
+enum class LaserMode { DOT, LINE, DELAY }
+
 /**
  * What floats over the page without being part of it: the laser pointer's tail and the ruler. It only
  * draws, and it is invalidated only while one of them has something to show.
@@ -31,8 +33,32 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
     /** How thick the laser's tail is, relative to its middle setting. */
     var laserScale = 1f
 
+    /** What the laser shows: a dot only, a tail that fades as it goes, or a tail that waits for the pen to lift. */
+    var laserMode = LaserMode.LINE
+        set(value) {
+            field = value
+            rebuildTrail()
+        }
+
+    /** How long the tail lasts, from 1 up. */
+    var laserLength = DEFAULT_LASER_LENGTH
+        set(value) {
+            field = value
+            rebuildTrail()
+        }
+
+    var laserColor = LASER_COLOR
+        set(value) {
+            field = value
+            glowPaint.color = value
+            tipPaint.color = value
+        }
+
     private val density = resources.displayMetrics.density
-    private val trail = FadingTrail(LASER_LIFETIME_MS)
+    private var trail = FadingTrail(LASER_LIFETIME_MS)
+    private var laserHeld = false
+    private var laserStartedAt = 0L
+    private var laserReleasedAt = 0L
     // Square ends, because overlapping round ones show as beads along the see-through tail.
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -53,7 +79,21 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
     }
 
     fun laserStart(x: Float, y: Float) {
-        trail.start(x, y, SystemClock.uptimeMillis())
+        laserStartedAt = SystemClock.uptimeMillis()
+        laserHeld = true
+        trail.start(x, y, laserStartedAt)
+        invalidate()
+    }
+
+    fun laserEnd() {
+        laserHeld = false
+        laserReleasedAt = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    private fun rebuildTrail() {
+        trail = FadingTrail(if (laserMode == LaserMode.DOT) DOT_LIFETIME_MS else LASER_LIFETIME_MS / DEFAULT_LASER_LENGTH * laserLength)
+        laserHeld = false
         invalidate()
     }
 
@@ -72,16 +112,25 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
     }
 
     private fun drawLaser(canvas: Canvas) {
-        val now = SystemClock.uptimeMillis()
-        if (!trail.prune(now)) return
+        val real = SystemClock.uptimeMillis()
+        // The delayed tail keeps its strength while the pen is down, then fades as a whole.
+        val now = when {
+            laserMode != LaserMode.DELAY -> real
+            laserHeld -> laserStartedAt
+            else -> laserStartedAt + (real - laserReleasedAt)
+        }
+        // A held pen keeps its tip however still it is.
+        if (!laserHeld && !trail.prune(now) || laserHeld && trail.tipIndex < 0) return
         val width = LASER_WIDTH_DP * density * laserScale
-        trail.forEachSegment(now) { x0, y0, x1, y1, strength ->
-            glowPaint.alpha = (strength * LASER_ALPHA).roundToInt()
-            glowPaint.strokeWidth = width * strength
-            canvas.drawLine(x0, y0, x1, y1, glowPaint)
+        if (laserMode != LaserMode.DOT) {
+            trail.forEachSegment(now) { x0, y0, x1, y1, strength ->
+                glowPaint.alpha = (strength * LASER_ALPHA).roundToInt()
+                glowPaint.strokeWidth = width * strength
+                canvas.drawLine(x0, y0, x1, y1, glowPaint)
+            }
         }
         val tip = trail.tipIndex
-        tipPaint.alpha = (trail.strengthAt(tip, now) * OPAQUE).roundToInt()
+        tipPaint.alpha = (if (laserHeld) 1f else trail.strengthAt(tip, now)).times(OPAQUE).roundToInt()
         canvas.drawCircle(trail.xAt(tip), trail.yAt(tip), width * LASER_TIP_RATIO, tipPaint)
         // The tail goes on fading with no touches to prompt a redraw.
         postInvalidateOnAnimation()
@@ -146,6 +195,8 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
 
     private companion object {
         const val LASER_LIFETIME_MS = 700L
+        const val DOT_LIFETIME_MS = 250L
+        const val DEFAULT_LASER_LENGTH = 2
         const val LASER_COLOR = 0xFFE8321E.toInt()
         const val LASER_WIDTH_DP = 7f
         const val LASER_ALPHA = 200f

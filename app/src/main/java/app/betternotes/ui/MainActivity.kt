@@ -114,6 +114,12 @@ class MainActivity : ComponentActivity() {
                             openScratch(showingCanvas)
                         },
                         onOpenSettings = { shownOverlay.value = SettingsOverlay.SCREEN },
+                        documentId = { editor?.document?.id },
+                        onOpenDocument = { id ->
+                            canvas.rememberPage()
+                            editor?.saveNow()
+                            openDocument(id)
+                        },
                         onTogglePerfReadout = if (BuildConfig.PERF_TOOLS) ({ showReadout = !showReadout }) else null,
                     )
                 }

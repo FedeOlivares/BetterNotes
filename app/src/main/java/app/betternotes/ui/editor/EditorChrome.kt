@@ -58,6 +58,9 @@ internal class EditorActions(
     val onBack: () -> Unit,
     val onZoomToRealSize: () -> Unit,
     val onOpenSettings: () -> Unit,
+    /** The library's id of the document being edited, or null for a scratch note. */
+    val documentId: () -> Long?,
+    val onOpenDocument: (Long) -> Unit,
     val onToggleTheme: () -> Unit,
     /** Stand-ins until the library opens documents: not part of the design. */
     val onToggleScratchKind: () -> Unit,
@@ -123,7 +126,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                     if (preset != null) {
                         ToolRow(state, preset, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.LASER) {
-                        LaserRow(state, notices, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                        LaserRow(state, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.ERASER) {
                         EraserRow(state, state.eraser, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.LASSO) {
@@ -196,6 +199,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
         if (state.sidebarMenuOpen) SidebarMenu(state, notices)
         if (state.pagesOpen) AllPagesPanel(state, notices)
+        if (state.quickSwitchOpen) QuickSwitch(state, actions, notices)
 
         val panelTop = EdgeMargin + PillHeight + PillGap + PillHeight + PanelGap
         val panelModifier = Modifier
@@ -215,6 +219,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 state.activeTool == ActiveTool.TABLE -> TablePanel(state, state.table, sheet)
                 state.activeTool == ActiveTool.IMAGE -> ImagePanel(state, sources, notices, sheet)
                 state.activeTool == ActiveTool.EMOJI -> EmojiPanel(state, sheet)
+                state.activeTool == ActiveTool.LASER -> LaserPanel(state, sheet)
             }
         }
     }
@@ -226,7 +231,9 @@ private fun LeftPill(state: EditorState, actions: EditorActions, notices: Notice
         ToolbarIcon(EditorIcons.Back, stringResource(R.string.editor_back), onClick = actions.onBack)
         ToolbarIcon(EditorIcons.Sidebar, stringResource(R.string.editor_sidebar), onClick = { state.sidebarMenuOpen = true })
         ToolbarIcon(EditorIcons.PageGrid, stringResource(R.string.editor_page_grid), onClick = { state.pagesOpen = true })
-        ToolbarIcon(EditorIcons.PageStack, stringResource(R.string.editor_page_stack), onClick = notices::notBuilt)
+        ToolbarIcon(EditorIcons.PageStack, stringResource(R.string.editor_page_stack)) {
+            state.quickSwitchOpen = true
+        }
         ToolbarIcon(EditorIcons.ChevronsUpDown, stringResource(R.string.editor_chevrons), onClick = notices::notBuilt)
     }
 }
@@ -380,9 +387,9 @@ private fun MenuEntry(label: Int, onClick: () -> Unit) {
 
 /** The laser's row: its color, three sizes, and the way into its options. */
 @Composable
-private fun LaserRow(state: EditorState, notices: Notices, modifier: Modifier) {
+private fun LaserRow(state: EditorState, modifier: Modifier) {
     Pill(modifier) {
-        ToolbarCellBox(onClick = notices::notBuilt) { ColorDot(LASER_COLOR, diameter = 24.dp) }
+        ToolbarCellBox(onClick = { state.panelOpen = !state.panelOpen }) { ColorDot(state.laserColor, diameter = 24.dp) }
         for (slot in 0..2) {
             ToolbarCellBox(onClick = { state.selectLaserWidth(slot) }) {
                 if (slot == 0) {
@@ -394,7 +401,9 @@ private fun LaserRow(state: EditorState, notices: Notices, modifier: Modifier) {
             }
         }
         PillDivider()
-        ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options), onClick = notices::notBuilt)
+        ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
+            state.panelOpen = !state.panelOpen
+        }
     }
 }
 
@@ -531,7 +540,6 @@ internal fun WidthGlyph(thickness: Int) {
 }
 
 private const val WIDTH_GLYPH_DP_PER_UNIT = 0.27f
-private const val LASER_COLOR = 0xFFE8321E.toInt()
 private const val LASER_MIDDLE_GLYPH = 6
 private const val LASER_THICK_GLYPH = 12
 private const val POSITION_VISIBLE_MS = 2000L
