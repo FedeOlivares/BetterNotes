@@ -4,6 +4,7 @@ import app.betternotes.core.model.StrokePoints
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.math.exp
 import kotlin.math.hypot
 import kotlin.math.max
 
@@ -128,25 +129,33 @@ object StrokeGestures {
 
 /**
  * Follows the pen a little behind it, so a shaky hand draws a steadier line. Level 1 is the pen
- * itself, and each level above it follows more slowly.
+ * itself. Higher levels follow with a time constant of [TAU_MS_PER_LEVEL] ms for each level above
+ * the first, whatever rate the pen reports at.
  */
 class Stabilizer(level: Int) {
-    private val follow = 1f / level.coerceAtLeast(1)
+    private val tauMs = (level.coerceAtLeast(1) - 1) * TAU_MS_PER_LEVEL
     private var x = 0f
     private var y = 0f
+    private var lastMs = 0L
     private var started = false
 
-    /** Moves toward the pen and leaves where the line now is in [out], as x then y. */
-    fun next(penX: Float, penY: Float, out: FloatArray) {
-        if (!started) {
+    /** Moves toward the pen as of [timeMs] and leaves where the line now is in [out], as x then y. */
+    fun next(penX: Float, penY: Float, timeMs: Long, out: FloatArray) {
+        if (!started || tauMs <= 0f) {
             x = penX
             y = penY
             started = true
         } else {
+            val follow = 1f - exp(-(timeMs - lastMs).coerceAtLeast(0L) / tauMs)
             x += (penX - x) * follow
             y += (penY - y) * follow
         }
+        lastMs = timeMs
         out[0] = x
         out[1] = y
+    }
+
+    companion object {
+        const val TAU_MS_PER_LEVEL = 25f
     }
 }

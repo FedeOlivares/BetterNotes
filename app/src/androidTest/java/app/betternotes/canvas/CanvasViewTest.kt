@@ -544,7 +544,8 @@ class CanvasViewTest {
         waitForIdle()
         assertTrue("The lasso was not asked for", onMain { requested })
         assertTrue("Nothing was selected", onMain { canvas.hasSelection })
-        assertEquals(2, pageContent().size)
+        // The circle's own line is gone, and only the stroke inside it is selected.
+        assertEquals(1, pageContent().size)
     }
 
     // ---- Helpers ----

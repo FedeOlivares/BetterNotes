@@ -1725,7 +1725,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private fun stabilizedInput(x: Float, y: Float, timeMs: Long, pressure: Float): StrokeInput {
         val at = floatArrayOf(x, y)
         screenToPage.mapPoints(at)
-        stabilizer?.next(at[0], at[1], stabilized)
+        stabilizer?.next(at[0], at[1], timeMs, stabilized)
         return StrokeInput().apply {
             update(stabilized[0], stabilized[1], (timeMs - strokeStartMs).coerceAtLeast(0L), InputToolType.STYLUS, STROKE_UNIT_CM, pressure)
         }
@@ -1931,17 +1931,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val reach = LOOP_TAP_REACH_DP * resources.displayMetrics.density / viewport.pxPerPt
         if (!StrokeGestures.isNearLine(loop.item.points, x, y, reach)) return false
         lastLoop = null
+        // The circle itself is the lasso: its line is taken off the page and what it surrounds is selected.
         val content = editor.content(pageId)
+        val own = (0 until content.size).firstOrNull { content[it].id == loop.item.id } ?: return false
         val inside = selectWithLasso(pageId, content, StrokeGestures.polygon(loop.item.points), ALL_ITEM_KINDS, false)
-        val indices = inside.indices.toMutableList()
-        val items = inside.items.toMutableList()
-        val own = (0 until content.size).firstOrNull { content[it].id == loop.item.id }
-        if (own != null && own !in indices) {
-            val at = indices.indexOfFirst { it > own }.let { if (it < 0) indices.size else it }
-            indices.add(at, own)
-            items.add(at, content[own])
-        }
-        if (indices.isEmpty()) return false
+        val picked = inside.indices.indices.filter { inside.indices[it] != own }
+        if (picked.isEmpty()) return false
+        editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
+        redrawChanges(pageIndex)
+        // Everything above the removed line moves down one place.
+        val indices = picked.map { inside.indices[it].let { index -> if (index > own) index - 1 else index } }
+        val items = picked.map { inside.items[it] }
         lasso.select(pageIndex, Selection(pageId, indices.toIntArray(), items))
         onLassoRequested()
         syncChanges()
