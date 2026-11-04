@@ -28,6 +28,10 @@ class DocumentSearch(
     /** Reports each finished update. Pending lines above zero mean models are missing or recognition failed. */
     var onIndexed: (IndexUpdate) -> Unit = {}
 
+    /** Lines of ink the last update could not read. Zero when everything written is searchable. */
+    var pendingLines = 0
+        private set
+
     private val printedText = PdfPrintedText(store)
     private val indexer = SearchIndexer(store, recognizer, printedText)
     private val main = Handler(Looper.getMainLooper())
@@ -64,6 +68,16 @@ class DocumentSearch(
         }
     }
 
+    /** The name the first words of the document suggest, or null if nothing is readable yet. */
+    fun suggestTitle(pages: List<Page>, onResult: (String?) -> Unit) {
+        val snapshot = pages.toList()
+        if (closed.get()) return
+        worker.execute {
+            val title = app.betternotes.core.search.suggestTitle(indexOrLoad(), snapshot)
+            main.post { if (!closed.get()) onResult(title) }
+        }
+    }
+
     /** Stops after the line in progress and keeps what was indexed, so the work is not lost. */
     fun close() {
         closed.set(true)
@@ -92,7 +106,11 @@ class DocumentSearch(
                 Log.e(TAG, "Could not save the search index", e)
             }
         }
-        main.post { if (!closed.get()) onIndexed(update) }
+        main.post {
+            if (closed.get()) return@post
+            pendingLines = update.pendingLines
+            onIndexed(update)
+        }
     }
 
     private fun indexOrLoad() = index ?: indexer.load().also { index = it }

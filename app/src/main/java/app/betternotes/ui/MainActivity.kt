@@ -17,12 +17,16 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import app.betternotes.BuildConfig
+import app.betternotes.R
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
 import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.gesture.InputMode
+import app.betternotes.core.search.isPlaceholderTitle
 import app.betternotes.core.settings.AppSettings
+import app.betternotes.core.settings.AutoName
+import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.settings.OneFingerSetting
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
@@ -53,6 +57,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var settings: SettingsRepository
     private val readout = mutableStateOf("")
     private val shownOverlay = mutableStateOf<SettingsOverlay?>(null)
+    private val searchState = mutableStateOf<DocumentSearch?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,7 +86,13 @@ class MainActivity : ComponentActivity() {
         }
         val overlays = ComposeView(this).apply {
             setContent {
-                SettingsOverlayHost(shownOverlay.value, settings, canvas, onDismiss = { shownOverlay.value = null })
+                SettingsOverlayHost(
+                    shownOverlay.value,
+                    settings,
+                    canvas,
+                    onDismiss = { shownOverlay.value = null },
+                    search = searchState.value,
+                )
             }
         }
         setContentView(
@@ -107,7 +118,19 @@ class MainActivity : ComponentActivity() {
     /** Keys get here only if no view took them, so typing in a text field never fires a shortcut. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val action = settings.settings.value.keyBindings.actionFor(event)
-        return (action != null && canvas.perform(action)) || super.onKeyDown(keyCode, event)
+        return (action != null && (canvas.perform(action) || openOverlayFor(action))) || super.onKeyDown(keyCode, event)
+    }
+
+    /** The shortcuts that open a screen. They toggle, so the same keys close it again. */
+    private fun openOverlayFor(action: EditorAction): Boolean {
+        val overlay = when (action) {
+            EditorAction.SEARCH -> SettingsOverlay.SEARCH
+            EditorAction.EXPORT -> SettingsOverlay.EXPORT
+            EditorAction.SETTINGS -> SettingsOverlay.SCREEN
+            else -> return false
+        }
+        shownOverlay.value = if (shownOverlay.value == overlay) null else overlay
+        return true
     }
 
     override fun onStop() {
@@ -156,6 +179,8 @@ class MainActivity : ComponentActivity() {
         canvas.open(next)
         val nextSearch = DocumentSearch(next.store, MlKitRecognizer())
         search = nextSearch
+        searchState.value = nextSearch
+        nextSearch.onIndexed = { nameFromText(next, nextSearch) }
         next.onSaved = { nextSearch.refresh(next.document.pages) }
         nextSearch.refresh(next.document.pages)
     }
@@ -186,6 +211,38 @@ class MainActivity : ComponentActivity() {
             } else {
                 show(WindowInsetsCompat.Type.systemBars())
             }
+        }
+    }
+
+    /**
+     * Gives a note the first words written in it as its name, once they can be read, if it still has the
+     * name the app gave it. A name the owner chose is never touched.
+     */
+    private fun nameFromText(target: NoteEditor, from: DocumentSearch) {
+        if (settings.settings.value.autoName != AutoName.AUTO) return
+        val document = target.document
+        if (!isPlaceholderTitle(document.title, placeholderTitles(document.createdAtMs))) return
+        from.suggestTitle(document.pages) { suggested ->
+            // The owner may have renamed it while this was being worked out.
+            if (suggested != null && target === editor && isPlaceholderTitle(document.title, placeholderTitles(document.createdAtMs))) {
+                document.title = suggested
+            }
+        }
+    }
+
+    /** Every name a new note starts with, in both languages, as the language may have changed since. */
+    private fun placeholderTitles(createdAtMs: Long): List<String> {
+        val date = java.time.Instant.ofEpochMilli(createdAtMs).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()
+        return listOf("en", "es-419").flatMap { tag ->
+            val configuration = android.content.res.Configuration(resources.configuration)
+            configuration.setLocale(java.util.Locale.forLanguageTag(tag))
+            val localized = createConfigurationContext(configuration)
+            listOf(
+                localized.getString(R.string.settings_note_dated, date),
+                localized.getString(R.string.settings_note_untitled),
+                "Scratch note",
+                "Scratch canvas",
+            )
         }
     }
 

@@ -2,6 +2,8 @@ package app.betternotes.export
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
@@ -16,6 +18,7 @@ import app.betternotes.core.export.ExportFrame
 import app.betternotes.core.export.ImageExportOptions
 import app.betternotes.core.export.ImageFormat
 import app.betternotes.core.export.PageSelection
+import app.betternotes.core.export.PdfExportOptions
 import app.betternotes.core.export.exportFileName
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.Bounds
@@ -41,20 +44,34 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
     private val source = ExportSource()
     private val painter = PagePainter(source)
     private val rasterPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val invertPaint = Paint().apply { colorFilter = ColorMatrixColorFilter(INVERT) }
 
-    /** Writes one PDF holding every selected page. An empty canvas page is left out. Returns the pages written. */
+    /**
+     * Writes one PDF holding every selected page. An empty canvas page is left out. Returns the pages
+     * written. Inverting colors or rasterizing turns each page into a picture, as vectors cannot be
+     * inverted after the fact.
+     */
     @Throws(IOException::class)
-    fun writePdf(selection: PageSelection, out: OutputStream, cancelled: () -> Boolean = { false }): Int {
+    fun writePdf(
+        selection: PageSelection,
+        out: OutputStream,
+        options: PdfExportOptions = PdfExportOptions(),
+        cancelled: () -> Boolean = { false },
+    ): Int {
         val pdf = PdfDocument()
         try {
             var written = 0
             for (index in selection.resolve(pages.size)) {
                 if (cancelled()) return written
                 val area = loadPage(index) ?: continue
-                val frame = ExportFrame.forPdf(area)
+                val frame = ExportFrame.forPdf(area, options.scale)
                 val info = PdfDocument.PageInfo.Builder(frame.outputWidth, frame.outputHeight, written + 1).create()
                 val page = pdf.startPage(info)
-                paint(page.canvas, pages[index], frame, PDF_PAGE_DPI / POINTS_PER_INCH)
+                if (options.rasterize || options.invert) {
+                    paintAsPicture(page.canvas, pages[index], area, frame, options)
+                } else {
+                    paint(page.canvas, pages[index], frame, PDF_PAGE_DPI * frame.scale / POINTS_PER_INCH, invert = false)
+                }
                 pdf.finishPage(page)
                 written++
             }
@@ -86,10 +103,10 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
         for (index in indices) {
             if (cancelled()) break
             val area = loadPage(index) ?: continue
-            val frame = ExportFrame.forImage(area, options.dpi)
+            val frame = ExportFrame.forImage(area, options.effectiveDpi)
             val bitmap = createBitmap(frame.outputWidth, frame.outputHeight)
             try {
-                paint(Canvas(bitmap), pages[index], frame, frame.scale)
+                paint(Canvas(bitmap), pages[index], frame, frame.scale, options.invert)
                 val name = exportFileName(title, options.format.extension, index + 1, pages.size)
                 open(name).use { out ->
                     if (!bitmap.compress(format, options.quality, out)) throw IOException("Could not encode $name")
@@ -110,13 +127,44 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
         return ExportFrame.areaOf(page, items)
     }
 
-    private fun paint(canvas: Canvas, page: Page, frame: ExportFrame, pdfPxPerPt: Float) {
+    /**
+     * A small picture of page [index], [widthPx] wide, for choosing pages. A canvas shows its ink. Blocks, and
+     * shares the one page in memory with an export, so don't run it at the same time as one.
+     */
+    @Throws(IOException::class)
+    fun thumbnail(index: Int, widthPx: Int): Bitmap {
+        val page = pages[index]
+        val area = loadPage(index) ?: Bounds(0f, 0f, EMPTY_CANVAS_WIDTH_PT, EMPTY_CANVAS_HEIGHT_PT)
+        val factor = widthPx / area.width
+        val frame = ExportFrame(area, factor, widthPx, ceil(area.height * factor).toInt().coerceAtLeast(1))
+        val bitmap = createBitmap(frame.outputWidth, frame.outputHeight)
+        paint(Canvas(bitmap), page, frame, frame.scale, invert = false)
+        source.clear()
+        return bitmap
+    }
+
+    /** One picture per page, put in the PDF at the page's size. A full-page picture at 300 dpi takes about 35 MB. */
+    private fun paintAsPicture(target: Canvas, page: Page, area: Bounds, frame: ExportFrame, options: PdfExportOptions) {
+        val picture = ExportFrame.forImage(area, PDF_PAGE_DPI * options.scale)
+        val bitmap = createBitmap(picture.outputWidth, picture.outputHeight)
+        try {
+            paint(Canvas(bitmap), page, picture, picture.scale, options.invert)
+            target.drawBitmap(bitmap, null, RectF(0f, 0f, frame.outputWidth.toFloat(), frame.outputHeight.toFloat()), rasterPaint)
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun paint(canvas: Canvas, page: Page, frame: ExportFrame, pdfPxPerPt: Float, invert: Boolean) {
+        // Only bitmap canvases can invert: the layer is read back as pixels.
+        val layer = if (invert) canvas.saveLayer(null, invertPaint) else -1
         canvas.withSave {
             scale(frame.scale, frame.scale)
             translate(-frame.area.left, -frame.area.top)
             (page.source as? PageSource.PdfPage)?.let { paintPdf(this, page, it, pdfPxPerPt) }
             painter.paintPage(this, page, frame.area, frame.scale)
         }
+        if (invert) canvas.restoreToCount(layer)
     }
 
     /**
@@ -154,6 +202,20 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
     private companion object {
         const val PDF_PAGE_DPI = 300f
         const val POINTS_PER_INCH = 72f
+
+        /** What a thumbnail of an empty canvas shows: an A4 sheet of paper. */
+        const val EMPTY_CANVAS_WIDTH_PT = 595f
+        const val EMPTY_CANVAS_HEIGHT_PT = 842f
+
+        /** Each color to its opposite, and alpha as it is. */
+        val INVERT = ColorMatrix(
+            floatArrayOf(
+                -1f, 0f, 0f, 0f, 255f,
+                0f, -1f, 0f, 0f, 255f,
+                0f, 0f, -1f, 0f, 255f,
+                0f, 0f, 0f, 1f, 0f,
+            ),
+        )
     }
 }
 

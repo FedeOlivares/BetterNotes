@@ -71,8 +71,31 @@ class PageAppearanceTest {
         assertEquals(PageSize.Letter, document.pages[0].size)
         val pdfDoc = pdf()
         assertNull(pdfDoc.resizePages(listOf(pdfDoc.pages[0].id), PageSize.A4))
-        val canvasDoc = canvas()
-        assertNull(canvasDoc.resizePages(listOf(canvasDoc.pages[0].id), PageSize.A4))
+    }
+
+    @Test
+    fun `a lone page can become infinite and back, and a second page rules it out`() {
+        val document = note()
+        val target = FakeTarget(document)
+        val before = document.pages[0]
+        val grid = PageBackground(template = PageTemplate.Grid())
+        val edit = document.changeAppearance(listOf(before.id), grid, infinite = true)!!
+        edit.apply(target)
+        assertNull(document.pages[0].size)
+        assertEquals(false, document.canAddPages)
+        document.resizePages(listOf(before.id), PageSize.A4)!!.apply(target)
+        assertEquals(PageSize.A4, document.pages[0].size)
+        assertEquals(true, document.canAddPages)
+        edit.revert(target)
+        edit.apply(target)
+        edit.revert(target)
+        assertEquals(before, document.pages[0])
+
+        // A template with no tiling would draw nothing on an infinite page.
+        assertNull(document.changeAppearance(listOf(before.id), PageBackground(template = PageTemplate.Legal()), infinite = true))
+
+        document.insertPage(1, before.copy(id = 99L))
+        assertNull(document.changeAppearance(listOf(before.id), grid, infinite = true))
     }
 
     @Test

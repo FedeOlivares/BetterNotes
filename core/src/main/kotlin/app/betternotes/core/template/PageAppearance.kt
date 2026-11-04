@@ -202,15 +202,24 @@ fun Document.changePaperColor(pageIds: Collection<Long>, color: Int): Edit? = pa
 
 /**
  * The template picker's apply, as one undoable change per page: a background, and a new size if
- * [size] is given. A custom layout brings its own size. Pages that can't take part are skipped.
+ * [size] is given, or an infinite page if [infinite]. A custom layout brings its own size. Pages that can't take part are skipped.
  */
-fun Document.changeAppearance(pageIds: Collection<Long>, background: PageBackground, size: PageSize? = null): Edit? =
+fun Document.changeAppearance(
+    pageIds: Collection<Long>,
+    background: PageBackground,
+    size: PageSize? = null,
+    infinite: Boolean = false,
+): Edit? =
     pageEdit(pageIds) { page ->
         val layout = (background.template as? PageTemplate.Custom)?.layout
-        val accepts = page.source == PageSource.Blank &&
-            if (layout != null) page.isResizable else page.size != null || background.template.tiles
-        if (!accepts) return@pageEdit null
-        val newSize = layout?.size ?: size?.takeIf { page.isResizable } ?: page.size
+        if (page.source != PageSource.Blank || layout != null && page.size == null) return@pageEdit null
+        val newSize = when {
+            layout != null -> layout.size
+            infinite -> if (canBeInfinite) null else return@pageEdit null
+            size != null && page.isResizable -> size
+            else -> page.size
+        }
+        if (newSize == null && !background.template.tiles) return@pageEdit null
         page.copy(size = newSize, background = background)
     }
 
@@ -220,7 +229,7 @@ fun Document.changeAppearance(pageIds: Collection<Long>, background: PageBackgro
  * deleting the layout later leaves the page as it is.
  */
 fun Document.applyCustomLayout(pageIds: Collection<Long>, layout: CustomLayout): Edit? = pageEdit(pageIds) { page ->
-    if (page.isResizable) {
+    if (page.isResizable && page.size != null) {
         page.copy(size = layout.size, background = page.background.copy(template = PageTemplate.Custom(layout)))
     } else {
         null

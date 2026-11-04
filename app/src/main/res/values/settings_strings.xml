@@ -2,18 +2,28 @@
 <resources>
     <string name="settings_close">Close</string>
     <string name="settings_back">Back</string>
-
+    <string name="settings_less">Decrease</string>
+    <string name="settings_more">Increase</string>
     <string name="settings_title">Settings</string>
     <string name="settings_notes">Notes</string>
     <string name="settings_new_note_name">New note name</string>
     <string name="settings_note_dated">New note %1$s</string>
     <string name="settings_note_untitled">Untitled</string>
+    <string name="settings_auto_name">Auto name notes</string>
+    <string name="settings_auto_name_detail">Uses the first words written in a new note</string>
+    <string name="settings_auto_name_auto">Auto</string>
+    <string name="settings_auto_name_off">Off</string>
+    <string name="settings_language">Language</string>
+    <string name="language_english">English</string>
+    <string name="language_spanish">Español (Latinoamérica)</string>
     <string name="settings_canvas">Canvas</string>
     <string name="settings_continue">Continue from last opened page</string>
     <string name="settings_keep_on">Keep screen on</string>
     <string name="settings_keep_on_detail">Screen will stay awake when notes are open</string>
     <string name="settings_hide_bars">Hide all system bars</string>
     <string name="settings_hide_bars_detail">Hide status and navigation bars when notes are open</string>
+    <string name="settings_snap">Snap to align</string>
+    <string name="settings_snap_detail">Items line up with each other as you move them</string>
     <string name="settings_scroll_layout">Scroll and layout</string>
     <string name="settings_shortcuts">Keyboard shortcuts</string>
     <string name="settings_calibration">Real size calibration</string>
@@ -33,24 +43,20 @@
     <string name="settings_storage_cache_detail">Cache helps improve app performance.</string>
     <string name="settings_storage_size">%1$.2f MB</string>
     <string name="settings_clear_cache">Clear cache</string>
-
     <string name="scroll_vertical">Vertical</string>
     <string name="scroll_left_to_right">Side to side, left to right</string>
     <string name="scroll_right_to_left">Side to side, right to left</string>
-
     <string name="shortcuts_hint">Tap an action, then press the keys for it.</string>
     <string name="shortcuts_press">Press the keys for this action.</string>
     <string name="shortcuts_taken">That was on %1$s, which now has no shortcut (%2$s).</string>
     <string name="shortcuts_waiting">Press keys…</string>
     <string name="shortcuts_none">None</string>
     <string name="shortcuts_reset">Reset all</string>
-
     <string name="calibration_hint">This line should be %1$d cm long. Measure it on the screen with a ruler. If it is off, enter what you measured.</string>
     <string name="calibration_density">Screen density in use, in dpi</string>
     <string name="calibration_measured">Measured length, in cm</string>
     <string name="calibration_apply">Apply</string>
     <string name="calibration_reset">Use the device\'s value</string>
-
     <string name="stylus_finger_title">Stylus &amp; finger</string>
     <string name="stylus">Stylus</string>
     <string name="stylus_latency">Latency optimization</string>
@@ -87,7 +93,6 @@
     <string name="gesture_timing">Tap timing</string>
     <string name="gesture_timing_detail">How long undo waits for a third tap.</string>
     <string name="gesture_timing_value">%1$d ms</string>
-
     <string name="template_title">Template</string>
     <string name="template_built_in">Built-in</string>
     <string name="template_custom">Custom</string>
@@ -116,7 +121,8 @@
     <string name="size_a5">A5</string>
     <string name="size_letter">Letter</string>
     <string name="size_legal">Legal</string>
-
+    <string name="size_infinite">Infinite</string>
+    <string name="template_size_infinite">Size: Infinite</string>
     <string name="layout_title">Custom layout</string>
     <string name="layout_new">New layout</string>
     <string name="layout_edit">Edit</string>
@@ -136,4 +142,109 @@
     <string name="unit_px">px</string>
     <string name="unit_cm">cm</string>
     <string name="unit_inch">in</string>
+    <string name="export_title">Export</string>
+    <string name="export_select_pages">Select pages</string>
+    <string name="export_select_all">Select all</string>
+    <string name="export_deselect_all">Deselect all</string>
+    <string name="export_range_hint">Enter page range to export, e.g. 2-5, 8</string>
+    <string name="export_as">Export as</string>
+    <string name="export_pdf">PDF</string>
+    <string name="export_image">Image</string>
+    <string name="export_page_scale">Page Scale</string>
+    <string name="export_percent">%1$d%%</string>
+    <string name="export_size_mm">%1$d × %2$d mm</string>
+    <string name="export_size_px">%1$d × %2$d px</string>
+    <string name="export_invert">Invert color</string>
+    <string name="export_rasterize">Rasterization</string>
+    <string name="export_rasterize_detail">The exported PDF will be rasterized, turning it into a fixed image where text and graphics are not editable.</string>
+    <string name="export_png">PNG</string>
+    <string name="export_jpeg">JPEG</string>
+    <string name="export_cancel">Cancel</string>
+    <string name="export_action">Export</string>
+    <string name="export_working">Exporting…</string>
+    <string name="export_done">Exported</string>
+    <string name="export_nothing">There is nothing to export on those pages</string>
+    <string name="export_failed">The export failed</string>
+    <string name="pomodoro_title">Pomodoro timer</string>
+    <string name="pomodoro_phase_focus">Focus</string>
+    <string name="pomodoro_phase_short">Short break</string>
+    <string name="pomodoro_phase_long">Long break</string>
+    <string name="pomodoro_start">Start</string>
+    <string name="pomodoro_pause">Pause</string>
+    <string name="pomodoro_skip">Skip</string>
+    <string name="pomodoro_reset">Reset</string>
+    <string name="pomodoro_focus_minutes">Focus minutes</string>
+    <string name="pomodoro_short_minutes">Short break minutes</string>
+    <string name="pomodoro_long_minutes">Long break minutes</string>
+    <string name="pomodoro_sessions">Sessions before a long break</string>
+    <string name="pomodoro_auto_start">Start the next phase by itself</string>
+    <string name="pomodoro_notify">Notify when a phase ends</string>
+    <string name="pomodoro_notify_detail">Notifications stay on this device</string>
+    <string name="pomodoro_focus_done">Focus session finished</string>
+    <string name="pomodoro_break_done">Break finished</string>
+    <string name="pomodoro_next_focus">Time to focus.</string>
+    <string name="pomodoro_next_short">Take a short break.</string>
+    <string name="pomodoro_next_long">Take a long break.</string>
+    <string name="search_title">Search</string>
+    <string name="search_hint">Search this note</string>
+    <string name="search_close">Close search</string>
+    <string name="search_none">No matches</string>
+    <string name="search_searching">Searching…</string>
+    <string name="search_pending">Some handwriting hasn\'t been read yet, so matches may be missing.</string>
+    <string name="search_page">Page %1$d</string>
+    <string name="search_previous">Previous match</string>
+    <string name="search_next">Next match</string>
+    <plurals name="search_matches">
+        <item quantity="one">%d match</item>
+        <item quantity="other">%d matches</item>
+    </plurals>
+    <string-array name="editor_action_names">
+        <item>Undo</item>
+        <item>Redo</item>
+        <item>Toggle finger draw</item>
+        <item>Toggle view only</item>
+        <item>Toggle toolbar</item>
+        <item>Pen</item>
+        <item>Pencil</item>
+        <item>Highlighter</item>
+        <item>Lasso</item>
+        <item>Eraser</item>
+        <item>Shape</item>
+        <item>Image</item>
+        <item>Camera</item>
+        <item>Sticky note</item>
+        <item>Table</item>
+        <item>Loupe</item>
+        <item>Recorder</item>
+        <item>Ruler</item>
+        <item>Laser pointer</item>
+        <item>Open tool panel</item>
+        <item>Color 1</item>
+        <item>Color 2</item>
+        <item>Color 3</item>
+        <item>Color 4</item>
+        <item>Color 5</item>
+        <item>Width 1</item>
+        <item>Width 2</item>
+        <item>Width 3</item>
+        <item>Toggle erase mode</item>
+        <item>Clear page</item>
+        <item>Copy</item>
+        <item>Cut</item>
+        <item>Paste</item>
+        <item>Delete selection</item>
+        <item>Next page</item>
+        <item>Previous page</item>
+        <item>First page</item>
+        <item>Last page</item>
+        <item>Add page</item>
+        <item>Page grid</item>
+        <item>Page switcher</item>
+        <item>Zoom in</item>
+        <item>Zoom out</item>
+        <item>Real size</item>
+        <item>Search</item>
+        <item>Export</item>
+        <item>Settings</item>
+    </string-array>
 </resources>

@@ -161,7 +161,7 @@ class EditTest {
         assertEquals(DocumentKind.CANVAS, canvas.kind)
         assertFalse(canvas.canAddPages)
         assertFalse(canvas.canRemovePages)
-        assertFalse(canvas.pages[0].isResizable)
+        assertTrue(canvas.pages[0].isResizable)
         assertThrows(IllegalArgumentException::class.java) {
             InsertPage(1, Page(5, PageSize.A4)).apply(FakeTarget(canvas))
         }
@@ -187,12 +187,13 @@ class EditTest {
     }
 
     @Test
-    fun `only a canvas may hold an infinite page`() {
+    fun `only a lone note or canvas page may be infinite`() {
+        Document(1, "x", DocumentKind.NOTE, 0, 0, listOf(Page(1, null)))
         assertThrows(IllegalArgumentException::class.java) {
-            Document(1, "x", DocumentKind.NOTE, 0, 0, listOf(Page(1, null)))
+            Document(1, "x", DocumentKind.NOTE, 0, 0, listOf(Page(1, null), Page(2, PageSize.A4)))
         }
         assertThrows(IllegalArgumentException::class.java) {
-            Document(1, "x", DocumentKind.CANVAS, 0, 0, listOf(Page(1, PageSize.A4)))
+            Document(1, "x", DocumentKind.PDF, 0, 0, listOf(Page(1, null)))
         }
     }
 }

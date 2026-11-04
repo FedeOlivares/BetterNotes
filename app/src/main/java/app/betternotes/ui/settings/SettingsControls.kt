@@ -72,6 +72,9 @@ internal data class SettingsColors(
     val sheet: Color,
     val card: Color,
     val closeButton: Color,
+    val field: Color,
+    val inset: Color,
+    val kindSelected: Color,
     val title: Color,
     val text: Color,
     val secondary: Color,
@@ -96,6 +99,9 @@ private val DarkSettings = SettingsColors(
     sheet = Color(0xFF1E1F23),
     card = Color(0xFF333746),
     closeButton = Color(0xFF2C2C2E),
+    field = Color(0xFF3D4455),
+    inset = Color(0xFF26282D),
+    kindSelected = Color(0xFF1F3560),
     title = Color(0xFFE6E7EA),
     text = Color(0xFFE3E4E9),
     secondary = Color(0xFFC6C8D0),
@@ -121,6 +127,9 @@ private val LightSettings = SettingsColors(
     sheet = Color(0xFFFFFFFF),
     card = Color(0xFFE6E9F2),
     closeButton = Color(0xFFE3E4E8),
+    field = Color(0xFFE2E5EE),
+    inset = Color(0xFFEDEFF3),
+    kindSelected = Color(0xFFDCE7FB),
     title = Color(0xFF1B1C20),
     text = Color(0xFF1F2026),
     secondary = Color(0xFF55585F),
@@ -196,6 +205,7 @@ internal object SettingsIcons {
                 "M16.4 12V8.2a1.4 1.4 0 0 1 2.8 0V15a6 6 0 0 1-6 6h-1.4a6 6 0 0 1-4.6-2.2L4 14.6a1.5 1.5 0 0 1 2.2-2L8 14.5",
         )
     }
+    val Search by lazy { icon("search", "M10.5 4a6.5 6.5 0 1 0 0 13a6.5 6.5 0 0 0 0-13zM15.4 15.4L20 20") }
     val Info by lazy { icon("info", "M12 3.2a8.8 8.8 0 1 0 0 17.6a8.8 8.8 0 0 0 0-17.6zM12 11v5.5M12 7.5v.2") }
 }
 
@@ -511,6 +521,43 @@ internal fun RoundIcon(icon: ImageVector, size: Dp, description: String? = null,
         modifier = Modifier.size(size + 14.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick),
     ) {
         Icon(icon, description, tint = LocalSettingsColors.current.text, modifier = Modifier.size(size))
+    }
+}
+
+internal fun lineIcon(name: String, path: String) = icon(name, path)
+
+/** A slider with a bar for the handle and a gap each side, and no steps or buttons, as the export sheet shows. */
+@Composable
+internal fun PlainSlider(fraction: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifier) {
+    val colors = LocalSettingsColors.current
+    val latest by rememberUpdatedState(onChange)
+    Canvas(
+        modifier
+            .height(44.dp)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    latest((down.position.x / size.width).coerceIn(0f, 1f))
+                    down.consume()
+                    drag(down.id) { change ->
+                        latest((change.position.x / size.width).coerceIn(0f, 1f))
+                        if (change.positionChange() != Offset.Zero) change.consume()
+                    }
+                }
+            },
+    ) {
+        val track = 9.dp.toPx()
+        val handleWidth = 5.dp.toPx()
+        val gap = 6.dp.toPx()
+        val centerY = size.height / 2f
+        val x = fraction.coerceIn(0f, 1f) * size.width
+        val radius = CornerRadius(track / 2f)
+        if (x - gap > 0f) drawRoundRect(colors.accent, Offset(0f, centerY - track / 2f), Size(x - gap, track), radius)
+        if (x + gap < size.width) {
+            drawRoundRect(colors.chipSelected, Offset(x + gap, centerY - track / 2f), Size(size.width - x - gap, track), radius)
+            drawCircle(colors.accent, 2.5.dp.toPx(), Offset(size.width - track / 2f, centerY))
+        }
+        drawRoundRect(colors.accent, Offset(x - handleWidth / 2f, 4.dp.toPx()), Size(handleWidth, size.height - 8.dp.toPx()), CornerRadius(handleWidth / 2f))
     }
 }
 

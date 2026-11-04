@@ -75,7 +75,12 @@ data class CanvasSettings(
     val continueFromLastPage: Boolean = true,
     val keepScreenOn: Boolean = true,
     val hideSystemBars: Boolean = true,
+    /** Items line up with each other as they are dragged. The editor does the aligning. */
+    val snapToAlign: Boolean = true,
 )
+
+/** Whether a new note takes its name from the first words written in it. */
+enum class AutoName { AUTO, OFF }
 
 /**
  * A measured screen density, for when the device misreports its own. Real size depends on this: the
@@ -122,6 +127,8 @@ data class AppSettings(
     val stylus: StylusSettings = StylusSettings(),
     val canvas: CanvasSettings = CanvasSettings(),
     val newNoteName: NewNoteName = NewNoteName.DATED,
+    val autoName: AutoName = AutoName.AUTO,
+    val pomodoro: PomodoroSettings = PomodoroSettings(),
 ) {
     /** Saves [layout], replacing any layout with the same name. */
     fun withCustomLayout(layout: CustomLayout): AppSettings {

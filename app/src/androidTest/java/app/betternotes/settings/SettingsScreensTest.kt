@@ -124,15 +124,19 @@ class SettingsScreensTest {
 
     @Test
     fun templateSheetChangesNothingUntilApply() {
-        val applied = ArrayList<Triple<PageBackground, PageSize?, ApplyScope>>()
+        val applied = ArrayList<Triple<PageBackground, Boolean, ApplyScope>>()
         compose.setContent {
             SettingsTheme {
                 TemplateSheet(
                     current = PageBackground(template = PageTemplate.Dotted()),
                     pageSize = PageSize.A4,
                     canResize = true,
+                    canBeInfinite = true,
                     customLayouts = emptyList(),
-                    onApply = { background, size, scope -> applied += Triple(background, size, scope) },
+                    onApply = { background, size, infinite, scope ->
+                        assertNull(size)
+                        applied += Triple(background, infinite, scope)
+                    },
                     onNewLayout = {},
                     onEditLayout = {},
                     onClose = {},
@@ -142,10 +146,38 @@ class SettingsScreensTest {
         tap("Grid")
         assertTrue(applied.isEmpty())
         compose.onNodeWithText("Apply to current page").performClick()
-        val (background, size, scope) = applied.single()
+        val (background, infinite, scope) = applied.single()
         assertTrue(background.template is PageTemplate.Grid)
-        assertNull("the size was not touched", size)
+        assertFalse("the size was not touched", infinite)
         assertEquals(ApplyScope.CURRENT_PAGE, scope)
+    }
+
+    @Test
+    fun infiniteIsOfferedAsAPageSizeAndAppliedAsOne() {
+        var result: Triple<PageBackground, PageSize?, Boolean>? = null
+        compose.setContent {
+            SettingsTheme {
+                TemplateSheet(
+                    current = PageBackground(template = PageTemplate.Cornell()),
+                    pageSize = PageSize.A4,
+                    canResize = true,
+                    canBeInfinite = true,
+                    customLayouts = emptyList(),
+                    onApply = { background, size, infinite, _ -> result = Triple(background, size, infinite) },
+                    onNewLayout = {},
+                    onEditLayout = {},
+                    onClose = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Size: 595 x 842").performClick()
+        compose.onNodeWithText("Infinite").performClick()
+        compose.onNodeWithText("Size: Infinite").assertIsDisplayed()
+        compose.onNodeWithText("Apply to current page").performClick()
+        val (background, size, infinite) = result!!
+        assertTrue("a template that does not repeat gives way to a blank one", background.template is PageTemplate.Blank)
+        assertNull(size)
+        assertTrue(infinite)
     }
 
     @Test
@@ -156,8 +188,9 @@ class SettingsScreensTest {
                     current = PageBackground(),
                     pageSize = PageSize.Letter,
                     canResize = false,
+                    canBeInfinite = false,
                     customLayouts = emptyList(),
-                    onApply = { _, _, _ -> },
+                    onApply = { _, _, _, _ -> },
                     onNewLayout = {},
                     onEditLayout = {},
                     onClose = {},

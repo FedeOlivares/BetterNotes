@@ -33,8 +33,8 @@ data class Page(
     val background: PageBackground = PageBackground(),
     val source: PageSource = PageSource.Blank,
 ) {
-    /** A page taken from a PDF keeps the PDF's size. */
-    val isResizable get() = source == PageSource.Blank && size != null
+    /** A page taken from a PDF keeps the PDF's size. A blank page may be sized or infinite. */
+    val isResizable get() = source == PageSource.Blank
 }
 
 /**
@@ -66,7 +66,11 @@ class Document(
     var version = 0L
         private set
 
-    val canAddPages get() = kind == DocumentKind.NOTE || kind == DocumentKind.PDF
+    /** An infinite page is a document's only page, so pages can't be added while one exists. */
+    val canAddPages get() = kind != DocumentKind.TEXT && pageList.none { it.size == null }
+
+    /** Only a note or canvas with a single page can have an infinite page, which is how a canvas is made. */
+    val canBeInfinite get() = (kind == DocumentKind.NOTE || kind == DocumentKind.CANVAS) && pageList.size == 1
 
     /** A document keeps at least one page. */
     val canRemovePages get() = pageList.size > 1
@@ -74,10 +78,7 @@ class Document(
     init {
         require(pageList.isNotEmpty()) { "A document needs a page" }
         require(pageList.map { it.id }.toSet().size == pageList.size) { "Duplicate page id" }
-        when (kind) {
-            DocumentKind.CANVAS -> require(pageList.single().size == null) { "A canvas is one infinite page" }
-            else -> require(pageList.all { it.size != null }) { "Only a canvas has infinite pages" }
-        }
+        require(pageList.all { it.size != null } || canBeInfinite) { "Only a lone note or canvas page can be infinite" }
     }
 
     fun indexOfPage(pageId: Long) = pageList.indexOfFirst { it.id == pageId }
@@ -85,8 +86,8 @@ class Document(
     fun page(pageId: Long): Page = pageList[requireIndex(pageId)]
 
     internal fun insertPage(index: Int, page: Page) {
-        require(canAddPages) { "A canvas has exactly one page" }
-        require(page.size != null) { "Only a canvas has infinite pages" }
+        require(canAddPages) { "This document cannot take more pages" }
+        require(page.size != null) { "Only a lone page can be infinite" }
         require(indexOfPage(page.id) < 0) { "Duplicate page id" }
         pageList.add(index, page)
         version++
@@ -107,9 +108,8 @@ class Document(
         val index = requireIndex(updated.id)
         val current = pageList[index]
         require(updated.source == current.source) { "A page keeps its source" }
-        require(updated.size == current.size || current.isResizable && updated.size != null) {
-            "This page cannot change size"
-        }
+        require(updated.size == current.size || current.isResizable) { "This page cannot change size" }
+        require(updated.size != null || canBeInfinite) { "This document cannot have an infinite page" }
         pageList[index] = updated
         version++
     }

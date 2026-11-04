@@ -19,7 +19,7 @@ import java.util.concurrent.Executors
  * [update] is for the main thread. The file is small enough to read during startup.
  */
 class SettingsRepository(private val store: SettingsStore) {
-    constructor(context: Context) : this(SettingsStore(File(context.filesDir, "settings.bns")))
+    constructor(context: Context) : this(SettingsStore(fileIn(context)))
 
     private val state = MutableStateFlow(store.read())
     private val writer = Executors.newSingleThreadExecutor { task -> Thread(task, "settings-io") }
@@ -39,8 +39,11 @@ class SettingsRepository(private val store: SettingsStore) {
         }
     }
 
-    private companion object {
-        const val TAG = "SettingsRepository"
+    companion object {
+        private const val TAG = "SettingsRepository"
+
+        /** Where the settings live, which the Pomodoro alarm also reads with the app closed. */
+        fun fileIn(context: Context) = File(context.filesDir, "settings.bns")
     }
 }
 

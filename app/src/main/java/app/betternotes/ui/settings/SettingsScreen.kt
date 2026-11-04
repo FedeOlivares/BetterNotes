@@ -48,6 +48,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -61,6 +62,7 @@ import app.betternotes.ui.theme.AppLanguage
 import app.betternotes.ui.theme.ThemeMode
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.settings.AppSettings
+import app.betternotes.core.settings.AutoName
 import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.settings.KeyChord
 import app.betternotes.core.settings.NewNoteName
@@ -143,6 +145,7 @@ private fun SettingsPageFrame(title: String, onBack: () -> Unit, modifier: Modif
 private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSettings) -> Unit, open: (SettingsPage) -> Unit) {
     val canvas = settings.canvas
     GeneralCard()
+    val context = LocalContext.current
     SettingsCard {
         CardTitle(stringResource(R.string.settings_notes))
         DropdownRow(
@@ -151,6 +154,13 @@ private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
             NewNoteName.entries,
             { noteName(it) },
         ) { value -> onChange { it.copy(newNoteName = value) } }
+        DropdownRow(
+            stringResource(R.string.settings_auto_name),
+            settings.autoName,
+            AutoName.entries,
+            { stringResource(if (it == AutoName.AUTO) R.string.settings_auto_name_auto else R.string.settings_auto_name_off) },
+            detail = stringResource(R.string.settings_auto_name_detail),
+        ) { value -> onChange { it.copy(autoName = value) } }
     }
     SettingsCard {
         CardTitle(stringResource(R.string.settings_canvas))
@@ -163,10 +173,14 @@ private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
         ToggleRow(stringResource(R.string.settings_hide_bars), canvas.hideSystemBars, stringResource(R.string.settings_hide_bars_detail)) { value ->
             onChange { it.copy(canvas = it.canvas.copy(hideSystemBars = value)) }
         }
+        ToggleRow(stringResource(R.string.settings_snap), canvas.snapToAlign, stringResource(R.string.settings_snap_detail)) { value ->
+            onChange { it.copy(canvas = it.canvas.copy(snapToAlign = value)) }
+        }
         LinkRow(stringResource(R.string.settings_scroll_layout)) { open(SettingsPage.SCROLL) }
         LinkRow(stringResource(R.string.settings_shortcuts)) { open(SettingsPage.SHORTCUTS) }
         LinkRow(stringResource(R.string.settings_calibration), stringResource(R.string.settings_calibration_detail)) { open(SettingsPage.CALIBRATION) }
     }
+    PomodoroCard(settings, onChange)
     HandwritingCard()
     StorageCard()
     Spacer(Modifier.height(12.dp))
@@ -402,9 +416,9 @@ private fun ShortcutsPage(settings: AppSettings, onChange: ((AppSettings) -> App
     }
 }
 
-/** Action names come from the enum, as there are about fifty and each reads plainly once spaced out. */
-private fun actionName(action: EditorAction) =
-    action.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+/** The names are in a resource array, in the order of the enum, so that they can be translated. */
+@Composable
+private fun actionName(action: EditorAction): String = stringArrayResource(R.array.editor_action_names)[action.ordinal]
 
 private fun chordName(chord: KeyChord): String {
     val parts = ArrayList<String>()

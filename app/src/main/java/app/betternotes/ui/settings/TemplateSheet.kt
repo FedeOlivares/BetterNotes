@@ -80,15 +80,17 @@ private val THUMBNAIL_PAGE = PageSize(420f, 420f)
  * The template picker over the editor. Matches the owner's screenshot. It changes nothing until Apply,
  * and the caller turns what comes back into undoable edits.
  *
- * [pageSize] is null on a canvas, and [canResize] is false on a PDF page, whose size is fixed.
+ * [pageSize] is null on an infinite page, and [canResize] is false on a PDF page, whose size is fixed.
+ * [canBeInfinite] offers "Infinite" in the size list, which is how an infinite canvas is made.
  */
 @Composable
 fun TemplateSheet(
     current: PageBackground,
     pageSize: PageSize?,
     canResize: Boolean,
+    canBeInfinite: Boolean,
     customLayouts: List<CustomLayout>,
-    onApply: (background: PageBackground, layoutSize: PageSize?, scope: ApplyScope) -> Unit,
+    onApply: (background: PageBackground, layoutSize: PageSize?, infinite: Boolean, scope: ApplyScope) -> Unit,
     onNewLayout: () -> Unit,
     onEditLayout: (CustomLayout) -> Unit,
     onClose: () -> Unit,
@@ -112,9 +114,12 @@ fun TemplateSheet(
                     ChoiceChip(stringResource(R.string.template_built_in), !customTab) { customTab = false }
                     Spacer(Modifier.width(11.dp))
                     ChoiceChip(stringResource(R.string.template_custom), customTab) { customTab = true }
-                    if (pageSize != null) {
+                    if (pageSize != null || canResize) {
                         Spacer(Modifier.width(30.dp))
-                        SizeChooser(size!!, enabled = canResize) { size = it }
+                        SizeChooser(size, enabled = canResize, canBeInfinite = canBeInfinite) {
+                            size = it
+                            if (it == null && !template.tiles) template = TemplateKind.BLANK.newTemplate()
+                        }
                     }
                 }
                 Spacer(Modifier.height(30.dp))
@@ -139,7 +144,7 @@ fun TemplateSheet(
                             if (group in collapsed) collapsed -= group else collapsed += group
                         }
                         if (group !in collapsed) {
-                            ThumbnailRow(group, template, paper, onCanvas = pageSize == null) { kind ->
+                            ThumbnailRow(group, template, paper, onCanvas = size == null) { kind ->
                                 template = kind.newTemplate().keepingLevelsOf(template)
                             }
                         }
@@ -147,12 +152,12 @@ fun TemplateSheet(
                 }
             }
             ApplyButton(
-                enabled = template !is PageTemplate.Custom || pageSize != null,
+                enabled = template !is PageTemplate.Custom || size != null,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 15.dp, bottom = 14.dp),
             ) { scope ->
                 val layout = (template as? PageTemplate.Custom)?.layout
                 val sizeToApply = layout?.size ?: size.takeIf { it != pageSize }
-                onApply(PageBackground(paper, template), sizeToApply, scope)
+                onApply(PageBackground(paper, template), sizeToApply, layout == null && size == null && pageSize != null, scope)
             }
         }
     }
@@ -196,7 +201,7 @@ private fun kindName(kind: TemplateKind) = stringResource(
 )
 
 @Composable
-private fun SizeChooser(size: PageSize, enabled: Boolean, onChange: (PageSize) -> Unit) {
+private fun SizeChooser(size: PageSize?, enabled: Boolean, canBeInfinite: Boolean, onChange: (PageSize?) -> Unit) {
     val colors = LocalSettingsColors.current
     var open by remember { mutableStateOf(false) }
     Box {
@@ -205,7 +210,11 @@ private fun SizeChooser(size: PageSize, enabled: Boolean, onChange: (PageSize) -
             modifier = Modifier.clickable(enabled = enabled) { open = true },
         ) {
             Text(
-                stringResource(R.string.template_size, size.widthPt.roundToInt(), size.heightPt.roundToInt()),
+                if (size == null) {
+                    stringResource(R.string.template_size_infinite)
+                } else {
+                    stringResource(R.string.template_size, size.widthPt.roundToInt(), size.heightPt.roundToInt())
+                },
                 color = if (enabled) colors.title else colors.secondary,
                 fontSize = 19.5.sp,
             )
@@ -221,6 +230,15 @@ private fun SizeChooser(size: PageSize, enabled: Boolean, onChange: (PageSize) -
                     onClick = {
                         open = false
                         onChange(option)
+                    },
+                )
+            }
+            if (canBeInfinite) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.size_infinite), fontSize = 20.sp) },
+                    onClick = {
+                        open = false
+                        onChange(null)
                     },
                 )
             }

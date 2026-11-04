@@ -3,6 +3,9 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The Pomodoro timer's end-of-phase notification and its exact alarm. Both stay on the device. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -14,6 +17,10 @@
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <receiver
+            android:name=".pomodoro.PomodoroAlarmReceiver"
+            android:exported="false" />
 
         <!-- Lets the camera app write a photo into the app's cache. -->
         <provider

@@ -26,16 +26,41 @@ sealed interface PageSelection {
 
 enum class ImageFormat(val extension: String) { PNG("png"), JPEG("jpg") }
 
+/** How far the export sheet's page scale slider goes. 100% is the page's own size. */
+val PAGE_SCALE_RANGE = 0.5f..2.5f
+
+data class PdfExportOptions(
+    val scale: Float = 1f,
+    val invert: Boolean = false,
+    /**
+     * Turns each page into one picture. The PDF is then exactly what the screen shows, but its ink can no
+     * longer be zoomed without blurring, and nothing in it can be selected.
+     */
+    val rasterize: Boolean = false,
+) {
+    init {
+        require(scale in PAGE_SCALE_RANGE) { "Bad scale $scale" }
+    }
+}
+
 data class ImageExportOptions(
     val format: ImageFormat = ImageFormat.PNG,
     val dpi: Float = DEFAULT_DPI,
     /** JPEG only, from 0 to 100. */
     val quality: Int = DEFAULT_JPEG_QUALITY,
+    /** Multiplies [dpi], as the export sheet's page scale does. */
+    val scale: Float = 1f,
+    /** Swaps every color for its opposite, for reading a light page on a dark screen. */
+    val invert: Boolean = false,
 ) {
     init {
         require(dpi > 0f) { "Bad resolution $dpi" }
         require(quality in 0..100) { "Bad quality $quality" }
+        require(scale in PAGE_SCALE_RANGE) { "Bad scale $scale" }
     }
+
+    /** The resolution the pages are drawn at. */
+    val effectiveDpi get() = dpi * scale
 
     companion object {
         const val DEFAULT_DPI = 300f
@@ -71,7 +96,7 @@ data class ExportFrame(val area: Bounds, val scale: Float, val outputWidth: Int,
         }
 
         /** One point of the document is one point of the PDF, unless the area is too large for a PDF page. */
-        fun forPdf(area: Bounds): ExportFrame = fitted(area, 1f, MAX_PDF_SIDE_PT)
+        fun forPdf(area: Bounds, scale: Float = 1f): ExportFrame = fitted(area, scale, MAX_PDF_SIDE_PT)
 
         fun forImage(area: Bounds, dpi: Float): ExportFrame {
             val wanted = dpi / POINTS_PER_INCH
