@@ -533,6 +533,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     val pageId = open.document.pages[index].id
                     open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), item))
                     syncChanges()
+                    // A new shape is selected, with its handles showing. Tape has none and stays on the tool.
+                    if (item.kind != ShapeKind.TAPE) selectLast(pageId)
                 }
             },
         )

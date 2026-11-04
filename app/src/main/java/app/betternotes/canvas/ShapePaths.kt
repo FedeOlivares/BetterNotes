@@ -3,6 +3,7 @@ package app.betternotes.canvas
 import android.graphics.Path
 import android.graphics.RectF
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.tools.ShapeTips
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
@@ -13,7 +14,7 @@ internal object ShapePaths {
     private val box = RectF()
     private val cloud = Path()
 
-    fun build(path: Path, kind: ShapeKind, w: Float, h: Float, cornerRadius: Float) {
+    fun build(path: Path, kind: ShapeKind, w: Float, h: Float, cornerRadius: Float, tipLength: Float = 0f, tipWidth: Float = 0f) {
         path.reset()
         val midY = h / 2f
         when (kind) {
@@ -22,12 +23,13 @@ internal object ShapePaths {
                 path.lineTo(w, midY)
             }
             ShapeKind.ARROW -> {
-                val head = min(w * HEAD_RATIO, HEAD_MAX)
+                val head = ShapeTips.length(kind, w, h, tipLength)
+                val spread = ShapeTips.width(kind, w, h, tipLength, tipWidth) / 2f
                 path.moveTo(0f, midY)
                 path.lineTo(w, midY)
-                path.moveTo(w - head, midY - head * HEAD_SPREAD)
+                path.moveTo(w - head, midY - spread)
                 path.lineTo(w, midY)
-                path.lineTo(w - head, midY + head * HEAD_SPREAD)
+                path.lineTo(w - head, midY + spread)
             }
             ShapeKind.RECTANGLE -> {
                 box.set(0f, 0f, w, h)
@@ -42,16 +44,20 @@ internal object ShapePaths {
             ShapeKind.DIAMOND -> polygon(path, w / 2f, 0f, w, midY, w / 2f, h, 0f, midY)
             ShapeKind.PARALLELOGRAM -> polygon(path, w * SLANT, 0f, w, 0f, w * (1f - SLANT), h, 0f, h)
             ShapeKind.TRAPEZOID -> polygon(path, w * SLANT, 0f, w * (1f - SLANT), 0f, w, h, 0f, h)
-            ShapeKind.BLOCK_ARROW -> polygon(
-                path,
-                0f, h * 0.3f,
-                w * 0.6f, h * 0.3f,
-                w * 0.6f, 0f,
-                w, midY,
-                w * 0.6f, h,
-                w * 0.6f, h * 0.7f,
-                0f, h * 0.7f,
-            )
+            ShapeKind.BLOCK_ARROW -> {
+                val neck = w - ShapeTips.length(kind, w, h, tipLength)
+                val reach = (ShapeTips.width(kind, w, h, tipLength, tipWidth) / 2f).coerceAtLeast(h * 0.2f)
+                polygon(
+                    path,
+                    0f, h * 0.3f,
+                    neck, h * 0.3f,
+                    neck, midY - reach,
+                    w, midY,
+                    neck, midY + reach,
+                    neck, h * 0.7f,
+                    0f, h * 0.7f,
+                )
+            }
             ShapeKind.CURVE -> {
                 path.moveTo(0f, midY)
                 path.cubicTo(w * 0.25f, -h * 0.3f, w * 0.25f, h * 1.1f, w / 2f, midY)
@@ -88,9 +94,9 @@ internal object ShapePaths {
             ShapeKind.CUBE, ShapeKind.TETRAHEDRON, ShapeKind.PRISM, ShapeKind.DISCS, ShapeKind.SINE, ShapeKind.COSINE,
             ShapeKind.AXES, ShapeKind.PARABOLA, ShapeKind.CUBIC, ShapeKind.BRACE, ShapeKind.HEART, ShapeKind.SPEECH_BOX,
             ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT, ShapeKind.TAPE,
-            -> buildSecondPage(path, kind, w, h)
+            -> buildSecondPage(path, kind, w, h, tipLength, tipWidth)
             ShapeKind.CYLINDER -> {
-                val cap = h * 0.15f
+                val cap = ShapeTips.length(kind, w, h, tipLength)
                 box.set(0f, 0f, w, cap * 2f)
                 path.addOval(box, Path.Direction.CW)
                 path.moveTo(0f, cap)
@@ -103,11 +109,12 @@ internal object ShapePaths {
     }
 
     /** The shapes of the screenshot's second page, and tape. Their proportions come from that grid. */
-    private fun buildSecondPage(path: Path, kind: ShapeKind, w: Float, h: Float) {
+    private fun buildSecondPage(path: Path, kind: ShapeKind, w: Float, h: Float, tipLength: Float, tipWidth: Float) {
         val midY = h / 2f
         when (kind) {
             ShapeKind.CUBE -> {
-                val side = 0.25f
+                // A cube drawn before it had a handle keeps its look, since its depth is then not set.
+                val side = if (tipLength > 0f) (tipLength / min(w, h)).coerceAtMost(0.9f) else 0.25f
                 polygon(path, 0f, h * side, w * (1f - side), h * side, w * (1f - side), h, 0f, h)
                 polyline(path, 0f, h * side, w * side, 0f, w, 0f, w, h * (1f - side), w * (1f - side), h)
                 polyline(path, w * (1f - side), h * side, w, 0f)
@@ -131,11 +138,12 @@ internal object ShapePaths {
             ShapeKind.AXES -> {
                 val originX = w * 0.3f
                 val originY = h * 0.7f
-                val head = min(w, h) * 0.1f
+                val head = ShapeTips.length(kind, w, h, tipLength)
+                val spread = ShapeTips.width(kind, w, h, tipLength, tipWidth) / 2f
                 polyline(path, originX, originY, originX, 0f)
-                polyline(path, originX - head, head, originX, 0f, originX + head, head)
+                polyline(path, originX - spread, head, originX, 0f, originX + spread, head)
                 polyline(path, originX, originY, w, originY)
-                polyline(path, w - head, originY - head, w, originY, w - head, originY + head)
+                polyline(path, w - head, originY - spread, w, originY, w - head, originY + spread)
                 polyline(path, originX, originY, 0f, h)
             }
             ShapeKind.PARABOLA -> curve(path, w, h) { x -> x * x }

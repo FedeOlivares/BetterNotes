@@ -79,7 +79,7 @@ internal class ItemPainter(
     private fun paintShape(canvas: Canvas, item: ShapeItem) {
         val width = item.frame.width
         val height = item.frame.height
-        ShapePaths.build(path, item.kind, width, height, item.cornerRadius)
+        ShapePaths.build(path, item.kind, width, height, item.cornerRadius, item.tipLength, item.tipWidth)
         val alpha = (item.opacity * OPAQUE).roundToInt()
         if (item.kind == ShapeKind.TAPE && item.fillColor == TapeOptions.WARNING_FILL) {
             paintWarningTape(canvas, width, height)

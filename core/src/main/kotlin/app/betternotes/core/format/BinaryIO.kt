@@ -14,6 +14,12 @@ class UnsupportedVersionException(val version: Int) : IOException("Unsupported f
 
 internal const val FORMAT_VERSION = 1
 
+/**
+ * The page files are at version 2: shapes gained a tip length and width. Version 1 pages still open, and
+ * their shapes get the default tips. The other files are still at [FORMAT_VERSION].
+ */
+internal const val PAGE_FORMAT_VERSION = 2
+
 private const val MAGIC_SIZE = 4
 private const val CRC_SIZE = 4
 
@@ -21,17 +27,23 @@ private const val CRC_SIZE = 4
  * The container shared by every file: 4 magic bytes, the format version as a varint, the body, and
  * a CRC-32 of everything before it. All numbers are little-endian, which is what ARM runs natively.
  */
-internal fun encodeFile(magic: String, body: ByteWriter.() -> Unit): ByteArray {
+internal fun encodeFile(magic: String, body: ByteWriter.() -> Unit): ByteArray = encodeFile(magic, FORMAT_VERSION, body)
+
+internal fun encodeFile(magic: String, version: Int, body: ByteWriter.() -> Unit): ByteArray {
     val writer = ByteWriter()
+    writer.version = version
     writer.bytes(magic.toByteArray(Charsets.US_ASCII))
-    writer.varint(FORMAT_VERSION)
+    writer.varint(version)
     writer.body()
     val crc = CRC32().apply { update(writer.array, 0, writer.size) }.value.toInt()
     writer.int(crc)
     return writer.toByteArray()
 }
 
-internal fun <T> decodeFile(bytes: ByteArray, magic: String, body: ByteReader.() -> T): T {
+internal fun <T> decodeFile(bytes: ByteArray, magic: String, body: ByteReader.() -> T): T =
+    decodeFile(bytes, magic, FORMAT_VERSION, body)
+
+internal fun <T> decodeFile(bytes: ByteArray, magic: String, newest: Int, body: ByteReader.() -> T): T {
     if (bytes.size < MAGIC_SIZE + 1 + CRC_SIZE) throw CorruptFileException("Only ${bytes.size} bytes")
     val expected = magic.toByteArray(Charsets.US_ASCII)
     for (i in 0 until MAGIC_SIZE) {
@@ -41,7 +53,8 @@ internal fun <T> decodeFile(bytes: ByteArray, magic: String, body: ByteReader.()
     val reader = ByteReader(bytes, MAGIC_SIZE, bodyEnd)
     // The version comes before the CRC check because a future format may checksum differently.
     val version = reader.guarded { varint() }
-    if (version != FORMAT_VERSION) throw UnsupportedVersionException(version)
+    if (version < 1 || version > newest) throw UnsupportedVersionException(version)
+    reader.version = version
 
     val stored = ByteBuffer.wrap(bytes, bodyEnd, CRC_SIZE).order(ByteOrder.LITTLE_ENDIAN).int
     val actual = CRC32().apply { update(bytes, 0, bodyEnd) }.value.toInt()
@@ -55,6 +68,9 @@ internal fun <T> decodeFile(bytes: ByteArray, magic: String, body: ByteReader.()
 }
 
 internal class ByteWriter(capacity: Int = 16 * 1024) {
+    /** The format version being written, for records that changed between versions. */
+    var version = FORMAT_VERSION
+
     private var buffer = ByteBuffer.allocate(capacity).order(ByteOrder.LITTLE_ENDIAN)
 
     val array: ByteArray get() = buffer.array()
@@ -125,6 +141,9 @@ internal class ByteWriter(capacity: Int = 16 * 1024) {
 
 internal class ByteReader(bytes: ByteArray, offset: Int, end: Int) {
     private val buffer = ByteBuffer.wrap(bytes, offset, end - offset).order(ByteOrder.LITTLE_ENDIAN)
+
+    /** The format version of the file being read, for records that changed between versions. */
+    var version = FORMAT_VERSION
 
     val remaining: Int get() = buffer.remaining()
 

@@ -94,9 +94,11 @@ internal val VERTICAL_ALIGNS = WireEnum(VerticalAlign.TOP, VerticalAlign.MIDDLE,
  * saving would then destroy it.
  */
 object PageCodec {
-    fun encode(items: List<PageItem>): ByteArray = encodeFile(PAGE_MAGIC) { items(items) }
+    /** [version] is only for tests of older formats. */
+    fun encode(items: List<PageItem>, version: Int = PAGE_FORMAT_VERSION): ByteArray =
+        encodeFile(PAGE_MAGIC, version) { items(items) }
 
-    fun decode(bytes: ByteArray): List<PageItem> = decodeFile(bytes, PAGE_MAGIC) { items() }
+    fun decode(bytes: ByteArray): List<PageItem> = decodeFile(bytes, PAGE_MAGIC, PAGE_FORMAT_VERSION) { items() }
 }
 
 private fun ByteWriter.items(items: List<PageItem>) {
@@ -131,6 +133,10 @@ private fun ByteWriter.item(item: PageItem) {
             int(item.fillColor)
             float(item.cornerRadius)
             float(item.opacity)
+            if (version >= 2) {
+                float(item.tipLength)
+                float(item.tipWidth)
+            }
         }
         is ImageItem -> {
             byte(TAG_IMAGE)
@@ -241,6 +247,8 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         fillColor = int(),
         cornerRadius = float(),
         opacity = float(),
+        tipLength = if (version >= 2) float() else 0f,
+        tipWidth = if (version >= 2) float() else 0f,
     )
     TAG_IMAGE -> ImageItem(
         id = long(),

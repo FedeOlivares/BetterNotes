@@ -206,9 +206,9 @@ class CodecTest {
 
     @Test
     fun `a newer version is refused, not skipped`() {
-        val newer = encodeWithVersion("BNPG", 2)
+        val newer = encodeWithVersion("BNPG", 3)
         val thrown = assertThrows(UnsupportedVersionException::class.java) { PageCodec.decode(newer) }
-        assertEquals(2, thrown.version)
+        assertEquals(3, thrown.version)
     }
 
     /** Builds a well-formed file with a bad body, to check values the checksum cannot catch. */
@@ -358,8 +358,18 @@ class CodecTest {
     @Test
     fun `format version 1 bytes do not change`() {
         val items = listOf(everyItem[0], everyItem[1])
-        assertArrayEquals(GOLDEN_PAGE.decodeBase64(), PageCodec.encode(items))
+        assertArrayEquals(GOLDEN_PAGE.decodeBase64(), PageCodec.encode(items, version = 1))
         assertEquals(items, PageCodec.decode(GOLDEN_PAGE.decodeBase64()))
+    }
+
+    @Test
+    fun `a version 1 shape opens with the default tips and a version 2 one keeps its own`() {
+        val plain = ShapeItem(9L, Frame(0f, 0f, 100f, 0f), ShapeKind.ARROW)
+        val tipped = plain.copy(tipLength = 30f, tipWidth = 18f)
+        assertEquals(listOf(plain), PageCodec.decode(PageCodec.encode(listOf(tipped), version = 1)).map {
+            (it as ShapeItem).copy(tipLength = 0f, tipWidth = 0f)
+        })
+        assertEquals(listOf(tipped), PageCodec.decode(PageCodec.encode(listOf(tipped))))
     }
 
     @Test

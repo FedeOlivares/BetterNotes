@@ -14,9 +14,12 @@ import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.withId
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.ResizeHandle
+import app.betternotes.core.tools.ShapeParam
+import app.betternotes.core.tools.ShapeTips
 import app.betternotes.core.tools.Selection
 import app.betternotes.core.tools.resizeTransform
 import app.betternotes.core.tools.selectWithLasso
@@ -36,7 +39,7 @@ internal class LassoController(
     private val pageOriginY: (pageIndex: Int) -> Float,
     private val redraw: () -> Unit,
 ) {
-    private enum class Drag { NONE, FREEFORM, RECTANGLE, MOVE, RESIZE }
+    private enum class Drag { NONE, FREEFORM, RECTANGLE, MOVE, RESIZE, PARAM }
 
     private var editor: NoteEditor? = null
     private var drag = Drag.NONE
@@ -51,6 +54,10 @@ internal class LassoController(
     private var currentX = 0f
     private var currentY = 0f
     private var transform = Affine()
+
+    /** While a shape's tip or stroke handle is dragged: the shape as it is now, and which handle it is. */
+    private var paramItem: ShapeItem? = null
+    private var param: ShapeParam? = null
     private val polygon = ArrayList<Float>()
 
     private val renderer = CanvasStrokeRenderer.create()
@@ -84,6 +91,12 @@ internal class LassoController(
         strokeWidth = 1.6f * density
         strokeCap = Paint.Cap.ROUND
     }
+    private val paramFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PARAM_COLOR }
+    private val paramEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = HANDLE_FILL
+        strokeWidth = 1.5f * density
+    }
     private val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = HANDLE_FILL }
     private val handleEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -107,7 +120,7 @@ internal class LassoController(
 
     /** Drops the selection, which holds positions that the next edit of the page may invalidate. */
     fun clear() {
-        if (drag == Drag.MOVE || drag == Drag.RESIZE) cancel()
+        if (drag == Drag.MOVE || drag == Drag.RESIZE || drag == Drag.PARAM) cancel()
         selection = null
         drag = Drag.NONE
         polygon.clear()
@@ -132,6 +145,14 @@ internal class LassoController(
         val current = selection
         val box = current?.bounds
         if (current != null && box != null && pageIndex == this.pageIndex) {
+            val shape = current.items.singleOrNull() as? ShapeItem
+            val tipHandle = shape?.let { paramHandleAt(it, x, y) }
+            if (shape != null && tipHandle != null) {
+                param = tipHandle
+                paramItem = shape
+                beginTransform(current, Drag.PARAM)
+                return
+            }
             val grabbed = handleAt(box, x, y)
             if (grabbed != null) {
                 handle = grabbed
@@ -162,6 +183,14 @@ internal class LassoController(
                 polygon += x
                 polygon += y
             }
+            Drag.PARAM -> {
+                val shape = paramItem
+                val which = param
+                if (shape != null && which != null) {
+                    val local = toLocal(shape, x, y)
+                    paramItem = ShapeTips.dragged(shape, which, local[0], local[1])
+                }
+            }
             Drag.MOVE -> transform = moveTransform(x - startX, y - startY)
             Drag.RESIZE -> transform = selection?.bounds?.let { resizeTransform(it, handle, x, y, keepAspect = handle.isCorner) } ?: transform
         }
@@ -188,6 +217,7 @@ internal class LassoController(
             Drag.NONE -> Unit
             Drag.RECTANGLE, Drag.FREEFORM -> finishMarquee()
             Drag.MOVE, Drag.RESIZE -> finishTransform()
+            Drag.PARAM -> finishParam()
         }
         drag = Drag.NONE
         redraw()
@@ -196,7 +226,7 @@ internal class LassoController(
     fun cancel() {
         val selected = selection
         val page = pageContent()
-        if ((drag == Drag.MOVE || drag == Drag.RESIZE) && selected != null && page != null) {
+        if ((drag == Drag.MOVE || drag == Drag.RESIZE || drag == Drag.PARAM) && selected != null && page != null) {
             page.splice(IntArray(0), selected.indices, selected.items)
         }
         drag = Drag.NONE
@@ -266,9 +296,14 @@ internal class LassoController(
                 selection?.bounds?.let { drawBox(canvas, it.mapped(transform)) }
                 drawGuides(canvas)
             }
+            Drag.PARAM -> {
+                drawParamItem(canvas)
+                paramItem?.let { drawParamHandles(canvas, it) }
+            }
             Drag.NONE -> selection?.bounds?.let { box ->
                 drawBox(canvas, box)
                 drawHandles(canvas, box)
+                (selection?.items?.singleOrNull() as? ShapeItem)?.let { drawParamHandles(canvas, it) }
             }
         }
     }
@@ -295,6 +330,75 @@ internal class LassoController(
         val pageId = editor.document.pages[pageIndex].id
         val found = selectWithLasso(pageId, page, points, kinds, fullOnly)
         selection = if (found.isEmpty) null else found
+    }
+
+    private fun finishParam() {
+        val selected = selection ?: return
+        val page = pageContent() ?: return
+        val changed = paramItem
+        paramItem = null
+        param = null
+        if (changed == null || changed == selected.items.single()) {
+            page.splice(IntArray(0), selected.indices, selected.items)
+            return
+        }
+        page.splice(IntArray(0), selected.indices, listOf(changed))
+        val edit = ItemsEdit(selected.pageId, selected.indices, selected.items, selected.indices, listOf(changed))
+        val kept = selected.afterTransform(edit)
+        selection = null
+        editor?.record(edit)
+        selection = kept
+    }
+
+    /** A page point in the shape's own frame: moved to its corner and turned back by its rotation. */
+    private fun toLocal(shape: ShapeItem, x: Float, y: Float): FloatArray {
+        val frame = shape.frame
+        val radians = Math.toRadians(-frame.rotation.toDouble())
+        val dx = x - frame.centerX
+        val dy = y - frame.centerY
+        val c = Math.cos(radians).toFloat()
+        val s = Math.sin(radians).toFloat()
+        return floatArrayOf(dx * c - dy * s + frame.width / 2f, dx * s + dy * c + frame.height / 2f)
+    }
+
+    /** The inverse of [toLocal]: a point in the shape's frame as a page point. */
+    private fun toPage(shape: ShapeItem, x: Float, y: Float): FloatArray {
+        val frame = shape.frame
+        val radians = Math.toRadians(frame.rotation.toDouble())
+        val dx = x - frame.width / 2f
+        val dy = y - frame.height / 2f
+        val c = Math.cos(radians).toFloat()
+        val s = Math.sin(radians).toFloat()
+        return floatArrayOf(dx * c - dy * s + frame.centerX, dx * s + dy * c + frame.centerY)
+    }
+
+    private fun paramHandleAt(shape: ShapeItem, x: Float, y: Float): ShapeParam? {
+        val reach = HANDLE_REACH_DP * density / viewport.pxPerPt
+        return ShapeTips.params(shape.kind).firstOrNull { which ->
+            val at = ShapeTips.position(shape, which)
+            val page = toPage(shape, at[0], at[1])
+            abs(page[0] - x) <= reach && abs(page[1] - y) <= reach
+        }
+    }
+
+    private fun drawParamItem(canvas: Canvas) {
+        val shape = paramItem ?: return
+        canvas.withMatrix(pageToScreen) { itemPainter.paint(this, shape) }
+    }
+
+    /** Round orange handles, unlike the white squares that resize the box. */
+    private fun drawParamHandles(canvas: Canvas, shape: ShapeItem) {
+        val radius = PARAM_HANDLE_DP * density
+        val point = FloatArray(2)
+        for (which in ShapeTips.params(shape.kind)) {
+            val at = ShapeTips.position(shape, which)
+            val page = toPage(shape, at[0], at[1])
+            point[0] = page[0]
+            point[1] = page[1]
+            pageToScreen.mapPoints(point)
+            canvas.drawCircle(point[0], point[1], radius, paramFill)
+            canvas.drawCircle(point[0], point[1], radius, paramEdge)
+        }
     }
 
     private fun finishTransform() {
@@ -451,6 +555,8 @@ internal class LassoController(
         const val HANDLE_HALF_DP = 4f
         const val HANDLE_EDGE_DP = 1f
         const val HANDLE_REACH_DP = 18f
+        const val PARAM_HANDLE_DP = 6f
+        const val PARAM_COLOR = 0xFFF28B30.toInt()
         const val BUTTON_RADIUS_DP = 18f
         const val BUTTON_GAP_DP = 8f
         const val DELETE_COLOR = 0xFFE5483F.toInt()

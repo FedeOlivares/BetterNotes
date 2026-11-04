@@ -133,6 +133,9 @@ data class ShapeItem(
     val fillColor: Int = 0,
     val cornerRadius: Float = 0f,
     val opacity: Float = 1f,
+    /** The size of the shape's tip, cap or depth that its handles change. 0 means the shape's own proportions. */
+    val tipLength: Float = 0f,
+    val tipWidth: Float = 0f,
 ) : PageItem {
     override val bounds get() = frame.bounds.outset(strokeWidth / 2f)
 
@@ -145,6 +148,8 @@ data class ShapeItem(
             strokeWidth = strokeWidth * factor,
             line = line.scaled(factor),
             cornerRadius = cornerRadius * factor,
+            tipLength = tipLength * factor,
+            tipWidth = tipWidth * factor,
         )
     }
 }
