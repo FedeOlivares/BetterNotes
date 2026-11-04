@@ -80,7 +80,7 @@ internal class PagePainter(private val editor: NoteEditor) {
 }
 
 /** Draws template lines directly, and batches dots, of which a dotted page has thousands. */
-private class CanvasTemplateSink : TemplateSink {
+internal class CanvasTemplateSink : TemplateSink {
     lateinit var canvas: Canvas
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }

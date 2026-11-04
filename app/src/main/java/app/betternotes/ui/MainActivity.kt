@@ -22,13 +22,14 @@ import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.template.PageTemplate
+import app.betternotes.library.LibraryRepository
 import app.betternotes.perf.CanvasBenchmark
 import app.betternotes.perf.PerfProbe
 import java.io.File
 
 /**
- * For now, opens a scratch note or canvas straight on the drawing surface. The library will replace
- * this as the way in.
+ * The drawing surface, showing the document the library asked for. Started with no document, as the
+ * tests and measuring scripts do, it opens a scratch note or canvas.
  */
 class MainActivity : ComponentActivity() {
     private lateinit var canvas: CanvasView
@@ -68,12 +69,17 @@ class MainActivity : ComponentActivity() {
         )
 
         val benchmarkStrokes = if (BuildConfig.PERF_TOOLS) intent.getIntExtra(EXTRA_BENCHMARK_STROKES, 0) else 0
-        if (benchmarkStrokes > 0) runBenchmark(benchmarkStrokes) else openScratch(canvasKind = false)
+        when {
+            benchmarkStrokes > 0 -> runBenchmark(benchmarkStrokes)
+            intent.hasExtra(EXTRA_DOCUMENT_ID) -> openDocument(intent.getLongExtra(EXTRA_DOCUMENT_ID, 0L))
+            else -> openScratch(canvasKind = false)
+        }
     }
 
     override fun onStop() {
         super.onStop()
         editor?.saveNow()
+        LibraryRepository.get(this).refresh()
     }
 
     override fun onDestroy() {
@@ -81,6 +87,11 @@ class MainActivity : ComponentActivity() {
         canvas.close()
         editor?.close()
         probe?.close()
+    }
+
+    private fun openDocument(id: Long) {
+        val store = LibraryRepository.get(this).documentStore(id)
+        show(NoteEditor(store, DocumentSession.open(store)))
     }
 
     private fun openScratch(canvasKind: Boolean) {
@@ -127,21 +138,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Asks for the fastest mode at the current resolution: 144 Hz on the Pad 7. The system may refuse. */
-    private fun requestHighestRefreshRate() {
-        val current = display.mode
-        val best = display.supportedModes
-            .filter {
-                it.physicalWidth == current.physicalWidth &&
-                    it.physicalHeight == current.physicalHeight
-            }
-            .maxByOrNull { it.refreshRate } ?: return
-        window.attributes = window.attributes.apply { preferredDisplayModeId = best.modeId }
-        window.isFrameRatePowerSavingsBalanced = false
-    }
+    companion object {
+        /** The library's id of the document to open. */
+        const val EXTRA_DOCUMENT_ID = "document_id"
 
-    private companion object {
         /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */
-        const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"
+        private const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"
     }
 }

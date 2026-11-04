@@ -106,12 +106,12 @@
 - **Online features:** nothing online at all: no cloud, sync, sharing, AI or account. Leave out the cloud button, avatar and people filter.
 - **Distribution:** personal use. Still do not copy Notewise's assets.
 - **Themes:** light and dark, with dark as the default. No light-mode reference screenshots exist.
+- **Greeting:** the app asks for a name once, and the greeting is "Good evening, [name]".
 
 ### Still open
 Do not assume answers to these.
 1. **Handwriting model download:** ML Kit Digital Ink downloads its model on demand, about 20 MB per language, which conflicts with "nothing online". Is a one-time download of the English and Spanish models acceptable, or is another approach needed?
    - Its docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Verify this.
-2. **Greeting:** what does the library greeting use in place of an account name?
 
 ## 4. UI reference
 Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
@@ -227,7 +227,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
-- All real UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match, and `MainActivity` opens a scratch note or canvas until the library exists.
+- The editor's UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match. `MainActivity` is the editor, and opens a scratch note or canvas when started without a document, as the tests and measuring scripts do.
 - The canvas paints only strokes and the page background. Shapes, images, text, sticky notes, tables, recordings and PDF pages are in the model but are not drawn yet.
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
@@ -267,6 +267,21 @@ Choices in the canvas that have no reference and may need the owner's input:
 - The infinite canvas stops about 18 m from the origin in each direction, to keep float coordinates accurate at 1500%.
 - The stylus's eraser end erases partially, with a 6 pt radius.
 - Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
+
+### Library
+The app opens on `ui/library/LibraryActivity`, which starts `MainActivity` with `EXTRA_DOCUMENT_ID`.
+- `core/.../library`: `Library`, immutable, holds folders and documents as one `LibraryEntry` type. `LibraryStore` lays out `library.bnl` and `documents/<hex id>/` in `filesDir`. A document's own folder is the truth about it: the library file caches its name and dates, and `LibraryRepository.refresh()` compares file times to correct them, so nothing has to tell the library about a save. `LibraryStoreTest` pins the file's bytes.
+- `app/.../library`: `LibraryRepository` (one per process, changes apply on the main thread and write in the background), `ThumbnailStore` and `ThumbnailRenderer` (720x540 WebP in the cache folder, named by save time, decoded to hardware bitmaps), and `LibraryPreferences` (theme, sort and the owner's name, in SharedPreferences `settings`).
+- `ui/theme`: `AppTheme` and `AppColors`. `ReferenceScale` makes 1 dp equal 1 pixel of the 1068 px wide reference, so its measurements copy over directly. The dark colors are measured from the screenshot; the light ones have no reference.
+- `ThumbnailRenderer` draws only ink, as `PagePainter` did when it was written. New item types need adding there too.
+- `PdfImporter` and `PdfThumbnails` came from the PDF workstream's branch unchanged.
+- To compare with the reference: seed made-up content with `LibraryDemoSeed` (see its comment), then take a screenshot. `reference/notewise/3.jpg` is at half the Pad 7's resolution.
+
+Library choices with no reference, which need the owner's screenshots or input:
+- What the "+" and the circled "..." open, the tiles' "..." menus, all dialogs, the search field and the inside of a folder. The circled "..." also holds the theme and name options until settings has a place for them.
+- Dates for items older than this year, the tag filter's list, and landscape's 4 columns.
+- The bottom pill keeps only home: the asterisk was AI, and what the grid icon does is unknown.
+- The serif is the system's (Noto Serif), not the reference's, which only looks close.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 
