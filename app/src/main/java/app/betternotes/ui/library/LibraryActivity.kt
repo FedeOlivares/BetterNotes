@@ -48,7 +48,11 @@ class LibraryActivity : ComponentActivity() {
         repository.refresh()
     }
 
-    private fun openDocument(id: Long) {
-        startActivity(Intent(this, MainActivity::class.java).putExtra(MainActivity.EXTRA_DOCUMENT_ID, id))
+    private fun openDocument(id: Long, startAction: String?) {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_DOCUMENT_ID, id)
+                .putExtra(MainActivity.EXTRA_START_ACTION, startAction),
+        )
     }
 }

@@ -27,6 +27,8 @@ data class AppColors(
     val glowStops: List<Pair<Float, Color>>,
     val glowDot: Color,
     val surface: Color,
+    val raisedSurface: Color,
+    val onRaisedAccent: Color,
     val border: Color,
     val pillBorder: Color,
     val greeting: Color,
@@ -62,6 +64,8 @@ private val DarkColors = AppColors(
     ),
     glowDot = Color(0x4D000000),
     surface = Color(0xFF1E1F23),
+    raisedSurface = Color(0xFF26292E),
+    onRaisedAccent = Color(0xFF6E9DF9),
     border = Color(0xFF48494D),
     pillBorder = Color(0xFF717075),
     greeting = Color(0xFFECECEE),
@@ -94,6 +98,8 @@ private val LightColors = AppColors(
     ),
     glowDot = Color(0x1F27457A),
     surface = Color(0xFFFFFFFF),
+    raisedSurface = Color(0xFFEEF1F6),
+    onRaisedAccent = Color(0xFF2C63D6),
     border = Color(0xFFD3D5DA),
     pillBorder = Color(0xFFC4C6CC),
     greeting = Color(0xFF17181B),
@@ -157,8 +163,11 @@ fun AppTheme(mode: ThemeMode, content: @Composable () -> Unit) {
 /** The short side of the screenshots the app's measurements were taken from, in their pixels. */
 private const val REFERENCE_SHORT_SIDE = 1068f
 
-/** On a screen much smaller than the tablet, keeps things from shrinking past what a finger can hit. */
-private const val MIN_DP_PER_UNIT = 0.75f
+/**
+ * On a screen much smaller than the tablet, keeps things from shrinking past what a finger can hit. Low
+ * enough to stay out of the way on the Pad 7, whose density of 2.75 would otherwise change its scale.
+ */
+private const val MIN_DP_PER_UNIT = 0.6f
 
 /**
  * Inside this, one dp is one pixel of the reference screenshots, so a measurement copied from a

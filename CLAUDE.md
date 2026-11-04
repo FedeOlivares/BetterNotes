@@ -275,10 +275,13 @@ The app opens on `ui/library/LibraryActivity`, which starts `MainActivity` with 
 - `ui/theme`: `AppTheme` and `AppColors`. `ReferenceScale` makes 1 dp equal 1 pixel of the 1068 px wide reference, so its measurements copy over directly. The dark colors are measured from the screenshot; the light ones have no reference.
 - `ThumbnailRenderer` draws only ink, as `PagePainter` did when it was written. New item types need adding there too.
 - `PdfImporter` and `PdfThumbnails` came from the PDF workstream's branch unchanged.
-- To compare with the reference: seed made-up content with `LibraryDemoSeed` (see its comment), then take a screenshot. `reference/notewise/3.jpg` is at half the Pad 7's resolution.
+- To compare with the reference: seed made-up content with `LibraryDemoSeed` (see its comment), then take a screenshot. `reference/notewise/app home.jpg` is at half the Pad 7's resolution, and `add new note.jpg` at its full resolution.
 
 Library choices with no reference, which need the owner's screenshots or input:
-- What the "+" and the circled "..." open, the tiles' "..." menus, all dialogs, the search field and the inside of a folder. The circled "..." also holds the theme and name options until settings has a place for them.
+- What the circled "..." opens, the tiles' "..." menus, all dialogs, the search field and the inside of a folder. The circled "..." also holds the theme and name options until settings has a place for them.
+- The "+" panel matches `add new note.jpg`, without "Link". Its "Text" tile makes a paged A4 note and its "Canvas" tile an infinite canvas, which is one reading of the screenshot. "Scan" is the camera with no edge detection, because the offline-capable scanner needs Google Play services. "File & Doc" takes PDFs, sound and pictures, not PPT, which nothing here can open offline.
+- `EXTRA_START_ACTION` asks the editor to start typing or recording in a new note. Nothing reads it until the editor has those tools.
+- Morning and afternoon use the evening's subtitle, and "Hey" lasts until 5 AM. The screenshots only show 8:21 PM and 2:05 AM.
 - Dates for items older than this year, the tag filter's list, and landscape's 4 columns.
 - The bottom pill keeps only home: the asterisk was AI, and what the grid icon does is unknown.
 - The serif is the system's (Noto Serif), not the reference's, which only looks close.

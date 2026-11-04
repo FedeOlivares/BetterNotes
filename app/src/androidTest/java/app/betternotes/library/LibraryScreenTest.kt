@@ -2,6 +2,9 @@ package app.betternotes.library
 
 import android.app.Instrumentation
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.net.Uri
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -14,13 +17,17 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.core.content.edit
+import androidx.core.graphics.createBitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import app.betternotes.core.library.LibraryStore
 import app.betternotes.core.library.LibraryView
+import app.betternotes.core.model.AudioItem
+import app.betternotes.core.model.DocumentKind
+import app.betternotes.core.model.ImageItem
 import app.betternotes.ui.MainActivity
 import app.betternotes.ui.library.LibraryActivity
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -31,6 +38,11 @@ import org.junit.rules.TestRule
 import org.junit.runner.Description
 import org.junit.runner.RunWith
 import org.junit.runners.model.Statement
+import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.time.LocalDate
 
 /** Runs the real home screen and repository on a device, with touches sent through Compose's test tools. */
 @OptIn(ExperimentalTestApi::class)
@@ -73,7 +85,7 @@ class LibraryScreenTest {
 
     private fun addFolder(name: String) {
         compose.onNodeWithContentDescription("Add").performClick()
-        compose.onNodeWithText("New folder").performClick()
+        compose.onNodeWithText("Folder").performClick()
         compose.onNode(hasSetTextAction()).performTextInput(name)
         compose.onNodeWithText("Create").performClick()
         waitForText(name)
@@ -202,10 +214,115 @@ class LibraryScreenTest {
         val monitor: Instrumentation.ActivityMonitor =
             instrumentation.addMonitor(MainActivity::class.java.name, null, true)
         compose.onNodeWithContentDescription("Add").performClick()
-        compose.onNodeWithText("New note").performClick()
+        compose.onNodeWithText("Text").performClick()
         compose.waitUntil(TIMEOUT_MS) { monitor.hits == 1 }
         instrumentation.removeMonitor(monitor)
-        assertNotNull(library()!!.entries.firstOrNull { it.name == "Untitled note" })
+        val note = library()!!.entries.first { it.document != null }
+        assertEquals("New note " + LocalDate.now(), note.name)
+        assertEquals(DocumentKind.NOTE, note.document!!.kind)
+    }
+
+    @Test
+    fun theCanvasTileMakesAnInfiniteCanvas() {
+        val monitor = instrumentation.addMonitor(MainActivity::class.java.name, null, true)
+        compose.onNodeWithContentDescription("Add").performClick()
+        compose.onNodeWithText("Let's get started").assertExists()
+        compose.onNodeWithText("Link").assertDoesNotExist()
+        compose.onNodeWithText("Canvas").performClick()
+        compose.waitUntil(TIMEOUT_MS) { monitor.hits == 1 }
+        instrumentation.removeMonitor(monitor)
+        assertEquals(DocumentKind.CANVAS, library()!!.entries.first { it.document != null }.document!!.kind)
+        compose.onNodeWithText("Let's get started").assertDoesNotExist()
+    }
+
+    @Test
+    fun aPhotoBecomesANoteWithItsPicture() {
+        val file = File(context.cacheDir, "photo-test.png")
+        val picture = createBitmap(400, 200).apply { eraseColor(Color.RED) }
+        FileOutputStream(file).use { picture.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        var created = 0L
+        compose.runOnUiThread {
+            repository.createFromPhotos(
+                context.contentResolver,
+                listOf(Uri.fromFile(file), Uri.fromFile(file)),
+                "Photos",
+                PhotoLayout.FILLS_PAGE,
+                null,
+                onFailed = { throw AssertionError("The import failed") },
+                onCreated = { created = it },
+            )
+        }
+        waitForText("Photos")
+        compose.waitUntil(TIMEOUT_MS) { created != 0L }
+
+        val documents = repository.documentStore(created)
+        val document = documents.readDocument()
+        assertEquals(2, document.pages.size)
+        val page = document.pages[0]
+        assertEquals(page.size!!.widthPt / 2f, page.size!!.heightPt, 0.01f)
+        val image = documents.readPage(page.id).single() as ImageItem
+        assertEquals(page.size!!.widthPt, image.frame.width, 0.01f)
+        assertTrue(documents.assetFile(image.assetId).length() > 0)
+
+        val bitmap = ThumbnailRenderer.render(documents)
+        assertEquals(Color.RED, bitmap.getPixel(bitmap.width / 2, bitmap.height / 2))
+    }
+
+    @Test
+    fun aRecordingBecomesANoteAndAFailedImportLeavesNothing() {
+        val wav = File(context.cacheDir, "audio-test.wav")
+        wav.writeBytes(oneSecondOfSilence())
+        var created = 0L
+        compose.runOnUiThread {
+            repository.createFromAudio(
+                context.contentResolver,
+                Uri.fromFile(wav),
+                "Lecture",
+                null,
+                onFailed = { throw AssertionError("The import failed") },
+                onCreated = { created = it },
+            )
+        }
+        waitForText("Lecture")
+        compose.waitUntil(TIMEOUT_MS) { created != 0L }
+        val documents = repository.documentStore(created)
+        val audio = documents.readPage(documents.readDocument().pages[0].id).single() as AudioItem
+        assertEquals(1000L, audio.durationMs)
+
+        var failed = false
+        compose.runOnUiThread {
+            repository.createFromAudio(
+                context.contentResolver,
+                Uri.fromFile(File(context.cacheDir, "does-not-exist.wav")),
+                "Missing",
+                null,
+                onFailed = { failed = true },
+                onCreated = { throw AssertionError("Nothing to create") },
+            )
+        }
+        compose.waitUntil(TIMEOUT_MS) { failed }
+        compose.onNodeWithText("Missing").assertDoesNotExist()
+        assertTrue(LibraryStore(context.filesDir).documentsDir.list()!!.none { it.startsWith(".import-") })
+    }
+
+    /** A valid WAV file: 8 kHz, 8 bits, mono, one second. */
+    private fun oneSecondOfSilence(): ByteArray {
+        val samples = 8000
+        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray())
+            putInt(36 + samples)
+            put("WAVEfmt ".toByteArray())
+            putInt(16)
+            putShort(1)
+            putShort(1)
+            putInt(samples)
+            putInt(samples)
+            putShort(1)
+            putShort(8)
+            put("data".toByteArray())
+            putInt(samples)
+        }
+        return header.array() + ByteArray(samples) { 128.toByte() }
     }
 
     private companion object {

@@ -1,10 +1,7 @@
 package app.betternotes.ui.library
 
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -87,6 +84,8 @@ private val HeaderHeight = 324.dp
 
 private val Top = LibraryView.InFolder(null)
 
+private const val LATE_NIGHT_END_HOUR = 5
+
 /** Everything a tile or menu can ask for that needs a dialog first. */
 private sealed interface PendingDialog {
     data object NewFolder : PendingDialog
@@ -124,7 +123,7 @@ private val ViewSaver = Saver<LibraryView, String>(
 internal fun LibraryScreen(
     repository: LibraryRepository,
     preferences: LibraryPreferences,
-    onOpenDocument: (Long) -> Unit,
+    onOpenDocument: (id: Long, startAction: String?) -> Unit,
 ) {
     val colors = LocalAppColors.current
     val library by repository.library.collectAsStateWithLifecycle()
@@ -162,21 +161,23 @@ internal fun LibraryScreen(
     val folderForNewItems = (shelf as? LibraryView.InFolder)?.id
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val untitledNote = stringResource(R.string.library_untitled_note)
-    val untitledCanvas = stringResource(R.string.library_untitled_canvas)
-    fun importPdf(uri: Uri, password: String?) {
-        scope.launch {
-            when (val result = repository.importPdf(context.contentResolver, uri, folderForNewItems, password)) {
-                is PdfImportResult.Imported -> Unit
-                PdfImportResult.NeedsPassword -> dialog = PendingDialog.PdfPassword(uri)
-                is PdfImportResult.Failed ->
-                    Toast.makeText(context, R.string.library_import_failed, Toast.LENGTH_LONG).show()
+    var adding by remember { mutableStateOf(false) }
+    BackHandler(adding) { adding = false }
+    val flows = rememberNewItemActions(
+        repository,
+        folderForNewItems,
+        onOpenDocument,
+        onNewFolder = { dialog = PendingDialog.NewFolder },
+        importPdf = { uri, password ->
+            scope.launch {
+                when (repository.importPdf(context.contentResolver, uri, folderForNewItems, password)) {
+                    is PdfImportResult.Imported -> Unit
+                    PdfImportResult.NeedsPassword -> dialog = PendingDialog.PdfPassword(uri)
+                    is PdfImportResult.Failed -> showImportFailed(context)
+                }
             }
-        }
-    }
-    val pdfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) importPdf(uri, null)
-    }
+        },
+    )
 
     Box(Modifier.fillMaxSize().background(colors.background)) {
         TopGlow(colors)
@@ -220,7 +221,7 @@ internal fun LibraryScreen(
                     val info = entry.document
                     if (info != null) {
                         DocumentCard(entry, info, nowMs, repository.thumbnails, actions) {
-                            if (!inBin) onOpenDocument(entry.id)
+                            if (!inBin) onOpenDocument(entry.id, null)
                         }
                     } else {
                         FolderCard(entry, current?.itemCount(entry.id) ?: 0, actions) {
@@ -242,20 +243,20 @@ internal fun LibraryScreen(
             },
             modifier = Modifier.align(Alignment.BottomStart).padding(start = SideMargin, bottom = 18.dp),
         )
+        if (adding) {
+            NewItemPanel(
+                flows.panel,
+                onDismiss = { adding = false },
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = 96.dp),
+            )
+        }
         AddButton(
-            onNewNote = {
-                repository.createNote(untitledNote, folderForNewItems, onOpenDocument)
-            },
-            onNewCanvas = {
-                repository.createCanvas(untitledCanvas, folderForNewItems, onOpenDocument)
-            },
-            onNewFolder = { dialog = PendingDialog.NewFolder },
-            onImportPdf = { pdfPicker.launch(arrayOf("application/pdf")) },
+            onClick = { adding = !adding },
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = 17.dp),
         )
     }
 
-    ShowDialog(dialog, library, repository, preferences, folderForNewItems, ::importPdf) { dialog = null }
+    ShowDialog(dialog, library, repository, preferences, folderForNewItems, flows.importPdfWithPassword) { dialog = null }
 }
 
 @Composable
@@ -402,7 +403,7 @@ private fun Header(
                 modifier = Modifier.offset(y = 144.dp),
             )
             Text(
-                stringResource(R.string.library_subtitle),
+                stringResource(if (isLateNight(nowMs)) R.string.library_subtitle_night else R.string.library_subtitle),
                 color = colors.subtitle,
                 fontSize = 18.sp,
                 lineHeight = 24.sp,
@@ -436,12 +437,17 @@ private fun FolderTitle(name: String, onBack: () -> Unit) {
     }
 }
 
+private fun hourOf(nowMs: Long) = Calendar.getInstance().apply { timeInMillis = nowMs }[Calendar.HOUR_OF_DAY]
+
+/** The reference greets differently at 2:05 AM than at 8:21 PM. Where the night ends is a guess. */
+private fun isLateNight(nowMs: Long) = hourOf(nowMs) < LATE_NIGHT_END_HOUR
+
 @Composable
 private fun greeting(name: String?, nowMs: Long): String {
-    // Good morning until noon, then good afternoon until six. The reference only shows the evening.
-    val hour = Calendar.getInstance().apply { timeInMillis = nowMs }[Calendar.HOUR_OF_DAY]
+    val hour = hourOf(nowMs)
     val timeOfDay = stringResource(
         when {
+            isLateNight(nowMs) -> R.string.library_good_night
             hour < 12 -> R.string.library_good_morning
             hour < 18 -> R.string.library_good_afternoon
             else -> R.string.library_good_evening
@@ -647,45 +653,18 @@ private fun HomePill(selected: Boolean, onClick: () -> Unit, modifier: Modifier)
     }
 }
 
-/** No screenshot shows what the reference's "+" opens, so this menu is a plain stand-in. */
 @Composable
-private fun AddButton(
-    onNewNote: () -> Unit,
-    onNewCanvas: () -> Unit,
-    onNewFolder: () -> Unit,
-    onImportPdf: () -> Unit,
-    modifier: Modifier,
-) {
+private fun AddButton(onClick: () -> Unit, modifier: Modifier) {
     val colors = LocalAppColors.current
-    var open by remember { mutableStateOf(false) }
-    Box(modifier) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(66.dp)
-                .clip(CircleShape)
-                .background(colors.accent)
-                .clickable { open = true },
-        ) {
-            Icon(LibraryIcons.Plus, stringResource(R.string.library_add), tint = colors.onAccent, modifier = Modifier.size(32.dp))
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            val entries = listOf(
-                R.string.library_new_note to onNewNote,
-                R.string.library_new_canvas to onNewCanvas,
-                R.string.library_new_folder to onNewFolder,
-                R.string.library_import_pdf to onImportPdf,
-            )
-            for ((label, action) in entries) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(label)) },
-                    onClick = {
-                        open = false
-                        action()
-                    },
-                )
-            }
-        }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(66.dp)
+            .clip(CircleShape)
+            .background(colors.accent)
+            .clickable(onClick = onClick),
+    ) {
+        Icon(LibraryIcons.Plus, stringResource(R.string.library_add), tint = colors.onAccent, modifier = Modifier.size(32.dp))
     }
 }
 

@@ -46,13 +46,15 @@ import app.betternotes.core.library.DocumentInfo
 import app.betternotes.core.library.LibraryEntry
 import app.betternotes.library.ThumbnailStore
 import app.betternotes.ui.theme.LocalAppColors
-import java.util.Calendar
+import java.time.Instant
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 private val CardShape = RoundedCornerShape(25.dp)
 private val HeaderHeight = 92.dp
 private const val CARD_RATIO = 319f / 320f
-private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
+private const val DAYS_SHOWN_BY_NAME = 7L
 
 /** One thing a tile's "..." menu can do. */
 internal class CardAction(val label: String, val run: () -> Unit)
@@ -238,22 +240,28 @@ private fun CardMenu(actions: @Composable () -> List<CardAction>, dotColor: Colo
 }
 
 /**
- * As the reference shows them: the day and time within the last week, the date and time this year.
- * Older dates, which it does not show, leave out the time to fit a tile. The patterns follow the
- * device's language and its 12 or 24 hour clock.
+ * As the reference shows them: "Today" and the time, then the day and time for the 6 days before, and
+ * after that the date and time. That is by calendar days, so a Wednesday a week ago is not "Wednesday".
+ * It shows no older year, so those leave out the time to fit a tile. The patterns follow the device's
+ * language and its 12 or 24 hour clock.
  */
 @Composable
 private fun formatDate(ms: Long, nowMs: Long): String {
     val context = LocalContext.current
-    return remember(ms, nowMs) {
-        val date = Calendar.getInstance().apply { timeInMillis = ms }
-        val now = Calendar.getInstance().apply { timeInMillis = nowMs }
+    val todayFormat = stringResource(R.string.library_today)
+    return remember(ms, nowMs, todayFormat) {
+        val zone = ZoneId.systemDefault()
+        val date = Instant.ofEpochMilli(ms).atZone(zone).toLocalDate()
+        val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+        val age = ChronoUnit.DAYS.between(date, today)
         val time = if (DateFormat.is24HourFormat(context)) "Hmm" else "hmm"
-        val skeleton = when {
-            nowMs - ms in 0 until WEEK_MS -> "EEEE$time"
-            date[Calendar.YEAR] == now[Calendar.YEAR] -> "MMMd$time"
-            else -> "yMMMd"
+        fun format(skeleton: String) =
+            DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), ms).toString()
+        when {
+            age == 0L -> todayFormat.format(format(time))
+            age in 1 until DAYS_SHOWN_BY_NAME -> format("EEEE$time")
+            date.year == today.year -> format("MMMd$time")
+            else -> format("yMMMd")
         }
-        DateFormat.format(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), date).toString()
     }
 }

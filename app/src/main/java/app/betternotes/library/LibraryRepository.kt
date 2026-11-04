@@ -27,7 +27,10 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * The library for the whole app. The screen sees changes at once, because they apply here on the main
@@ -83,6 +86,31 @@ class LibraryRepository private constructor(context: Context) {
     fun createFolder(name: String, parentId: Long?) {
         val entry = LibraryEntry(IdSource.Random.next(), name, parentId, System.currentTimeMillis())
         update { it.plus(entry) }
+    }
+
+    /** Starts a note with one page per picture, and passes its id on once it is on the disk. */
+    fun createFromPhotos(
+        resolver: ContentResolver,
+        uris: List<Uri>,
+        title: String,
+        layout: PhotoLayout,
+        folderId: Long?,
+        onFailed: () -> Unit,
+        onCreated: (Long) -> Unit,
+    ) = createFromMedia(folderId, onFailed, onCreated) { documents, now ->
+        MediaImport.photos(resolver, uris, documents, title, layout, newPageBackground(), now)
+    }
+
+    /** Starts a note holding a recording, and passes its id on once it is on the disk. */
+    fun createFromAudio(
+        resolver: ContentResolver,
+        uri: Uri,
+        title: String,
+        folderId: Long?,
+        onFailed: () -> Unit,
+        onCreated: (Long) -> Unit,
+    ) = createFromMedia(folderId, onFailed, onCreated) { documents, now ->
+        MediaImport.audio(resolver, uri, documents, title, newPageBackground(), now)
     }
 
     /** Suspends while the file is copied. On success the document is already in the library. */
@@ -147,6 +175,39 @@ class LibraryRepository private constructor(context: Context) {
             }
             add(scanned, folderId)
             onCreated(scanned.id)
+        }
+    }
+
+    /**
+     * The document's id is only known once it has been built, so it is written in a temporary folder
+     * and renamed at the end. A failed or interrupted import leaves no document behind.
+     */
+    private fun createFromMedia(
+        folderId: Long?,
+        onFailed: () -> Unit,
+        onCreated: (Long) -> Unit,
+        build: (DocumentStore, nowMs: Long) -> Document,
+    ) {
+        scope.launch {
+            val scanned = withContext(Dispatchers.IO) {
+                val temp = File(store.documentsDir, ".import-" + System.nanoTime())
+                try {
+                    val document = build(DocumentStore(temp), System.currentTimeMillis())
+                    val documents = store.documentStore(document.id)
+                    Files.move(temp.toPath(), documents.root.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                    ScannedDocument(document, documents.descriptionModifiedMs())
+                } catch (e: IOException) {
+                    Log.e(TAG, "Could not import", e)
+                    temp.deleteRecursively()
+                    null
+                }
+            }
+            if (scanned == null) {
+                onFailed()
+            } else {
+                add(scanned, folderId)
+                onCreated(scanned.id)
+            }
         }
     }
 

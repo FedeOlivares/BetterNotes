@@ -44,6 +44,39 @@ internal object LibraryIcons {
     val Plus = icon("plus", outline = "M12 5v14M5 12h14")
     val Back = icon("back", outline = "M19.5 12H5M11 6l-6 6 6 6")
     val Close = icon("close", outline = "M6.5 6.5l11 11M17.5 6.5l-11 11")
+    val TextCursor = icon("text", outline = "M4.5 6.5V5h11.500v1.5M10.200 5v14M8 19h4.400M19.500 3.500v17")
+    val Canvas = icon(
+        "canvas",
+        outline = "M5 4.5h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2z" +
+            "M7.500 16c1.500-3.500 3.500-7.500 4.500-7c.8.4-.5 3.500-1.500 6.500c1.500-2 4.500-7 5.500-6.500c.8.4-1 4-1 6.500",
+    )
+    val Microphone = icon(
+        "microphone",
+        outline = "M12 3a3 3 0 0 1 3 3v5.5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6",
+    )
+    val Document = icon(
+        "document",
+        outline = "M13.5 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5zM13.5 3v5.5H19M8.5 12.5h7M8.5 16h7",
+    )
+    val Camera = icon(
+        "camera",
+        outline = "M9 5.5l1.2-1.7h3.6L15 5.5h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2z" +
+            "M12 9a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7z",
+    )
+    val Scan = icon(
+        "scan",
+        outline = "M3.5 8V5.5a2 2 0 0 1 2-2H8M16 3.5h2.5a2 2 0 0 1 2 2V8M20.5 16v2.5a2 2 0 0 1-2 2H16M8 20.5H5.5a2 2 0 0 1-2-2V16" +
+            "M8.5 7.5h4.5l2.5 2.5v6.5h-7zM13 7.5V10h2.5",
+    )
+    val Photos = icon(
+        "photos",
+        outline = "M5.5 3.5h13a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2z" +
+            "M3.5 16.5l5-5 4 4 2.5-2.5 5.5 5.5M15 7a1.6 1.6 0 1 0 0 3.200a1.6 1.6 0 0 0 0-3.200z",
+    )
+    val Folder = icon(
+        "folder",
+        outline = "M3.5 7a2 2 0 0 1 2-2h4.2l2.3 2.5h6.500a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z",
+    )
     val MoreCircled = icon(
         "more",
         outline = "M12 3.2a8.8 8.8 0 1 0 0 17.6a8.8 8.8 0 0 0 0-17.6z",

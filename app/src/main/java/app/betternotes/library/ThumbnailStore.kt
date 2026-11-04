@@ -6,9 +6,11 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.Log
 import android.util.LruCache
 import androidx.core.graphics.createBitmap
+import androidx.core.graphics.withRotation
 import androidx.core.graphics.withTranslation
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import app.betternotes.canvas.CanvasTemplateSink
@@ -17,6 +19,7 @@ import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.library.LibraryStore
 import app.betternotes.core.model.DocumentKind
+import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
@@ -133,7 +136,7 @@ internal object ThumbnailRenderer {
                 (HEIGHT_PX - view.top) / view.scale,
             )
             if (!isPdf && view.scale >= MIN_PATTERN_SCALE) drawPattern(this, page, region)
-            drawItems(this, items, view.scale)
+            drawItems(this, store, items, view.scale)
         }
         return bitmap
     }
@@ -175,12 +178,32 @@ internal object ThumbnailRenderer {
         sink.flush()
     }
 
-    /** Only ink for now, like the canvas's painter. New item types need adding in both. */
-    private fun drawItems(canvas: Canvas, items: List<PageItem>, scale: Float) {
+    /** Only ink and pictures for now. New item types need adding here as well as in the canvas's painter. */
+    private fun drawItems(canvas: Canvas, store: DocumentStore, items: List<PageItem>, scale: Float) {
         val renderer = CanvasStrokeRenderer.create()
         val strokeToBitmap = Matrix().apply { setScale(scale, scale) }
         for (item in items) {
-            if (item is StrokeItem) renderer.draw(canvas, item.toInkStroke(), strokeToBitmap)
+            when (item) {
+                is StrokeItem -> renderer.draw(canvas, item.toInkStroke(), strokeToBitmap)
+                is ImageItem -> drawImage(canvas, store, item, scale)
+                else -> Unit
+            }
         }
+    }
+
+    private fun drawImage(canvas: Canvas, store: DocumentStore, item: ImageItem, scale: Float) {
+        val file = store.assetFile(item.assetId)
+        val frame = item.frame
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        // A picture is far larger than a tile needs, and this reads only about as much of it as is shown.
+        val shownPx = (frame.width * scale).toInt().coerceAtLeast(1)
+        val options = BitmapFactory.Options().apply { inSampleSize = (bounds.outWidth / shownPx).coerceAtLeast(1) }
+        val image = BitmapFactory.decodeFile(file.path, options) ?: return
+        canvas.withRotation(frame.rotation, frame.centerX, frame.centerY) {
+            val target = RectF(frame.left, frame.top, frame.left + frame.width, frame.top + frame.height)
+            drawBitmap(image, null, target, Paint(Paint.FILTER_BITMAP_FLAG))
+        }
+        image.recycle()
     }
 }
