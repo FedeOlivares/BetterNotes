@@ -4,6 +4,8 @@ import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -16,7 +18,10 @@ data class Bounds(val left: Float, val top: Float, val right: Float, val bottom:
 
     fun intersects(o: Bounds) = left <= o.right && o.left <= right && top <= o.bottom && o.top <= bottom
     fun contains(x: Float, y: Float) = x in left..right && y in top..bottom
+    fun contains(o: Bounds) = o.left >= left && o.right <= right && o.top >= top && o.bottom <= bottom
     fun outset(d: Float) = Bounds(left - d, top - d, right + d, bottom + d)
+    fun union(o: Bounds) =
+        Bounds(min(left, o.left), min(top, o.top), max(right, o.right), max(bottom, o.bottom))
 
     /** The rectangle's bounding box after rotating about its own center. */
     fun rotatedBounds(degrees: Float): Bounds {
