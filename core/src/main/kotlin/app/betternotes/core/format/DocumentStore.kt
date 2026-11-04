@@ -26,9 +26,15 @@ class DocumentStore(val root: File) {
     private val pagesDir = File(root, "pages")
     private val assetsDir = File(root, "assets")
 
+    /** True if a document has been written here. */
+    fun exists() = documentFile.exists()
+
     fun readDocument(): Document = DocumentCodec.decode(documentFile.readBytes())
 
-    fun writeDocument(document: Document) = writeAtomically(documentFile, DocumentCodec.encode(document))
+    fun writeDocument(document: Document) = writeDocumentBytes(DocumentCodec.encode(document))
+
+    /** Writes a description already encoded, so the document can keep changing on another thread. */
+    fun writeDocumentBytes(bytes: ByteArray) = writeAtomically(documentFile, bytes)
 
     /** A page with no file has simply never been drawn on, so it reads as empty. */
     fun readPage(pageId: Long): List<PageItem> {

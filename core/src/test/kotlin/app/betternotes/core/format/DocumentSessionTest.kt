@@ -100,11 +100,13 @@ class DocumentSessionTest {
     }
 
     @Test
-    fun `an evicted page is saved, and undo can still reach it`() {
+    fun `undo can still reach an evicted page`() {
         val session = newSession()
         session.draw(firstPage, 1)
         session.draw(firstPage, 2)
+        session.save()
         session.retainPages(emptySet())
+        assertEquals(null, session.loadedContent(firstPage))
 
         assertTrue(session.history.undo(session))
         assertEquals(listOf(1L), session.content(firstPage).ids())
@@ -113,15 +115,50 @@ class DocumentSessionTest {
     }
 
     @Test
-    fun `evicting a changed page still updates the modified time on the next save`() {
+    fun `a page with unsaved changes is not evicted`() {
         val session = newSession()
         session.draw(firstPage, 1)
-        clockMs = 7777
+        val page = session.content(firstPage)
         session.retainPages(emptySet())
+        assertTrue(page === session.loadedContent(firstPage))
+        assertTrue(pageFiles().isEmpty())
+    }
+
+    @Test
+    fun `a save split across threads keeps edits made after the snapshot`() {
+        val session = newSession()
+        session.draw(firstPage, 1)
+        val pending = session.prepareSave()!!
+        session.draw(firstPage, 2)
+        pending.write()
+        session.finishSave(pending)
+
         assertTrue(session.hasUnsavedChanges)
+        assertEquals(listOf(1L), reopen().content(firstPage).ids())
         session.save()
-        assertEquals(7777L, reopen().document.modifiedAtMs)
         assertFalse(session.hasUnsavedChanges)
+        assertEquals(listOf(1L, 2L), reopen().content(firstPage).ids())
+    }
+
+    @Test
+    fun `there is nothing to prepare without changes`() {
+        assertEquals(null, newSession().prepareSave())
+    }
+
+    @Test
+    fun `installing a page hands over items read elsewhere`() {
+        val session = newSession()
+        assertTrue(session.install(firstPage, listOf(stroke(5, 0f, 0f, 1f, 1f))))
+        assertEquals(listOf(5L), session.loadedContent(firstPage)!!.ids())
+        assertFalse(session.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `installing a page already in memory changes nothing`() {
+        val session = newSession()
+        session.draw(firstPage, 1)
+        assertFalse(session.install(firstPage, emptyList()))
+        assertEquals(listOf(1L), session.content(firstPage).ids())
     }
 
     @Test

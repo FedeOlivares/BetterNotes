@@ -4,13 +4,16 @@ import app.betternotes.core.edit.EditTarget
 import app.betternotes.core.edit.UndoHistory
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.PageContent
+import app.betternotes.core.model.PageItem
 
 /**
  * An open document: its undo history, and the pages currently in memory. Pages load the first time
- * they are asked for, so a thousand-page PDF costs only the pages being looked at. An undo that
- * reaches an evicted page reloads it, in the state the edit expects, since it was saved on eviction.
+ * they are asked for, or arrive through [install] from a background thread, so a thousand-page PDF
+ * costs only the pages being looked at. An undo that reaches an evicted page reloads it, in the state
+ * the edit expects, since only saved pages are evicted.
  *
- * Not thread safe, and loading or saving blocks on disk, so use it from one thread.
+ * Not thread safe, so use it from one thread. To keep that thread from blocking on the disk, split a
+ * save with [prepareSave], [PendingSave.write] and [finishSave].
  */
 class DocumentSession private constructor(
     private val store: DocumentStore,
@@ -23,51 +26,69 @@ class DocumentSession private constructor(
     private val savedVersions = HashMap<Long, Long>()
     private var savedDocumentVersion = document.version
 
-    // A page saved on eviction leaves the modified time in the description out of date.
-    private var descriptionStale = false
-
     override fun content(pageId: Long): PageContent = loaded.getOrPut(pageId) {
         PageContent(store.readPage(pageId)).also { savedVersions[pageId] = it.version }
     }
 
-    /** True if something has changed since the last [save]. */
-    val hasUnsavedChanges: Boolean
-        get() = descriptionStale || document.version != savedDocumentVersion ||
-            loaded.any { (id, page) -> page.version != savedVersions[id] }
+    /** The page if it is in memory, without touching the disk. */
+    fun loadedContent(pageId: Long): PageContent? = loaded[pageId]
 
-    /**
-     * Writes whatever changed. Pages go first: if the app dies between the two steps, a new page's
-     * file is an orphan to clean up, which beats a document listing a page whose ink never landed.
-     */
-    fun save() {
-        if (!hasUnsavedChanges) return
-        for ((id, page) in loaded) {
-            if (page.version != savedVersions[id]) savePage(id, page)
-        }
-        document.modifiedAtMs = clock()
-        store.writeDocument(document)
-        savedDocumentVersion = document.version
-        descriptionStale = false
+    /** Hands over items read on another thread. Returns false if the page got loaded in the meantime. */
+    fun install(pageId: Long, items: List<PageItem>): Boolean {
+        if (pageId in loaded) return false
+        val page = PageContent(items)
+        loaded[pageId] = page
+        savedVersions[pageId] = page.version
+        return true
     }
 
-    /** Saves and drops every loaded page not in [pageIds], which keeps memory proportional to the view. */
+    /** Every page in memory, in no particular order. */
+    val loadedContents: Collection<PageContent> get() = loaded.values
+
+    /** True if something has changed since the last save. */
+    val hasUnsavedChanges: Boolean
+        get() = document.version != savedDocumentVersion ||
+            loaded.any { (id, page) -> page.version != savedVersions[id] }
+
+    /** Writes whatever changed, and blocks until it is on the disk. */
+    fun save() {
+        val pending = prepareSave() ?: return
+        pending.write()
+        finishSave(pending)
+    }
+
+    /**
+     * Captures what needs writing, or returns null if nothing does. Cheap, because items are immutable
+     * and only the list of them is copied. Edits made after this go into the next save.
+     */
+    fun prepareSave(): PendingSave? {
+        if (!hasUnsavedChanges) return null
+        val changed = loaded.filter { (id, page) -> page.version != savedVersions[id] }
+            .map { (id, page) -> PendingSave.PageSnapshot(id, page.version, page.toList()) }
+        document.modifiedAtMs = clock()
+        return PendingSave(store, changed, DocumentCodec.encode(document), document.version)
+    }
+
+    /** Records a finished [PendingSave.write], on this session's thread. */
+    fun finishSave(save: PendingSave) {
+        for (page in save.pages) {
+            if (page.id in loaded) savedVersions[page.id] = page.version
+        }
+        savedDocumentVersion = save.documentVersion
+    }
+
+    /**
+     * Drops every loaded page not in [pageIds], which keeps memory proportional to the view. A page
+     * with unsaved changes stays until they are saved, so this never touches the disk.
+     */
     fun retainPages(pageIds: Set<Long>) {
         val iterator = loaded.entries.iterator()
         while (iterator.hasNext()) {
             val (id, page) = iterator.next()
-            if (id in pageIds) continue
-            if (page.version != savedVersions[id]) {
-                savePage(id, page)
-                descriptionStale = true
-            }
+            if (id in pageIds || page.version != savedVersions[id]) continue
             iterator.remove()
             savedVersions.remove(id)
         }
-    }
-
-    private fun savePage(id: Long, page: PageContent) {
-        store.writePage(id, page.toList())
-        savedVersions[id] = page.version
     }
 
     companion object {
@@ -87,5 +108,27 @@ class DocumentSession private constructor(
             store.deleteOrphanPages(document)
             return DocumentSession(store, document, clock)
         }
+    }
+}
+
+/**
+ * A snapshot of what a save will write. [write] can run on any thread, but saves must run one at a
+ * time, in the order they were prepared.
+ */
+class PendingSave internal constructor(
+    private val store: DocumentStore,
+    internal val pages: List<PageSnapshot>,
+    private val documentBytes: ByteArray,
+    internal val documentVersion: Long,
+) {
+    internal class PageSnapshot(val id: Long, val version: Long, val items: List<PageItem>)
+
+    /**
+     * Pages go first: if the app dies between the two steps, a new page's file is an orphan to clean
+     * up, which beats a document listing a page whose ink never landed.
+     */
+    fun write() {
+        for (page in pages) store.writePage(page.id, page.items)
+        store.writeDocumentBytes(documentBytes)
     }
 }
