@@ -1,5 +1,6 @@
 package app.betternotes.canvas
 
+import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -9,6 +10,7 @@ import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.format.PendingSave
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
@@ -23,7 +25,7 @@ import java.util.concurrent.Executors
  * and meshing, which go to one background thread so that drawing never waits on them.
  */
 class NoteEditor(
-    private val store: DocumentStore,
+    internal val store: DocumentStore,
     private val session: DocumentSession,
 ) {
     internal val strokes = StrokeCache()
@@ -31,9 +33,30 @@ class NoteEditor(
     /** The PDF behind this document's pages, if it has any. */
     internal val pdf: PdfPages? =
         if (session.document.pages.any { it.source is PageSource.PdfPage }) PdfPages(store, session.document) else null
+    internal val paintSource = object : PaintSource {
+        override val pages get() = document.pages
+        override fun contentOrLoad(pageId: Long) = this@NoteEditor.contentOrLoad(pageId)
+        override fun mesh(item: StrokeItem) = strokes.get(item)
+
+        override fun paintPdfTile(
+            canvas: Canvas,
+            page: Page,
+            pdf: PageSource.PdfPage,
+            originX: Float,
+            originY: Float,
+            x: Double,
+            y: Double,
+            scale: Float,
+        ) {
+            this@NoteEditor.pdf?.paint(canvas, page, pdf, originX, originY, x, y, scale)
+        }
+    }
 
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
+
+    /** Called on the main thread after edits reach the disk, for whatever reads the saved files. */
+    var onSaved: () -> Unit = {}
 
     private val main = Handler(Looper.getMainLooper())
     private val background = Executors.newSingleThreadExecutor { task -> Thread(task, "note-io") }
@@ -46,7 +69,7 @@ class NoteEditor(
     /** The page's items if they are in memory. If they are not, starts loading them and returns null. */
     fun contentOrLoad(pageId: Long): PageContent? {
         val content = session.loadedContent(pageId)
-        if (content == null && loading.add(pageId)) loadInBackground(pageId)
+        if (content == null && !closed && loading.add(pageId)) loadInBackground(pageId)
         return content
     }
 
@@ -101,6 +124,7 @@ class NoteEditor(
         val pending = session.prepareSave() ?: return
         background.submit { write(pending) }.get()
         session.finishSave(pending)
+        onSaved()
     }
 
     /** Saves and stops the background thread. Only a stroke that had already ended can still arrive. */
@@ -123,7 +147,12 @@ class NoteEditor(
     private fun saveInBackground() {
         val pending = session.prepareSave() ?: return
         background.execute {
-            if (write(pending)) main.post { session.finishSave(pending) }
+            if (write(pending)) {
+                main.post {
+                    session.finishSave(pending)
+                    onSaved()
+                }
+            }
         }
     }
 

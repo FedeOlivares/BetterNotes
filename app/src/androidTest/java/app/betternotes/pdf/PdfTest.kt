@@ -1,6 +1,7 @@
 package app.betternotes.pdf
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
@@ -19,15 +20,20 @@ import androidx.test.platform.app.InstrumentationRegistry
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
 import app.betternotes.core.edit.UpdatePage
+import app.betternotes.core.export.ImageExportOptions
+import app.betternotes.core.export.PageSelection
 import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.model.StrokePointsBuilder
 import app.betternotes.core.search.TextMatch
 import app.betternotes.core.template.PageBackground
+import app.betternotes.export.DocumentExporter
 import app.betternotes.ui.MainActivity
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -38,11 +44,13 @@ import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 
 /**
  * Runs the platform's real PDF engine on PDFs written with the platform's PdfDocument, and checks what
@@ -251,6 +259,81 @@ class PdfTest {
         onMain { editor!!.saveNow() }
         assertArrayEquals(before, imported.store.assetFile(source.assetId).readBytes())
         assertEquals(1, DocumentSession.open(imported.store).content(pageId).size)
+    }
+
+    // ---- Export ----
+
+    @Test
+    fun anExportedImageHasThePdfPageUnderTheInk() {
+        val imported = import(writePdf("a.pdf", listOf(200 to 300)))
+        val stroke = StrokePointsBuilder(2).apply {
+            add(100f, 200f, 1f, 0f, 0f, 0f)
+            add(190f, 200f, 1f, 0f, 0f, 10f)
+        }.build()
+        imported.store.writePage(imported.document.pages[0].id, listOf(StrokeItem(1, InkStyle(width = 8f), stroke)))
+        val out = ByteArrayOutputStream()
+        DocumentExporter(imported.store, "a", imported.document.pages)
+            .writeImages(PageSelection.All, ImageExportOptions(dpi = 72f), { out })
+        val image = BitmapFactory.decodeByteArray(out.toByteArray(), 0, out.size())
+        assertEquals(200, image.width)
+        assertEquals(300, image.height)
+        assertTrue("PDF square", isDark(image.getPixel(40, 40)))
+        assertTrue("PDF paper", isWhite(image.getPixel(100, 100)))
+        assertFalse("Ink", isWhite(image.getPixel(150, 200)))
+    }
+
+    @Test
+    fun anExportedPdfKeepsThePageSizeAndShowsThePdf() {
+        val imported = import(writePdf("a.pdf", listOf(200 to 300, 612 to 792)))
+        val file = File(root, "out.pdf")
+        val written = FileOutputStream(file).use {
+            DocumentExporter(imported.store, "a", imported.document.pages).writePdf(PageSelection.All, it)
+        }
+        assertEquals(2, written)
+        val again = import(file)
+        assertEquals(listOf(PageSize(200f, 300f), PageSize(612f, 792f)), again.document.pages.map { it.size })
+        val bitmap = PdfThumbnails.render(again.store, again.document.pages[0].source as PageSource.PdfPage, 200)
+        assertTrue(Integer.toHexString(bitmap.getPixel(40, 40)), isDark(bitmap.getPixel(40, 40)))
+        assertTrue(Integer.toHexString(bitmap.getPixel(100, 100)), isWhite(bitmap.getPixel(100, 100)))
+    }
+
+    // ---- The search index ----
+
+    @Test
+    fun printedLinesComeBackWhereTheTextIs() {
+        val imported = import(writePdf("a.pdf", listOf(400 to 600), text = { "Camión rojo\nuna pala-\nbra partida" }))
+        val lines = PdfPrintedText(imported.store).use { it.linesOf(imported.document.pages[0]) }
+        assertEquals(listOf("Camión rojo", "una palabra", "partida"), lines.map { it.text.trim() })
+        assertEquals(50f, lines[0].bounds.left, 3f)
+        assertTrue("${lines[0].bounds}", lines[0].bounds.top in 270f..300f)
+        assertTrue("${lines[1].bounds}", lines[1].bounds.top in 300f..330f)
+    }
+
+    @Test
+    fun thePdfCanBeReadForTheIndexWhileItIsOnScreen() {
+        val imported = import(writePdf("a.pdf", List(40) { 400 to 600 }, text = { "pagina $it" }))
+        openOnCanvas(imported)
+        val finished = AtomicReference<Throwable?>()
+        val indexing = thread {
+            try {
+                PdfPrintedText(imported.store).use { text ->
+                    repeat(3) { imported.document.pages.forEach { page -> text.linesOf(page) } }
+                }
+            } catch (e: Throwable) {
+                finished.set(e)
+            }
+        }
+        repeat(40) { page ->
+            onMain {
+                val viewport = canvas.viewport
+                viewport.panY = -page * 612f * viewport.pxPerPt
+                canvas.zoomTo(1f + page % 3)
+            }
+            SystemClock.sleep(16)
+        }
+        indexing.join()
+        assertEquals(null, finished.get())
+        onMain { canvas.zoomTo(1f) }
     }
 
     // ---- Search ----

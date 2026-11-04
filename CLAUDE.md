@@ -107,11 +107,13 @@
 - **Distribution:** personal use. Still do not copy Notewise's assets.
 - **Themes:** light and dark, with dark as the default. No light-mode reference screenshots exist.
 
-### Still open
-Do not assume answers to these.
-1. **Handwriting model download:** ML Kit Digital Ink downloads its model on demand, about 20 MB per language, which conflicts with "nothing online". Is a one-time download of the English and Spanish models acceptable, or is another approach needed?
-   - Its docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Verify this.
-2. **Greeting:** what does the library greeting use in place of an account name?
+### Decided by the owner (2026-11-04)
+- **Handwriting model download:** a one-time download of the ML Kit Digital Ink models for English and Spanish (about 20 MB each) is accepted. It is the only exception to "nothing online". If the models ever go missing, the app reports it and does not download them again by itself.
+- **Greeting:** the app asks for a name only, and the library greeting uses it.
+- **`minSdk`:** stays at 35. The owner's tablet runs Android 16 (API 36), which meets it.
+
+### Still to verify
+- That recognition works on the Pad 7 with no network: run `.\scripts\verify-handwriting-offline.ps1 -Serial <serial>`. On an x86_64 emulator (API 37) it worked in airplane mode and with no `INTERNET` permission, with the models surviving that update and 0 bytes of the app's traffic while recognizing. `TrafficStats` sees only the app's own traffic, not Google Play services'.
 
 ## 4. UI reference
 Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
@@ -174,7 +176,14 @@ Checked on 2026-11-03.
 ### Device (Xiaomi spec page)
 - 11.2 inch, 3200 x 2136, 345 ppi, up to 144 Hz.
 - Touch sampling up to 360 Hz, 240 Hz with pen.
-- OS is HyperOS 2. Xiaomi's pages don't state the Android version, so check it on the tablet.
+- The spec page lists HyperOS 2 and doesn't state the Android version. See the next section for what the tablet runs.
+
+### Owner's tablet (read over adb, 2026-11-04)
+- Xiaomi Pad 7, model 2410CRP4CG (`uke`), arm64-v8a.
+- Android 16 (API 36), HyperOS `OS3.0.304.0.WOZMIXM`.
+- Display 2136 x 3200, density bucket 440. It reports xdpi 332.441 and ydpi 340.511.
+- It lists refresh rates of 30, 48, 50, 60, 90, 120 and 144 Hz. That list doesn't show what the app actually gets.
+- The reported dpi average about 336.5, some 2.5% below the spec's 345 ppi. `CanvasView` uses that average, so real size may come out about 2.5% small. Nobody has measured this on the glass. `AppSettings.calibration` can correct it, but no screen sets it yet.
 
 ### Real-size implications at 345 ppi
 - 1 cm is about 135.8 px, so A4 width (210 mm) is about 2852 px.
@@ -209,7 +218,8 @@ Location: `D:\code\better-notes`, a local git repository with no remote. **The f
 - All checks (unit tests, lint, debug and release builds): `.\scripts\check.ps1`
 - Core unit tests: `.\gradlew.bat :core:test`
 - Debug APK: `.\gradlew.bat :app:assembleDebug`
-- Canvas tests on a connected device or emulator: `.\gradlew.bat :app:connectedDebugAndroidTest`
+- Device tests on a connected device or emulator: `.\gradlew.bat :app:connectedDebugAndroidTest`. Tests that need the handwriting models skip without them, and the test run uninstalls the app, which deletes them. Add `-Pandroid.testInstrumentationRunnerArguments.downloadInk=true` to fetch them first.
+- Handwriting with no network, and installing the everyday build: `.\scripts\verify-handwriting-offline.ps1 [-Serial <serial>]`
 - Measure on a device: `.\scripts\measure-device.ps1 [-Serial <serial>] [-Strokes 3000] [-HandSeconds 60]`
 
 Toolchain in use: Gradle 9.6.0 with a pinned checksum, AGP 9.5.0, Kotlin 2.4.21, JDK 25 (JBR) targeting Java 17. `local.properties` is git-ignored and holds the SDK path.
@@ -219,12 +229,11 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 
 ### Files that exist
 - Gradle config and wrapper, `.gitignore`, `.gitattributes`, `scripts/check.ps1`
-- `app/`: the canvas, the measuring tools, and a temporary way in. See "Canvas" below.
+- `app/`: the canvas, the measuring tools, and a temporary way in. See "Canvas" below. Also settings, export and search. See "Settings, export and search" below.
 - `core/` (`app.betternotes.core`), pure Kotlin with JVM tests. See "Core" below.
 - `reference/notewise/`: the owner's screenshots (git-ignored)
 
 ### Known gaps
-- `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
 - All real UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match, and `MainActivity` opens a scratch note or canvas until the library exists.
@@ -232,6 +241,9 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
 - `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
+- Settings, export, search, the model download and calibration have logic and tests but no screens, because no reference screenshots exist. Nothing in the app calls the download yet, except the check script.
+- Export paints what `PagePainter` paints, so it has the same gap as the canvas: only strokes, paper, templates and PDF pages for now.
+- ML Kit's native libraries make the APK large: about 73 MB for debug and 39 MB for offline, with every ABI included. Only arm64-v8a is needed on the tablet.
 
 ### Core
 - `geometry`: bounds, affine, rotated `Frame`, convex clipping (`Capsule`, `RectClipper`), units, viewport.
@@ -268,13 +280,33 @@ Choices in the canvas that have no reference and may need the owner's input:
 - The stylus's eraser end erases partially, with a 6 pt radius.
 - Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
 
+### Settings, export and search
+- `core/.../settings`: `AppSettings` (two-finger tap timings, scroll direction, new page defaults, custom layouts, shortcuts, screen calibration), `SettingsCodec` (tagged sections, so a setting can be added without a format version) and `SettingsStore`. The theme is not here: the library keeps it in SharedPreferences. `app/.../settings/SettingsRepository` holds the current value and saves in the background. `CanvasView.applySettings` applies them.
+- Shortcuts: `KeyBindings` maps `EditorAction` to `KeyChord`. `MainActivity.onKeyDown` gets only keys no view took, and passes them to `CanvasView.perform`. That handles undo, redo, zoom, page moves, finger mode and view-only, and returns false for the rest, which the toolbars must handle.
+- `core/.../template`: `PageAppearance` (template kinds, density and line weight, undoable background and custom layout edits) and `CustomLayoutBuilder`.
+- Export: `core/.../export/ExportPlan` holds the math and file names. `app/.../export/DocumentExporter` writes PDFs (vector, one point per point) and PNG or JPEG images (300 dpi by default) from the saved files on a background thread. `NoteEditor.exporter()` saves first.
+- `PagePainter` draws from a `PaintSource`, so that export can use it off the main thread. New item types and PDF backgrounds added there reach exports too, if what they need is on `PaintSource`.
+- Search: `core/.../search` has the `HandwritingRecognizer` interface, `groupInkLines`, `SearchIndex` and `SearchIndexer`, which saves `search.bni` in the document's folder and only recognizes lines that changed. `app/.../search` has `MlKitRecognizer`, `InkModels` and `DocumentSearch`, which refreshes after each save on a low-priority thread.
+- The `offline` build type has no `INTERNET` permission. It uses the same package and key as debug, so it installs over a debug build that has downloaded the models. Debug and profile keep the permission, and so does release, which is not used yet. ML Kit needs the keep rules in `app/proguard-rules.pro`, or minified builds crash at startup.
+- `perf/HandwritingCheck` and `SyntheticInk` run the check script's recognition. The words are drawn by program, so they show the pipeline works, not how well it reads real writing.
+
+Choices here that have no reference and may need the owner's input:
+- All default shortcuts. Single letters choose tools, and Ctrl combinations do the rest.
+- Undo's tap window can be set from 100 to 1000 ms, and the default stays 300 ms.
+- Templates' density can be set from 4 to 96 pt, and line weight from 0.1 to 4 pt.
+- A custom layout resizes the page to its own size, and can't go on a PDF page or a canvas. Changing the template of a PDF page does nothing.
+- An exported canvas shows its items plus a 24 pt margin, and an empty one is left out. Images stop at 64 million pixels, and a canvas larger than a PDF page shrinks to fit.
+- Search needs all the query's words on one line, ignores case and accents, and lets handwriting differ by one letter from 4 letters up, and two from 8 up. Those near matches are flagged `exact = false`.
+- Highlighter strokes, and strokes over 5 times the median height, are not read as writing.
+
 ### PDF
 In `app/.../pdf/`, plus `SearchableText` in `:core`'s `search` package:
 - `PdfImporter`: copies a PDF into a new document folder, `documentsDir/<id hex>`, built in a temporary folder and renamed at the end. An encrypted file is stored decrypted, so the password is never kept. Off the main thread.
 - `PdfWorker`: the one thread that talks to `PdfRenderer`, because the platform serializes PDF work anyway. It keeps the last page open. Previews go first, then tiles nearest the middle of the view, then one search page at a time.
 - `PdfPages`: paints a PDF page into a tile without ever waiting. A tile uses its own raster if ready, otherwise the zoom before stretched, otherwise a whole-page preview (512 px on the long side), and is redrawn when its raster arrives. Rasters sit on the tile's own pixels, so text stays as sharp as PDFium drew it. A pinch asks for no sharp tiles until it ends.
 - `PdfThumbnails`: a one-off render of a page, for the library and the page switcher.
-- Search: `NoteEditor.searchPdfText` streams `TextMatch`es, and `CanvasView.showMatches` and `reveal` mark and scroll to them. These take any `TextMatch`, so handwriting search can use them too.
+- Search has two parts. `PdfPrintedText` feeds PDF lines into `SearchIndexer` as `TextSource.PRINTED`, so `DocumentSearch` finds PDF text next to handwriting, with a whole line as the hit's rectangle. `NoteEditor.searchPdfText` streams `TextMatch`es with the exact words' rectangles, and `CanvasView.showMatches` and `reveal` mark and scroll to them. The search screen should list hits from `DocumentSearch` and can mark words with `searchPdfText`, or the two could become one if line rectangles prove good enough.
+- Export: `DocumentExporter` draws the PDF page under the ink with `PdfThumbnails`, because `PaintSource.paintPdfTile` is only for tiles.
 - `ui/PdfDevChrome.kt` is a plain stand-in for import and search, with no reference to match, like `DevChrome`.
 
 `PdfTest` runs on a device or emulator and checks real pixels. `PdfSpeedTest` times a generated 300-page PDF and logs under `BetterNotesPerf`. With more than one device attached, set `ANDROID_SERIAL` or Gradle runs on all of them.
@@ -285,11 +317,11 @@ Known gaps:
 - Tested only on PDFs generated with Android's `PdfDocument` and with pypdf, never on a real-world file such as a scanned or very heavy book.
 - `PdfRenderer` reports page sizes in whole points, so a real A4 page (595.28 x 841.89) can lose under 1 pt at its right and bottom edges. That is about 0.05% off true size.
 - Text search reads text only, so a scanned PDF finds nothing. There is no OCR.
-- Text is read once per page and kept only in memory, so the first search after opening reads every page again. Previews and tiles are not cached on disk.
+- Previews and tiles are not cached on disk. `searchPdfText` reads text once per page and keeps it only in memory.
 - The bitmap caches have fixed budgets (96 MB previews, 128 MB tiles) and do not react to `onTrimMemory`.
 - `PdfDevChrome` has no way to enter a password, though `PdfImporter` accepts one.
 - Links and forms in a PDF do nothing.
-- PDF export (workstream 7) needs to draw the PDF page under the ink. `PageSource.PdfPage` says which page.
+- An exported PDF holds the pages of an imported PDF as 300 dpi pixels, so they lose their selectable text. The platform offers no way to copy their vectors at `minSdk` 35.
 
 Choices with no reference that may need the owner's input:
 - A PDF page is always on white paper. Its page background and template are ignored, while blank pages added to a PDF keep theirs.
@@ -305,7 +337,7 @@ Open to challenge. These are one agent's suggestions, not validated by a build.
 - **Modules:** a pure Kotlin `:core` (model, geometry, erase, lasso, gestures, templates, file format) with JVM tests, plus an Android `:app`.
 - **Coordinates:** world units in PDF points (1/72 inch), so PDFs and notes share one space. Zoom 1.0 equals physical size via screen DPI.
 - **Storage:** one binary file per page, so long documents only load the pages on screen.
-- **PDF:** platform `PdfRenderer`. Setting `minSdk` to 35 adds its text extraction, but only if the tablet runs Android 15, so confirm that first.
+- **PDF:** platform `PdfRenderer`. `minSdk` 35 adds its text extraction, and the tablet's Android 16 meets that.
 - **Undo:** immutable items with reversible edits.
 
 ## 8. Suggested workstreams

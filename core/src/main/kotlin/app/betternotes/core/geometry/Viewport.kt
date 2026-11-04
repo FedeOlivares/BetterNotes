@@ -29,6 +29,15 @@ class Viewport(var screenDpi: Float) {
         panY = focusY - worldY * pxPerPt
     }
 
+    /** Changes the screen density while keeping the world point under the focal pixel fixed. */
+    fun changeDpi(dpi: Float, focusX: Float, focusY: Float) {
+        val worldX = toWorldX(focusX)
+        val worldY = toWorldY(focusY)
+        screenDpi = dpi
+        panX = focusX - worldX * pxPerPt
+        panY = focusY - worldY * pxPerPt
+    }
+
     fun visibleWorld(screenWidth: Int, screenHeight: Int) = Bounds(
         toWorldX(0f),
         toWorldY(0f),

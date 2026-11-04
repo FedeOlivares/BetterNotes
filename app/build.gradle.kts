@@ -20,12 +20,14 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "PERF_TOOLS", "true")
+            buildConfigField("boolean", "DEV_CHECKS", "true")
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("boolean", "PERF_TOOLS", "false")
+            buildConfigField("boolean", "DEV_CHECKS", "false")
         }
         // Runs like a release, so its timings mean something, but can be installed and measured.
         create("profile") {
@@ -35,6 +37,17 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             isProfileable = true
             buildConfigField("boolean", "PERF_TOOLS", "true")
+            buildConfigField("boolean", "DEV_CHECKS", "true")
+        }
+        // The everyday build once the handwriting models are on the device: it has no INTERNET permission
+        // (see src/offline/AndroidManifest.xml). Same package and key as debug, so it installs over a
+        // debug build that downloaded them and keeps its data.
+        create("offline") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "PERF_TOOLS", "false")
+            buildConfigField("boolean", "DEV_CHECKS", "true")
         }
     }
 
@@ -67,6 +80,7 @@ dependencies {
     implementation(libs.ink.rendering)
     implementation(libs.ink.strokes)
     implementation(libs.motion.prediction)
+    implementation(libs.mlkit.digital.ink)
 
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
