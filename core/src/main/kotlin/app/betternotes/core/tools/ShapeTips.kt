@@ -3,6 +3,10 @@ package app.betternotes.core.tools
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 import kotlin.math.min
 
 /** What a handle on a selected shape changes. */
@@ -24,7 +28,8 @@ object ShapeTips {
     fun params(kind: ShapeKind): Set<ShapeParam> = when (kind) {
         ShapeKind.ARROW, ShapeKind.BLOCK_ARROW, ShapeKind.AXES ->
             setOf(ShapeParam.STROKE_WIDTH, ShapeParam.TIP_LENGTH, ShapeParam.TIP_WIDTH)
-        ShapeKind.CYLINDER, ShapeKind.CUBE -> setOf(ShapeParam.STROKE_WIDTH, ShapeParam.TIP_LENGTH)
+        ShapeKind.CYLINDER, ShapeKind.CUBE, ShapeKind.PIE, ShapeKind.PRISM, ShapeKind.SPEECH_ROUND ->
+            setOf(ShapeParam.STROKE_WIDTH, ShapeParam.TIP_LENGTH)
         ShapeKind.TAPE -> emptySet()
         else -> setOf(ShapeParam.STROKE_WIDTH)
     }
@@ -38,6 +43,10 @@ object ShapeTips {
             ShapeKind.BLOCK_ARROW -> w * 0.4f
             ShapeKind.CYLINDER -> h * 0.15f
             ShapeKind.CUBE -> min(w, h) * 0.25f
+            // The pie's bite in degrees, the wedge's body height, and where the speech tail's tip is across.
+            ShapeKind.PIE -> PIE_BITE_DEGREES
+            ShapeKind.PRISM -> h * WEDGE_BODY
+            ShapeKind.SPEECH_ROUND -> w * SPEECH_TAIL_X
             else -> 0f
         }
     }
@@ -49,8 +58,16 @@ object ShapeTips {
             ShapeKind.ARROW -> length(kind, w, h, tipLength) * ARROW_SPREAD * 2f
             ShapeKind.AXES -> length(kind, w, h, tipLength) * 2f
             ShapeKind.BLOCK_ARROW -> h
+            ShapeKind.SPEECH_ROUND -> h
             else -> 0f
         }
+    }
+
+    /** The point where a speech bubble's tail ends, in its frame. */
+    fun speechTip(item: ShapeItem): FloatArray {
+        val w = item.frame.width
+        val h = item.frame.height
+        return floatArrayOf(length(item.kind, w, h, item.tipLength), width(item.kind, w, h, item.tipLength, item.tipWidth))
     }
 
     /** Where the handle for [param] sits, as x then y. */
@@ -63,6 +80,12 @@ object ShapeTips {
         return when (param) {
             ShapeParam.STROKE_WIDTH -> floatArrayOf(w / 2f, -item.strokeWidth / 2f)
             ShapeParam.TIP_LENGTH -> when (item.kind) {
+                ShapeKind.PIE -> {
+                    val sweep = Math.toRadians((360f - length).toDouble())
+                    floatArrayOf(w / 2f + w / 2f * cos(sweep).toFloat(), h / 2f + h / 2f * sin(sweep).toFloat())
+                }
+                ShapeKind.PRISM -> floatArrayOf(w / 2f, h)
+                ShapeKind.SPEECH_ROUND -> speechTip(item)
                 ShapeKind.CYLINDER -> floatArrayOf(w / 2f, length * 2f)
                 ShapeKind.CUBE -> floatArrayOf(0f, length)
                 else -> floatArrayOf(w - length, axis)
@@ -79,6 +102,21 @@ object ShapeTips {
         return when (param) {
             ShapeParam.STROKE_WIDTH -> item.copy(strokeWidth = (-2f * y).coerceIn(MIN_STROKE_PT, MAX_STROKE_PT))
             ShapeParam.TIP_LENGTH -> when (item.kind) {
+                ShapeKind.PIE -> {
+                    val around = Math.toDegrees(atan2((y - h / 2f) / (h / 2f), (x - w / 2f) / (w / 2f)).toDouble()).toFloat()
+                    val sweep = if (around < 0f) around + 360f else around
+                    item.copy(tipLength = (360f - sweep).coerceIn(MIN_BITE_DEGREES, 360f - MIN_BITE_DEGREES))
+                }
+                ShapeKind.PRISM -> {
+                    // Only the body grows: the frame gets taller by as much, so the top triangle stays as it was.
+                    val top = h - length(item.kind, w, h, item.tipLength)
+                    val height = y.coerceAtLeast(top + MIN_TIP_PT)
+                    item.copy(frame = item.frame.copy(height = height), tipLength = height - top)
+                }
+                ShapeKind.SPEECH_ROUND -> {
+                    val tip = outsideEllipse(w, h, x.coerceIn(0f, w), y.coerceIn(0f, h))
+                    item.copy(tipLength = tip[0], tipWidth = tip[1])
+                }
                 ShapeKind.CYLINDER -> item.copy(tipLength = (y / 2f).coerceIn(MIN_TIP_PT, h * 0.4f))
                 ShapeKind.CUBE -> item.copy(tipLength = y.coerceIn(MIN_TIP_PT, min(w, h) * 0.8f))
                 else -> item.copy(tipLength = (w - x).coerceIn(MIN_TIP_PT, w * 0.9f))
@@ -87,6 +125,25 @@ object ShapeTips {
         }
     }
 
+    /** A point inside the bubble's ellipse is pushed out to its edge, so the tail always sticks out. */
+    private fun outsideEllipse(w: Float, h: Float, x: Float, y: Float): FloatArray {
+        val cx = w / 2f
+        val cy = h * SPEECH_ELLIPSE / 2f
+        val rx = w / 2f
+        val ry = h * SPEECH_ELLIPSE / 2f
+        val nx = (x - cx) / rx
+        val ny = (y - cy) / ry
+        val reach = hypot(nx, ny)
+        if (reach >= 1.05f) return floatArrayOf(x, y)
+        val scale = if (reach == 0f) 1.05f else 1.05f / reach
+        return floatArrayOf(cx + nx * scale * rx, cy + ny * scale * ry)
+    }
+
+    const val PIE_BITE_DEGREES = 90f
+    const val MIN_BITE_DEGREES = 15f
+    const val WEDGE_BODY = 0.7f
+    const val SPEECH_TAIL_X = 0.38f
+    const val SPEECH_ELLIPSE = 0.75f
     const val ARROW_HEAD_MAX = 24f
     const val ARROW_SPREAD = 0.6f
     const val AXES_ORIGIN = 0.7f

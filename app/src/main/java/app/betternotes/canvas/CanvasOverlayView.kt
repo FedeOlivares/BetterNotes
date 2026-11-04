@@ -66,6 +66,12 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         color = LASER_COLOR
     }
     private val tipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = LASER_COLOR }
+    private val coreFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+    private val coreLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFFFFFFF.toInt()
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
     private val rulerBody = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = RULER_BODY }
     private val rulerMajorTick = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = RULER_MARK
@@ -124,14 +130,28 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         val width = LASER_WIDTH_DP * density * laserScale
         if (laserMode != LaserMode.DOT) {
             trail.forEachSegment(now) { x0, y0, x1, y1, strength ->
+                glowPaint.alpha = (strength * LASER_GLOW_ALPHA).roundToInt()
+                glowPaint.strokeWidth = width * LASER_GLOW_RATIO * strength
+                canvas.drawLine(x0, y0, x1, y1, glowPaint)
                 glowPaint.alpha = (strength * LASER_ALPHA).roundToInt()
                 glowPaint.strokeWidth = width * strength
                 canvas.drawLine(x0, y0, x1, y1, glowPaint)
+                coreLine.alpha = (strength * OPAQUE).roundToInt()
+                coreLine.strokeWidth = width * LASER_CORE_RATIO * strength
+                canvas.drawLine(x0, y0, x1, y1, coreLine)
             }
         }
         val tip = trail.tipIndex
-        tipPaint.alpha = (if (laserHeld) 1f else trail.strengthAt(tip, now)).times(OPAQUE).roundToInt()
-        canvas.drawCircle(trail.xAt(tip), trail.yAt(tip), width * LASER_TIP_RATIO, tipPaint)
+        val strength = if (laserHeld) 1f else trail.strengthAt(tip, now)
+        val tipX = trail.xAt(tip)
+        val tipY = trail.yAt(tip)
+        // A soft red halo, a red ring, and a white middle.
+        tipPaint.alpha = (strength * LASER_GLOW_ALPHA).roundToInt()
+        canvas.drawCircle(tipX, tipY, width * LASER_GLOW_RATIO, tipPaint)
+        tipPaint.alpha = (strength * OPAQUE).roundToInt()
+        canvas.drawCircle(tipX, tipY, width * LASER_TIP_RATIO, tipPaint)
+        coreFill.alpha = (strength * OPAQUE).roundToInt()
+        canvas.drawCircle(tipX, tipY, width * LASER_CORE_RATIO, coreFill)
         // The tail goes on fading with no touches to prompt a redraw.
         postInvalidateOnAnimation()
     }
@@ -197,9 +217,12 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         const val LASER_LIFETIME_MS = 700L
         const val DOT_LIFETIME_MS = 250L
         const val DEFAULT_LASER_LENGTH = 2
-        const val LASER_COLOR = 0xFFE8321E.toInt()
+        const val LASER_COLOR = 0xFFFF1A1A.toInt()
         const val LASER_WIDTH_DP = 7f
         const val LASER_ALPHA = 200f
+        const val LASER_GLOW_ALPHA = 90f
+        const val LASER_GLOW_RATIO = 2.4f
+        const val LASER_CORE_RATIO = 0.35f
         const val LASER_TIP_RATIO = 0.6f
         const val OPAQUE = 255f
 

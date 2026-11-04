@@ -102,7 +102,7 @@ internal class ItemPainter(
         canvas.withClip(path) {
             fill.color = TapeOptions.WARNING_FILL
             drawRect(0f, 0f, width, height, fill)
-            fill.color = TapeOptions.WARNING_RED
+            fill.color = TapeOptions.WARNING_STRIPE
             val stripe = height * WARNING_STRIPE_RATIO
             var x = -height
             while (x < width) {

@@ -41,7 +41,7 @@ internal object InkBrushes {
     private val roundHighlighter by lazy {
         val stock = highlighter.coats.first()
         val tip = stock.tip.toBuilder().setCornerRounding(1f).build()
-        BrushFamily.builder().setCoat(stock.copy(tip = tip)).build()
+        BrushFamily.builder().setCoat(stock.copy(tip = tip)).setInputModel(highlighter.inputModel).build()
     }
     private val dashed by lazy { StockBrushes.dashedLine(DashedLineVersion.V1) }
     private val squareNib by lazy { familyOf(BrushTip.builder().setCornerRounding(0f).build()) }
@@ -73,7 +73,14 @@ internal object InkBrushes {
         }
     }
 
-    private fun familyOf(tip: BrushTip) = BrushFamily.builder().setCoat(BrushCoat(tip)).build()
+    /**
+     * Without an input model the mesh joins the pen's samples with straight segments, which shows as
+     * corners when zoomed in. The sliding window smooths and upsamples them, as the stock brushes do.
+     */
+    private fun familyOf(tip: BrushTip) = BrushFamily.builder()
+        .setCoat(BrushCoat(tip))
+        .setInputModel(BrushFamily.InputModel.SlidingWindowModel())
+        .build()
 
     private fun colorOf(style: InkStyle): Int {
         val alpha = ((style.color ushr 24) * style.opacity + 0.5f).toInt().coerceIn(0, 255)

@@ -330,6 +330,37 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             field = value
         }
 
+    /**
+     * A map of an infinite page for the overlay: where its items are, and the part of it in view, in the
+     * page's own points. Null on any other kind of page.
+     */
+    class Minimap(val items: FloatArray, val viewLeft: Float, val viewTop: Float, val viewRight: Float, val viewBottom: Float)
+
+    fun minimap(): Minimap? {
+        val open = editor ?: return null
+        val layout = layout ?: return null
+        if (!layout.isInfinite || width == 0) return null
+        val content = open.contentOrLoad(open.document.pages[0].id) ?: return null
+        val all = content.toList()
+        // A map has no use for every item of a huge page, so it shows an even sample of them.
+        val step = (all.size / MINIMAP_MAX_ITEMS).coerceAtLeast(1)
+        val boxes = ArrayList<Float>()
+        for (i in all.indices step step) {
+            val b = all[i].bounds
+            boxes += b.left
+            boxes += b.top
+            boxes += b.right
+            boxes += b.bottom
+        }
+        return Minimap(
+            boxes.toFloatArray(),
+            viewport.toWorldX(0f),
+            viewport.toWorldY(0f),
+            viewport.toWorldX(width.toFloat()),
+            viewport.toWorldY(height.toFloat()),
+        )
+    }
+
     /** The open document, for changes made from outside the canvas. */
     val openDocument: Document? get() = editor?.document
 
@@ -666,6 +697,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         settlePan()
         onZoomChanged(viewport.zoom)
+        if (overlay.ruler != null) overlay.invalidate()
     }
 
     /**
@@ -1927,7 +1959,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         tiles.invalidate()
         onViewMoved()
-        if (lasso.hasSelection) overlay.invalidate()
+        if (lasso.hasSelection || overlay.ruler != null) overlay.invalidate()
     }
 
     override fun onTransformEnd() {
@@ -2115,6 +2147,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         /** How close to a ruler's edge a stroke must start to run along it. */
         const val RULER_EDGE_REACH_DP = 14f
         const val STRAIGHT_LINE_PRESSURE = 0.5f
+        const val MINIMAP_MAX_ITEMS = 400
         const val SCRIBBLE_REACH_PT = 2f
         const val LOOP_TAP_REACH_DP = 14f
         /** What one press of a zoom shortcut multiplies the zoom by. */

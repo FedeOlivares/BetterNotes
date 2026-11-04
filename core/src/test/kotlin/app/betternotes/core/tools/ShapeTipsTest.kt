@@ -55,4 +55,33 @@ class ShapeTipsTest {
         assertEquals(20f, scaled.tipLength, 0.001f)
         assertEquals(12f, scaled.tipWidth, 0.001f)
     }
+
+    @Test
+    fun theBiteOfAPieFollowsItsHandle() {
+        val pie = ShapeItem(2L, Frame(0f, 0f, 100f, 100f), ShapeKind.PIE)
+        // A handle straight up from the center leaves a bite of a quarter turn.
+        val up = ShapeTips.dragged(pie, ShapeParam.TIP_LENGTH, 50f, 0f)
+        assertEquals(90f, up.tipLength, 0.01f)
+        val wide = ShapeTips.dragged(pie, ShapeParam.TIP_LENGTH, 0f, 50f)
+        assertEquals(180f, wide.tipLength, 0.01f)
+    }
+
+    @Test
+    fun theWedgeBodyGrowsWithoutTheTopTriangle() {
+        val wedge = ShapeItem(3L, Frame(0f, 0f, 100f, 100f), ShapeKind.PRISM)
+        // By default the top is 30 and the body 70.
+        val taller = ShapeTips.dragged(wedge, ShapeParam.TIP_LENGTH, 50f, 150f)
+        assertEquals(150f, taller.frame.height, 0.01f)
+        assertEquals(120f, taller.tipLength, 0.01f)
+        assertEquals(30f, taller.frame.height - taller.tipLength, 0.01f)
+    }
+
+    @Test
+    fun aSpeechTailAlwaysSticksOutOfTheBubble() {
+        val bubble = ShapeItem(4L, Frame(0f, 0f, 200f, 100f), ShapeKind.SPEECH_ROUND)
+        val inside = ShapeTips.dragged(bubble, ShapeParam.TIP_LENGTH, 100f, 37f)
+        val dx = (inside.tipLength - 100f) / 100f
+        val dy = (inside.tipWidth - 37.5f) / 37.5f
+        assertTrue(dx * dx + dy * dy >= 1f)
+    }
 }

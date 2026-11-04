@@ -392,6 +392,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         viewMoves++
     }
 
+    fun minimap() = canvas.minimap()
+
     fun undo() = canvas.undo()
 
     fun redo() = canvas.redo()

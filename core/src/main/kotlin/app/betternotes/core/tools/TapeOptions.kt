@@ -29,7 +29,7 @@ data class TapeOptions(
     companion object {
         /** Marks a strip of tape that is painted as warning tape, whatever its other colors. */
         const val WARNING_FILL = 0xFFFFC400.toInt()
-        const val WARNING_RED = 0xFFD32F2F.toInt()
+        const val WARNING_STRIPE = 0xFF1B1B1B.toInt()
 
         /** See-through, as washi tape is. */
         val PALETTE: List<Int> = listOf(

@@ -148,7 +148,7 @@ data class ShapeItem(
             strokeWidth = strokeWidth * factor,
             line = line.scaled(factor),
             cornerRadius = cornerRadius * factor,
-            tipLength = tipLength * factor,
+            tipLength = if (kind == ShapeKind.PIE) tipLength else tipLength * factor,
             tipWidth = tipWidth * factor,
         )
     }

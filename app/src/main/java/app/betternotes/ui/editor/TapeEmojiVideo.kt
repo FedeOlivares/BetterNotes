@@ -172,7 +172,7 @@ internal val EMOJI: List<String> = listOf(
 private const val EMOJI_PER_ROW = 8
 private const val OPAQUE = 0xFF000000.toInt()
 
-/** A round swatch striped yellow and red, for the warning tape. */
+/** A round swatch striped yellow and black, for the warning tape. */
 @Composable
 private fun WarningSwatch() {
     androidx.compose.foundation.Canvas(Modifier.size(24.dp).clip(CircleShape)) {
@@ -187,7 +187,7 @@ private fun WarningSwatch() {
                 lineTo(x + size.height, 0f)
                 close()
             }
-            drawPath(slant, Color(TapeOptions.WARNING_RED))
+            drawPath(slant, Color(TapeOptions.WARNING_STRIPE))
             x += stripe * 2f
         }
     }

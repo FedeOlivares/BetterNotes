@@ -5,6 +5,7 @@ import android.graphics.RectF
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.tools.ShapeTips
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
@@ -68,7 +69,7 @@ internal object ShapePaths {
             ShapeKind.PIE -> {
                 box.set(0f, 0f, w, h)
                 path.moveTo(w / 2f, midY)
-                path.arcTo(box, 0f, PIE_SWEEP)
+                path.arcTo(box, 0f, 360f - ShapeTips.length(kind, w, h, tipLength))
                 path.close()
             }
             ShapeKind.ARC -> {
@@ -124,8 +125,10 @@ internal object ShapePaths {
                 polyline(path, w / 2f, 0f, w / 2f, h)
             }
             ShapeKind.PRISM -> {
-                polygon(path, 0f, h * 0.3f, w * 0.65f, 0f, w, h * 0.25f, w, h, 0f, h)
-                polyline(path, 0f, h * 0.3f, w, h * 0.25f)
+                // The top triangle is as tall as the frame minus the body, so growing the body leaves it alone.
+                val top = h - ShapeTips.length(kind, w, h, tipLength)
+                polygon(path, 0f, top, w * 0.65f, 0f, w, top * 0.25f / 0.3f, w, h, 0f, h)
+                polyline(path, 0f, top, w, top * 0.25f / 0.3f)
             }
             ShapeKind.DISCS -> {
                 box.set(0f, 0f, w, h * 0.45f)
@@ -164,22 +167,39 @@ internal object ShapePaths {
                 0f, 0f, w, 0f, w, h * 0.75f,
                 w * 0.7f, h * 0.75f, w * 0.72f, h, w * 0.45f, h * 0.75f, 0f, h * 0.75f,
             )
-            ShapeKind.SPEECH_ROUND -> {
-                box.set(0f, 0f, w, h * 0.75f)
-                path.addOval(box, Path.Direction.CW)
-                polyline(path, w * 0.28f, h * 0.68f, w * 0.38f, h, w * 0.5f, h * 0.75f)
-            }
+            ShapeKind.SPEECH_ROUND -> speechBubble(path, w, h, tipLength, tipWidth)
             ShapeKind.THOUGHT -> {
                 // Circles that touch merge into one outline, so the cloud has no lines inside it.
                 for ((i, bump) in CLOUD_BUMPS.withIndex()) {
                     cloud.rewind()
-                    cloud.addCircle(bump[0] * w, bump[1] * h, bump[2] * min(w, h), Path.Direction.CW)
+                    // Ovals sized by the frame, not circles sized by its shorter side, which come apart when it is stretched.
+                    box.set((bump[0] - bump[2]) * w, (bump[1] - bump[2]) * h, (bump[0] + bump[2]) * w, (bump[1] + bump[2]) * h)
+                    cloud.addOval(box, Path.Direction.CW)
                     if (i == 0) path.set(cloud) else path.op(cloud, Path.Op.UNION)
                 }
             }
             ShapeKind.TAPE -> tape(path, w, h)
             else -> Unit
         }
+    }
+
+    /** One closed outline: the ellipse is left open where the tail joins it, and the tail runs to its tip. */
+    private fun speechBubble(path: Path, w: Float, h: Float, tipLength: Float, tipWidth: Float) {
+        val rx = w / 2f
+        val ry = h * ShapeTips.SPEECH_ELLIPSE / 2f
+        val cx = rx
+        val cy = ry
+        val tipX = ShapeTips.length(ShapeKind.SPEECH_ROUND, w, h, tipLength)
+        val tipY = ShapeTips.width(ShapeKind.SPEECH_ROUND, w, h, tipLength, tipWidth)
+        // The angle along the ellipse that points at the tip, and a mouth to either side of it.
+        val toward = Math.toDegrees(atan2(((tipY - cy) / ry).toDouble(), ((tipX - cx) / rx).toDouble())).toFloat()
+        val start = toward + SPEECH_MOUTH_DEGREES
+        box.set(0f, 0f, w, ry * 2f)
+        val begin = Math.toRadians(start.toDouble())
+        path.moveTo(cx + rx * cos(begin).toFloat(), cy + ry * sin(begin).toFloat())
+        path.arcTo(box, start, 360f - 2f * SPEECH_MOUTH_DEGREES)
+        path.lineTo(tipX, tipY)
+        path.close()
     }
 
     private fun polyline(path: Path, vararg xy: Float) {
@@ -247,6 +267,7 @@ internal object ShapePaths {
         path.close()
     }
 
+    private const val SPEECH_MOUTH_DEGREES = 14f
     private const val CURVE_STEPS = 40
     private const val TAPE_TEETH = 5
     private val CLOUD_BUMPS = arrayOf(

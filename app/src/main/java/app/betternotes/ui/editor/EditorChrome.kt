@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import app.betternotes.canvas.CanvasView
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -457,7 +459,58 @@ private fun BoxScope.PositionControls(state: EditorState) {
         PageButton(EditorIcons.ChevronUp, stringResource(R.string.editor_previous_page), state::previousPage)
         PageButton(EditorIcons.ChevronDown, stringResource(R.string.editor_next_page), state::nextPage)
     }
+    val map = remember(moves) { state.minimap() }
+    if (map != null) MinimapView(map, Modifier.align(Alignment.BottomEnd).masksInk(state, "minimap"))
 }
+
+/** A small map of an infinite page, shown while it scrolls: where things are written, and what is in view. */
+@Composable
+private fun MinimapView(map: CanvasView.Minimap, modifier: Modifier) {
+    val colors = LocalEditorColors.current
+    Canvas(
+        modifier
+            .padding(end = 12.dp, bottom = 12.dp)
+            .size(MINIMAP_WIDTH, MINIMAP_HEIGHT)
+            .shadow(4.dp, RoundedCornerShape(12.dp), clip = false)
+            .clip(RoundedCornerShape(12.dp))
+            .background(colors.pill)
+            .border(1.dp, colors.pillBorder, RoundedCornerShape(12.dp)),
+    ) {
+        var left = map.viewLeft
+        var top = map.viewTop
+        var right = map.viewRight
+        var bottom = map.viewBottom
+        var i = 0
+        while (i < map.items.size) {
+            left = minOf(left, map.items[i])
+            top = minOf(top, map.items[i + 1])
+            right = maxOf(right, map.items[i + 2])
+            bottom = maxOf(bottom, map.items[i + 3])
+            i += 4
+        }
+        val inset = 8.dp.toPx()
+        val scale = minOf((size.width - 2 * inset) / (right - left).coerceAtLeast(1f), (size.height - 2 * inset) / (bottom - top).coerceAtLeast(1f))
+        val offsetX = (size.width - (right - left) * scale) / 2f
+        val offsetY = (size.height - (bottom - top) * scale) / 2f
+        fun x(value: Float) = offsetX + (value - left) * scale
+        fun y(value: Float) = offsetY + (value - top) * scale
+        i = 0
+        while (i < map.items.size) {
+            val w = ((map.items[i + 2] - map.items[i]) * scale).coerceAtLeast(MIN_MARK_DP.dp.toPx())
+            val h = ((map.items[i + 3] - map.items[i + 1]) * scale).coerceAtLeast(MIN_MARK_DP.dp.toPx())
+            drawRect(colors.label.copy(alpha = 0.7f), androidx.compose.ui.geometry.Offset(x(map.items[i]), y(map.items[i + 1])), androidx.compose.ui.geometry.Size(w, h))
+            i += 4
+        }
+        val view = androidx.compose.ui.geometry.Offset(x(map.viewLeft), y(map.viewTop))
+        val viewSize = androidx.compose.ui.geometry.Size((map.viewRight - map.viewLeft) * scale, (map.viewBottom - map.viewTop) * scale)
+        drawRect(colors.accent.copy(alpha = 0.18f), view, viewSize)
+        drawRect(colors.accent, view, viewSize, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+    }
+}
+
+private val MINIMAP_WIDTH = 150.dp
+private val MINIMAP_HEIGHT = 110.dp
+private const val MIN_MARK_DP = 1.5f
 
 @Composable
 private fun PageButton(icon: ImageVector, description: String, onClick: () -> Unit) {
