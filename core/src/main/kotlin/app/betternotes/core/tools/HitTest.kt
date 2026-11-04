@@ -54,7 +54,7 @@ private fun Frame.touches(probe: Capsule) =
 
 private fun ShapeItem.touches(probe: Capsule): Boolean {
     val outline = outline()
-    val isClosed = kind != ShapeKind.LINE && kind != ShapeKind.ARROW
+    val isClosed = kind != ShapeKind.LINE && kind != ShapeKind.ARROW && kind != ShapeKind.CURVE
     val margin = strokeWidth / 2f
     val lastStart = if (isClosed) outline.size - 2 else outline.size - 4
     var i = 0
@@ -69,10 +69,15 @@ private fun ShapeItem.touches(probe: Capsule): Boolean {
 /** Packed x,y world points along the shape. Corner radius is ignored, which is close enough to aim at. */
 private fun ShapeItem.outline(): FloatArray {
     val unit: FloatArray = when (kind) {
-        ShapeKind.LINE, ShapeKind.ARROW -> floatArrayOf(0f, 0.5f, 1f, 0.5f)
-        ShapeKind.RECTANGLE -> floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
+        ShapeKind.LINE, ShapeKind.ARROW, ShapeKind.CURVE -> floatArrayOf(0f, 0.5f, 1f, 0.5f)
+        ShapeKind.RECTANGLE, ShapeKind.BLOCK_ARROW, ShapeKind.PYRAMID, ShapeKind.CYLINDER ->
+            floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
         ShapeKind.TRIANGLE -> floatArrayOf(0.5f, 0f, 1f, 1f, 0f, 1f)
-        ShapeKind.ELLIPSE -> FloatArray(ELLIPSE_OUTLINE_SEGMENTS * 2) { i ->
+        ShapeKind.DIAMOND -> floatArrayOf(0.5f, 0f, 1f, 0.5f, 0.5f, 1f, 0f, 0.5f)
+        ShapeKind.PARALLELOGRAM -> floatArrayOf(0.22f, 0f, 1f, 0f, 0.78f, 1f, 0f, 1f)
+        ShapeKind.TRAPEZOID -> floatArrayOf(0.22f, 0f, 0.78f, 0f, 1f, 1f, 0f, 1f)
+        ShapeKind.ELLIPSE, ShapeKind.SPHERE, ShapeKind.PENTAGON, ShapeKind.HEXAGON, ShapeKind.PIE, ShapeKind.ARC, ShapeKind.STAR ->
+            FloatArray(ELLIPSE_OUTLINE_SEGMENTS * 2) { i ->
             val angle = 2.0 * PI * (i / 2) / ELLIPSE_OUTLINE_SEGMENTS
             val wave = if (i % 2 == 0) cos(angle) else sin(angle)
             0.5f + 0.5f * wave.toFloat()

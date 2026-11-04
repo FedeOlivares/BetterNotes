@@ -108,6 +108,7 @@ internal fun ToolbarIcon(
     description: String,
     enabled: Boolean = true,
     selected: Boolean = false,
+    accent: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = LocalEditorColors.current
@@ -124,6 +125,7 @@ internal fun ToolbarIcon(
             tint = when {
                 !enabled -> colors.iconDisabled
                 selected -> colors.toolSelectedIcon
+                accent -> colors.accent
                 else -> colors.icon
             },
             modifier = Modifier.size(24.dp),

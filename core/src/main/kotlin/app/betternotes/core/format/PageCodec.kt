@@ -37,7 +37,27 @@ internal val PEN_TYPES = WireEnum(PenType.NATURAL, PenType.BALL, PenType.CALLIGR
 internal val TIP_SHAPES = WireEnum(TipShape.ROUND, TipShape.SQUARE)
 internal val LINE_KINDS = WireEnum(LineKind.SOLID, LineKind.DOTTED, LineKind.DASHED)
 internal val SHAPE_KINDS =
-    WireEnum(ShapeKind.LINE, ShapeKind.ARROW, ShapeKind.RECTANGLE, ShapeKind.ELLIPSE, ShapeKind.TRIANGLE)
+    WireEnum(
+        ShapeKind.LINE,
+        ShapeKind.ARROW,
+        ShapeKind.RECTANGLE,
+        ShapeKind.ELLIPSE,
+        ShapeKind.TRIANGLE,
+        // Added after format version 1 shipped. New values go at the end, so old files read the same.
+        ShapeKind.DIAMOND,
+        ShapeKind.PARALLELOGRAM,
+        ShapeKind.TRAPEZOID,
+        ShapeKind.BLOCK_ARROW,
+        ShapeKind.CURVE,
+        ShapeKind.PENTAGON,
+        ShapeKind.HEXAGON,
+        ShapeKind.PIE,
+        ShapeKind.ARC,
+        ShapeKind.STAR,
+        ShapeKind.SPHERE,
+        ShapeKind.PYRAMID,
+        ShapeKind.CYLINDER,
+    )
 internal val IMAGE_SHAPES = WireEnum(ImageShape.RECTANGLE, ImageShape.ELLIPSE)
 
 /**

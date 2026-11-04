@@ -228,7 +228,7 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
 }
 
 @Composable
-private fun LabeledRow(
+internal fun LabeledRow(
     @StringRes label: Int,
     info: (() -> Unit)? = null,
     extra: (@Composable () -> Unit)? = null,
@@ -272,7 +272,7 @@ private fun LabeledRow(
 }
 
 @Composable
-private fun PanelIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+internal fun PanelIconButton(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(36.dp).tappable(radius = 18.dp, onClick = onClick),

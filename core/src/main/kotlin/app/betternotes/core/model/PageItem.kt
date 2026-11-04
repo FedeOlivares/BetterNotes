@@ -82,7 +82,26 @@ data class StrokeItem(
     }
 }
 
-enum class ShapeKind { LINE, ARROW, RECTANGLE, ELLIPSE, TRIANGLE }
+enum class ShapeKind {
+    LINE,
+    ARROW,
+    RECTANGLE,
+    ELLIPSE,
+    TRIANGLE,
+    DIAMOND,
+    PARALLELOGRAM,
+    TRAPEZOID,
+    BLOCK_ARROW,
+    CURVE,
+    PENTAGON,
+    HEXAGON,
+    PIE,
+    ARC,
+    STAR,
+    SPHERE,
+    PYRAMID,
+    CYLINDER,
+}
 
 /**
  * A vector shape. A line or arrow runs along the frame's horizontal center, from left to right,

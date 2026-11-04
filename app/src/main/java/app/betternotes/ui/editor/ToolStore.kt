@@ -6,7 +6,10 @@ import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.TipShape
+import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.InkPreset
+import app.betternotes.core.tools.ItemKind
+import app.betternotes.core.tools.LassoOptions
 import app.betternotes.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONException
@@ -29,6 +32,62 @@ internal class ToolStore(context: Context) {
 
     fun save(preset: InkPreset) {
         prefs.edit { putString(preset.tool.name, encode(preset).toString()) }
+    }
+
+    fun eraser(): EraserOptions = read(KEY_ERASER, EraserOptions()) { json ->
+        EraserOptions(
+            sizes = json.getJSONArray("sizes").ints(),
+            selectedSize = json.getInt("selectedSize"),
+            whole = json.getBoolean("whole"),
+            lockedToo = json.getBoolean("lockedToo"),
+            autoDeselect = json.getBoolean("autoDeselect"),
+            kinds = json.getJSONArray("kinds").kinds(),
+        )
+    }
+
+    fun save(options: EraserOptions) {
+        val json = JSONObject().apply {
+            put("sizes", JSONArray(options.sizes))
+            put("selectedSize", options.selectedSize)
+            put("whole", options.whole)
+            put("lockedToo", options.lockedToo)
+            put("autoDeselect", options.autoDeselect)
+            put("kinds", JSONArray(options.kinds.map { it.name }))
+        }
+        prefs.edit { putString(KEY_ERASER, json.toString()) }
+    }
+
+    fun lasso(): LassoOptions = read(KEY_LASSO, LassoOptions()) { json ->
+        LassoOptions(
+            rectangle = json.getBoolean("rectangle"),
+            lockedToo = json.getBoolean("lockedToo"),
+            takeScreenshot = json.getBoolean("takeScreenshot"),
+            fullSelectionOnly = json.getBoolean("fullSelectionOnly"),
+            kinds = json.getJSONArray("kinds").kinds(),
+        )
+    }
+
+    fun save(options: LassoOptions) {
+        val json = JSONObject().apply {
+            put("rectangle", options.rectangle)
+            put("lockedToo", options.lockedToo)
+            put("takeScreenshot", options.takeScreenshot)
+            put("fullSelectionOnly", options.fullSelectionOnly)
+            put("kinds", JSONArray(options.kinds.map { it.name }))
+        }
+        prefs.edit { putString(KEY_LASSO, json.toString()) }
+    }
+
+    /** Anything saved by an older build that no longer reads back gives way to [fallback]. */
+    private inline fun <T> read(key: String, fallback: T, decode: (JSONObject) -> T): T {
+        val saved = prefs.getString(key, null) ?: return fallback
+        return try {
+            decode(JSONObject(saved))
+        } catch (_: JSONException) {
+            fallback
+        } catch (_: IllegalArgumentException) {
+            fallback
+        }
     }
 
     var theme: ThemeMode
@@ -74,7 +133,11 @@ internal class ToolStore(context: Context) {
 
     private fun JSONArray.ints() = List(length()) { getInt(it) }
 
+    private fun JSONArray.kinds() = List(length()) { ItemKind.valueOf(getString(it)) }.toSet()
+
     private companion object {
         const val KEY_THEME = "theme"
+        const val KEY_ERASER = "eraser"
+        const val KEY_LASSO = "lasso"
     }
 }

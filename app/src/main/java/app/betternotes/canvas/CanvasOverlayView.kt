@@ -10,7 +10,10 @@ import androidx.core.graphics.withRotation
 import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.tools.FadingTrail
 import app.betternotes.core.tools.Ruler
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /**
@@ -59,7 +62,11 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         invalidate()
     }
 
+    /** Draws anything else that floats over the page, in view pixels. */
+    var extraDraw: (Canvas) -> Unit = {}
+
     override fun onDraw(canvas: Canvas) {
+        extraDraw(canvas)
         ruler?.let { drawRuler(canvas, it) }
         drawLaser(canvas)
     }
@@ -92,15 +99,14 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         canvas.withRotation(degrees, cx, cy) {
             drawRect(cx - ruler.length / 2f, cy - half, cx + ruler.length / 2f, cy + half, rulerBody)
             drawEdgeMarks(this, ruler)
-            for (i in 0 until DIAL_TICKS) {
-                val turn = i * 360f / DIAL_TICKS
-                val long = i % (DIAL_TICKS / 4) == 0
-                withRotation(turn, cx, cy) {
-                    val outer = DIAL_RADIUS_DP * density
-                    val inner = outer - density * if (long) DIAL_LONG_TICK_DP else DIAL_TICK_DP
-                    drawLine(cx + inner, cy, cx + outer, cy, rulerMinorTick)
-                }
-            }
+        }
+        val outer = DIAL_RADIUS_DP * density
+        for (i in 0 until DIAL_TICKS) {
+            val turn = 2.0 * PI * i / DIAL_TICKS + ruler.angleRadians
+            val inner = outer - density * if (i % (DIAL_TICKS / 4) == 0) DIAL_LONG_TICK_DP else DIAL_TICK_DP
+            val c = cos(turn).toFloat()
+            val s = sin(turn).toFloat()
+            canvas.drawLine(cx + inner * c, cy + inner * s, cx + outer * c, cy + outer * s, rulerMinorTick)
         }
         val text = "${ruler.displayDegrees().roundToInt() % HALF_TURN_DEGREES}°"
         canvas.drawText(text, cx, cy + rulerText.textSize * TEXT_CENTER_SHIFT, rulerText)

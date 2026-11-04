@@ -20,6 +20,7 @@ internal class PagePainter(private val editor: NoteEditor) {
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
+    private val items = ItemPainter()
 
     /**
      * Paints [region], given in document points. [leftPx] and [topPx] are where the canvas's origin
@@ -59,11 +60,14 @@ internal class PagePainter(private val editor: NoteEditor) {
         editor.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
     }
 
-    /** Only ink for now. The other item types arrive with their tools. */
     private fun paintItems(canvas: Canvas, content: PageContent, region: Bounds, scale: Float) {
         strokeToTile.setScale(scale, scale)
         content.forEachIntersecting(region) { _, item ->
-            if (item is StrokeItem) renderer.draw(canvas, editor.strokes.get(item), strokeToTile)
+            if (item is StrokeItem) {
+                renderer.draw(canvas, editor.strokes.get(item), strokeToTile)
+            } else {
+                items.paint(canvas, item)
+            }
         }
     }
 

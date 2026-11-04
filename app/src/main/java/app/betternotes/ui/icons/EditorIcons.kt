@@ -59,6 +59,12 @@ internal object EditorIcons {
         line("sticker", "M12 3a9 9 0 1 0 9 9c-1 3-3 5-5.5 6.5 M8 14.5c1 2.2 5 3 7.5 0 M9 9.5v.2 M15 9.5v.2 M21 12c-2.5-.5-5 .5-5.5 6.5")
     }
     val AddElement by lazy { line("add-element", rrect(3.5f, 4f, 9f, 7f, 1.5f) + rrect(3.5f, 14f, 17f, 6f, 1.5f) + "M18 4.5v6 M15 7.5h6") }
+    val EraseMode by lazy { line("erase-mode", "M9 4.2A9 9 0 1 0 19.8 15 M14.5 3.5l6 6-5 5-6-6z M8 13.5v.2 M5.5 9.5v.2") }
+    val Broom by lazy { line("broom", "M20.5 3.5L13 11 M9.5 9l5.5 5.5c-1.5 3-4 5.5-8 6.5l-1-3-1.5 2L3 19c1.5-1 3-3 2-4l-1-.5c2.500-.5 4-2.500 5.500-5.500z") }
+    val LassoFreeform by lazy { line("lasso-freeform", dashedCircle() + "M16.5 6.500l1.500 1.500-6 6-2 .5.5-2z") }
+    val LassoRectangle by lazy { line("lasso-rectangle", "M3 7V4.500A1.500 1.500 0 0 1 4.500 3H7 M11 3h3 M21 11v3 M21 18v1.500a1.500 1.500 0 0 1-1.500 1.500H17 M13 21h-3 M6 21H4.500A1.500 1.500 0 0 1 3 19.500V18 M3 14v-3 M17.500 5.500l2 2-7 7-2.500.5.500-2.500z") }
+    val LassoLocked by lazy { line("lasso-locked", dashedCircle() + "M8.500 11h7v5.500h-7z M10 11V9.500a2 2 0 0 1 4 0V11") }
+    val LassoScreenshot by lazy { line("lasso-screenshot", dashedCircle() + "M8 10h1.500l1-1.500h3l1 1.500H16v6H8z M12 11a1.700 1.700 0 1 0 .01 0") }
     val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
     val Insert by lazy { line("insert", rrect(4f, 4f, 16f, 16f, 2.5f) + "M12 8v8 M8 12h8") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }

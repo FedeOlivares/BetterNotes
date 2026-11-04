@@ -47,14 +47,20 @@ class Selection(
 /**
  * Selects what a closed lasso surrounds. [polygon] holds packed x,y pairs. A stroke is selected if
  * at least half of it is inside, so a slightly sloppy lasso still works. Anything else is selected
- * if its center is inside.
+ * if its center is inside. With [fullOnly], all of the item must be inside. Only items of [kinds] count.
  */
-fun selectWithLasso(pageId: Long, content: PageContent, polygon: FloatArray): Selection {
+fun selectWithLasso(
+    pageId: Long,
+    content: PageContent,
+    polygon: FloatArray,
+    kinds: Set<ItemKind> = ALL_ITEM_KINDS,
+    fullOnly: Boolean = false,
+): Selection {
     val indices = ArrayList<Int>()
     val items = ArrayList<PageItem>()
     if (polygon.size >= MIN_POLYGON_FLOATS) {
         content.forEachIntersecting(polygonBounds(polygon)) { index, item ->
-            if (item.isCaughtBy(polygon)) {
+            if (item.kind in kinds && item.isCaughtBy(polygon, fullOnly)) {
                 indices += index
                 items += item
             }
@@ -79,9 +85,11 @@ private fun polygonBounds(polygon: FloatArray): Bounds {
     return Bounds(left, top, right, bottom)
 }
 
-private fun PageItem.isCaughtBy(polygon: FloatArray): Boolean {
+private fun PageItem.isCaughtBy(polygon: FloatArray, fullOnly: Boolean): Boolean {
     if (this !is StrokeItem) {
-        return polygonContains(polygon, bounds.centerX, bounds.centerY)
+        if (!fullOnly) return polygonContains(polygon, bounds.centerX, bounds.centerY)
+        return polygonContains(polygon, bounds.left, bounds.top) && polygonContains(polygon, bounds.right, bounds.top) &&
+            polygonContains(polygon, bounds.right, bounds.bottom) && polygonContains(polygon, bounds.left, bounds.bottom)
     }
     val step = max(1, points.size / MAX_STROKE_SAMPLES)
     var tested = 0
@@ -90,7 +98,7 @@ private fun PageItem.isCaughtBy(polygon: FloatArray): Boolean {
         tested++
         if (polygonContains(polygon, points.x(i), points.y(i))) inside++
     }
-    return inside >= tested * STROKE_SELECT_FRACTION
+    return inside >= tested * (if (fullOnly) 1f else STROKE_SELECT_FRACTION)
 }
 
 /** A selection handle. The signs say which edges it drags: -1 left or top, 1 right or bottom, 0 neither. */

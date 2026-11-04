@@ -18,7 +18,9 @@ import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageBackground
+import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.EraseMode
+import app.betternotes.core.tools.ItemKind
 import app.betternotes.ui.MainActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -315,6 +317,47 @@ class CanvasViewTest {
         val edgeY = cy + 70f * onMain { canvas.resources.displayMetrics.density }
         drag(MotionEvent.TOOL_TYPE_STYLUS, cx - 100f to edgeY, cx + 100f to edgeY + 40f)
         assertTrue(onlyStroke().points.size > 2)
+    }
+
+    @Test
+    fun theLassoMovesAndResizesWhatItSelects() {
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        val before = onlyStroke()
+        onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = ALL_ITEM_KINDS, fullOnly = false) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(220f, 170f))
+        assertTrue(onMain { canvas.hasSelection })
+        assertEquals(1, pageContent().size)
+
+        // Inside the selection, away from its handles, so this moves it.
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(150f, 125f), worldToScreen(170f, 145f))
+        val moved = onlyStroke()
+        assertEquals(before.points.x(0) + 20f, moved.points.x(0), 0.5f)
+        assertEquals(before.points.y(0) + 20f, moved.points.y(0), 0.5f)
+        assertTrue(onMain { canvas.hasSelection })
+
+        onMain { canvas.undo() }
+        assertEquals(before.points.x(0), onlyStroke().points.x(0), 0f)
+        assertFalse(onMain { canvas.hasSelection })
+    }
+
+    @Test
+    fun theLassoIgnoresKindsSwitchedOff() {
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = setOf(ItemKind.IMAGE), fullOnly = false) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(220f, 170f))
+        assertFalse(onMain { canvas.hasSelection })
+    }
+
+    @Test
+    fun clearingThePageCanBeUndone() {
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        onMain { canvas.clearPage() }
+        assertEquals(0, pageContent().size)
+        onMain { canvas.undo() }
+        assertEquals(1, pageContent().size)
     }
 
     @Test

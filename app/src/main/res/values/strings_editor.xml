@@ -18,6 +18,7 @@
     <string name="editor_edit_color">Change this color</string>
     <string name="editor_tool_options">Tool options</string>
 
+    <string name="menu_delete_selection">Delete selection</string>
     <string name="menu_real_size">Zoom to real size</string>
     <string name="menu_theme">Switch light or dark theme</string>
     <string name="menu_scratch_kind">Switch scratch note or canvas</string>
@@ -49,6 +50,18 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="panel_size">Size</string>
+    <string name="panel_erase_entire">Erase entire object</string>
+    <string name="panel_erase_locked">Erase locked objects</string>
+    <string name="panel_auto_deselect">Auto deselect</string>
+    <string name="panel_erase_following">Erase the following</string>
+    <string name="panel_clear_page">Clear current page</string>
+    <string name="panel_freeform">Freeform</string>
+    <string name="panel_rectangle">Rectangle</string>
+    <string name="panel_select_locked">Select locked objects</string>
+    <string name="panel_take_screenshot">Take screenshot</string>
+    <string name="panel_full_selection">Full selection only</string>
+    <string name="panel_select_following">Select the following</string>
     <string name="panel_thickness">Thickness</string>
     <string name="panel_thinner">Thinner</string>
     <string name="panel_thicker">Thicker</string>
@@ -67,6 +80,8 @@
     <string name="panel_info">About this setting</string>
     <string name="panel_done">Done</string>
 
+    <string name="info_not_built_setting">Saved, but it does nothing yet.</string>
+    <string name="info_full_selection">Only selects items that are completely inside the selection.</string>
     <string name="info_hold_shape">Keep the pen still at the end of a stroke to turn it into a straight line.</string>
     <string name="info_scribble">Saved, but it does nothing yet.</string>
     <string name="info_circle">Saved, but it does nothing yet.</string>

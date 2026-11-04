@@ -36,7 +36,10 @@ import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.tools.EraseMode
+import app.betternotes.core.tools.DEFAULT_ERASABLE
 import app.betternotes.core.tools.EraseSession
+import app.betternotes.core.tools.ItemKind
+import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -46,10 +49,13 @@ import kotlin.math.roundToInt
 sealed interface CanvasTool {
     /** Holding the pen still for [holdToLineMs] turns the stroke into a straight line. 0 turns that off. */
     data class Ink(val style: InkStyle, val holdToLineMs: Int = 0) : CanvasTool
-    data class Eraser(val mode: EraseMode, val radiusPt: Float) : CanvasTool
+    data class Eraser(val mode: EraseMode, val radiusPt: Float, val kinds: Set<ItemKind> = DEFAULT_ERASABLE) : CanvasTool
 
     /** Shows where the pen is, with a fading tail, and leaves nothing on the page. */
     data object Laser : CanvasTool
+
+    /** Selects items and moves or resizes the selection. */
+    data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean) : CanvasTool
 }
 
 /** Reports what happens in the view, for the performance probe. */
@@ -119,6 +125,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
 
     var tool: CanvasTool = CanvasTool.Ink(InkStyle())
+        set(value) {
+            if (value !is CanvasTool.Lasso) lasso.clear()
+            field = value
+        }
 
     var inputMode: InputMode
         get() = recognizer.mode
@@ -224,6 +234,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var strokeEdge = Ruler.NO_EDGE
 
     private var laserPointer = -1
+    private var lassoPointer = -1
+
+    private val lasso by lazy {
+        LassoController(
+            viewport,
+            resources.displayMetrics.density,
+            { index -> layout?.originX(index) ?: 0f },
+            { index -> layout?.originY(index) ?: 0f },
+            { overlay.invalidate() },
+        )
+    }
 
     private class PendingStroke(val editor: NoteEditor, val pageId: Long, val style: InkStyle)
 
@@ -232,12 +253,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         addView(tiles, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        overlay.extraDraw = { canvas -> lasso.draw(canvas) }
         wet.addFinishedStrokesListener(this)
     }
 
     fun open(editor: NoteEditor) {
         close()
         this.editor = editor
+        lasso.open(editor)
         painter = PagePainter(editor)
         editor.onPageLoaded = ::redrawPage
         editor.onHistoryChanged = { onHistoryChanged() }
@@ -253,6 +276,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun close() {
         editor?.onPageLoaded = {}
         editor?.onHistoryChanged = {}
+        lasso.open(null)
         editor = null
         onHistoryChanged()
     }
@@ -274,12 +298,43 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         maskIsCurrent = false
     }
 
+    /** Removes what is selected, as one edit. */
+    fun deleteSelection() {
+        lasso.deleteSelection()
+        syncChanges()
+    }
+
+    val hasSelection get() = lasso.hasSelection
+
+    /**
+     * Clears the page at the middle of the view. On an infinite canvas it clears only what is showing,
+     * since there is no end to the rest.
+     */
+    fun clearPage() {
+        val editor = editor ?: return
+        val layout = layout ?: return
+        val page = editor.document.pages.getOrNull(currentPage) ?: return
+        val region = if (page.size != null) {
+            null
+        } else {
+            val world = viewport.visibleWorld(width, height)
+            val x = layout.originX(currentPage)
+            val y = layout.originY(currentPage)
+            Bounds(world.left - x, world.top - y, world.right - x, world.bottom - y)
+        }
+        lasso.clear()
+        clearEdit(page.id, editor.content(page.id), region)?.let { editor.perform(it) }
+        syncChanges()
+    }
+
     fun undo() {
+        lasso.clear()
         val done = editor?.undo() ?: return
         if (done) syncChanges()
     }
 
     fun redo() {
+        lasso.clear()
         val done = editor?.redo() ?: return
         if (done) syncChanges()
     }
@@ -466,8 +521,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val tool = tool
         if (kind == PointerKind.STYLUS_ERASER || tool is CanvasTool.Eraser) {
             val eraser = tool as? CanvasTool.Eraser ?: DEFAULT_ERASER
-            erase = EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt)
+            erase = EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt, kinds = eraser.kinds)
             eraseAt(x, y)
+        } else if (tool is CanvasTool.Lasso) {
+            lassoPointer = pointerId
+            editor.content(page.id)
+            lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly)
+            syncChanges()
         } else if (tool is CanvasTool.Ink) {
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
@@ -484,12 +544,22 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             overlay.laserMove(x, y)
             return
         }
+        if (pointerId == lassoPointer) {
+            lasso.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+            return
+        }
         if (erase != null) eraseAt(x, y)
     }
 
     override fun onDrawEnd(pointerId: Int) {
         if (pointerId == laserPointer) {
             laserPointer = -1
+            return
+        }
+        if (pointerId == lassoPointer) {
+            lassoPointer = -1
+            lasso.end()
+            syncChanges()
             return
         }
         strokeWaitingForEvent = false
@@ -515,6 +585,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             laserPointer = -1
             return
         }
+        if (pointerId == lassoPointer) {
+            lassoPointer = -1
+            lasso.cancel()
+            syncChanges()
+            return
+        }
         strokeWaitingForEvent = false
         val session = erase
         if (session != null) {
@@ -531,6 +607,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         pendingStrokes.remove(id)
         strokeId = null
     }
+
+    private fun pageX(screenX: Float, index: Int) = viewport.toWorldX(screenX) - (layout?.originX(index) ?: 0f)
+
+    private fun pageY(screenY: Float, index: Int) = viewport.toWorldY(screenY) - (layout?.originY(index) ?: 0f)
 
     private fun startWaitingStroke(event: MotionEvent) {
         strokeWaitingForEvent = false
@@ -730,6 +810,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         tiles.invalidate()
         onViewMoved()
+        if (lasso.hasSelection) overlay.invalidate()
     }
 
     override fun onTransformEnd() {

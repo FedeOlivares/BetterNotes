@@ -10,8 +10,9 @@ import app.betternotes.canvas.CanvasTool
 import app.betternotes.canvas.CanvasView
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.InkTool
-import app.betternotes.core.tools.EraseMode
+import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.InkPreset
+import app.betternotes.core.tools.LassoOptions
 
 /** The tools the strip can put in the pen's hand so far. */
 internal enum class ActiveTool(val ink: InkTool?) {
@@ -20,7 +21,10 @@ internal enum class ActiveTool(val ink: InkTool?) {
     HIGHLIGHTER(InkTool.HIGHLIGHTER),
     ERASER(null),
     LASER(null),
+    LASSO(null),
 }
+
+private val ActiveTool.hasPanel get() = ink != null || this == ActiveTool.ERASER || this == ActiveTool.LASSO
 
 /** What the color wheel's result is for. */
 internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE }
@@ -35,6 +39,10 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     private var drawingMode = InputMode.STYLUS_DRAW
 
     var activeTool by mutableStateOf(ActiveTool.PEN)
+        private set
+    var eraser by mutableStateOf(store.eraser())
+        private set
+    var lasso by mutableStateOf(store.lasso())
         private set
     var panelOpen by mutableStateOf(false)
     var toolRowCollapsed by mutableStateOf(false)
@@ -81,12 +89,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     fun select(tool: ActiveTool) {
         if (tool == activeTool) {
-            if (tool.ink != null) panelOpen = !panelOpen
+            if (tool.hasPanel) panelOpen = !panelOpen
             return
         }
         activeTool = tool
         colorTarget = null
-        if (tool.ink == null) panelOpen = false
+        if (!tool.hasPanel) panelOpen = false
         applyTool()
     }
 
@@ -97,8 +105,24 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         applyTool()
     }
 
+    fun updateEraser(change: (EraserOptions) -> EraserOptions) {
+        eraser = change(eraser)
+        applyTool()
+    }
+
+    fun updateLasso(change: (LassoOptions) -> LassoOptions) {
+        lasso = change(lasso)
+        applyTool()
+    }
+
+    fun clearPage() = canvas.clearPage()
+
+    fun deleteSelection() = canvas.deleteSelection()
+
     fun saveTools() {
         presets.values.forEach(store::save)
+        store.save(eraser)
+        store.save(lasso)
     }
 
     fun applyColor(color: Int) {
@@ -165,12 +189,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.tool = when {
             current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs)
             activeTool == ActiveTool.LASER -> CanvasTool.Laser
-            else -> CanvasTool.Eraser(EraseMode.PARTIAL, DEFAULT_ERASER_RADIUS_PT)
+            activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly)
+            else -> CanvasTool.Eraser(eraser.mode, eraser.radiusPt, eraser.kinds)
         }
     }
 
     private companion object {
-        const val DEFAULT_ERASER_RADIUS_PT = 6f
         val LASER_SCALES = floatArrayOf(0.5f, 1f, 1.6f)
     }
 }

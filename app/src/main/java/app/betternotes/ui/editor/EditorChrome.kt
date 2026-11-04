@@ -84,7 +84,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     val notices = rememberNotices()
     val preset = state.preset
 
-    LaunchedEffect(preset) {
+    LaunchedEffect(preset, state.eraser, state.lasso) {
         delay(SAVE_DELAY_MS)
         state.saveTools()
     }
@@ -111,6 +111,10 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                         ToolRow(state, preset, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.LASER) {
                         LaserRow(state, notices, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.ERASER) {
+                        EraserRow(state, state.eraser, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.LASSO) {
+                        LassoRow(state, state.lasso, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     }
                 }
             },
@@ -152,8 +156,13 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             .padding(top = panelTop, end = PanelEndMargin, bottom = PanelEndMargin)
         if (preset != null && state.colorTarget != null) {
             ColorWheelPanel(state, preset, panelModifier.masksInk(state, "wheel"))
-        } else if (preset != null && state.panelOpen) {
-            InkPanel(state, preset, notices, panelModifier.masksInk(state, "panel"))
+        } else if (state.panelOpen) {
+            val sheet = panelModifier.masksInk(state, "panel")
+            when {
+                preset != null -> InkPanel(state, preset, notices, sheet)
+                state.activeTool == ActiveTool.ERASER -> EraserPanel(state, state.eraser, notices, sheet)
+                state.activeTool == ActiveTool.LASSO -> LassoPanel(state, state.lasso, notices, sheet)
+            }
         }
     }
 }
@@ -175,7 +184,7 @@ private class StripItem(val icon: ImageVector, val label: Int, val tool: ActiveT
 /** In the order of the owner's screenshots. */
 private val StripItems by lazy {
     listOf(
-        StripItem(EditorIcons.Lasso, R.string.tool_lasso),
+        StripItem(EditorIcons.Lasso, R.string.tool_lasso, ActiveTool.LASSO),
         StripItem(EditorIcons.Pen, R.string.tool_pen, ActiveTool.PEN),
         StripItem(EditorIcons.Pencil, R.string.tool_pencil, ActiveTool.PENCIL),
         StripItem(EditorIcons.Highlighter, R.string.tool_highlighter, ActiveTool.HIGHLIGHTER),
@@ -263,6 +272,10 @@ private fun RightPill(state: EditorState, actions: EditorActions, modifier: Modi
         Box {
             ToolbarIcon(EditorIcons.More, stringResource(R.string.editor_more), onClick = { menuOpen = true })
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                MenuEntry(R.string.menu_delete_selection) {
+                    menuOpen = false
+                    state.deleteSelection()
+                }
                 MenuEntry(R.string.menu_real_size) {
                     menuOpen = false
                     actions.onZoomToRealSize()
