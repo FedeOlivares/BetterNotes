@@ -178,8 +178,9 @@
     <string name="brush_spill">Spill</string>
     <string name="brush_watercolor">Watercolor</string>
     <string name="brush_comics">Comics</string>
-    <string name="brush_scratches">Scratches</string>
+    <string name="brush_stripes">Stripes</string>
     <string name="brush_dots">Dots</string>
+    <string name="brush_single_dots">Single dots</string>
     <string name="brush_leaves">Leaves</string>
     <string name="brush_cross">Cross</string>
     <string name="brush_glow">Glow</string>

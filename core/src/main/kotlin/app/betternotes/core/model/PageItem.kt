@@ -35,7 +35,7 @@ enum class PenType { NATURAL, BALL, CALLIGRAPHY }
 enum class TipShape { ROUND, SQUARE }
 
 /** The kinds of the creative brush, which is what the pencil slot of the toolbar holds. */
-enum class BrushKind { PENCIL, OIL, SPILL, WATERCOLOR, COMICS, SCRATCHES, DOTS, LEAVES, CROSS, GLOW }
+enum class BrushKind { PENCIL, OIL, SPILL, WATERCOLOR, COMICS, STRIPES, DOTS, LEAVES, CROSS, GLOW, SINGLE_DOTS }
 
 /** [color] is ARGB, and [opacity] multiplies its alpha. [width] is the widest the line can get, in points. */
 data class InkStyle(

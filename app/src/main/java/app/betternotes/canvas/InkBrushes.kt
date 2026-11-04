@@ -120,15 +120,17 @@ internal object InkBrushes {
                 },
             )
             BrushKind.SPILL -> brushFamily(
-                tip {
-                    setCornerRounding(1f)
-                    setScaleX(0.3f)
-                    setScaleY(0.3f)
-                    setParticleGapDistanceScale(0.5f)
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.3f, 1.6f, noise(5, 0.05f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -1.2f, 1.2f, noise(6, 0.05f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -1.2f, 1.2f, noise(7, 0.05f)))
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.4f, 1f, noise(8, 0.07f)))
+                *Array(2) { c ->
+                    tip {
+                        setCornerRounding(1f)
+                        setScaleX(0.4f)
+                        setScaleY(0.4f)
+                        setParticleGapDistanceScale(0.2f)
+                        addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.2f, 1.7f, noise(5 + c, 0.05f)))
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -1.5f, 1.5f, noise(6 + c, 0.04f)))
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -1.5f, 1.5f, noise(7 + c, 0.04f)))
+                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.4f, 1f, noise(8 + c, 0.07f)))
+                    }
                 },
             )
             BrushKind.WATERCOLOR -> brushFamily(
@@ -147,7 +149,7 @@ internal object InkBrushes {
                 },
             )
             // Parallel dotted lines of different weight.
-            BrushKind.SCRATCHES -> brushFamily(
+            BrushKind.STRIPES -> brushFamily(
                 *lanes(-0.5f, 0.5f, 0.2f) { lane, i ->
                     setScaleY(0.05f + 0.02f * (i % 3))
                     setScaleX(0.1f)
@@ -156,7 +158,21 @@ internal object InkBrushes {
                     addBehavior(lane)
                 },
             )
+            // A speckle cloud: tiny dots thrown wide of the line, two coats for density.
             BrushKind.DOTS -> brushFamily(
+                *Array(2) { c ->
+                    tip {
+                        setCornerRounding(1f)
+                        setScaleX(0.06f)
+                        setScaleY(0.06f)
+                        setParticleGapDistanceScale(0.12f)
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -1.5f, 1.5f, noise(40 + c, 0.01f)))
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -1.5f, 1.5f, noise(42 + c, 0.01f)))
+                        addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.3f, 1.8f, noise(44 + c, 0.02f)))
+                    }
+                },
+            )
+            BrushKind.SINGLE_DOTS -> brushFamily(
                 tip {
                     setCornerRounding(1f)
                     setScaleX(0.22f)
@@ -182,20 +198,23 @@ internal object InkBrushes {
                 tip {
                     setCornerRounding(0f)
                     setScaleX(0.9f)
-                    setScaleY(0.025f)
-                    setParticleGapDistanceScale(0.12f)
+                    setScaleY(0.06f)
+                    setParticleGapDistanceScale(0.08f)
                     addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(17, 0.02f)))
                     addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.8f, 0.8f, noise(19, 0.03f)))
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1.4f, noise(18, 0.04f)))
                 },
             )
-            // A wide, faint stroke under a normal one.
+            // Layers from a wide faint halo down to the core, so the colour fades into the glow.
             BrushKind.GLOW -> brushFamily(
-                tip {
-                    setCornerRounding(1f)
-                    setScaleX(2.6f)
-                    setScaleY(2.6f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.3f, ConstantNode(1f)))
+                *Array(6) { i ->
+                    tip {
+                        setCornerRounding(1f)
+                        val scale = 3f - 0.4f * i
+                        setScaleX(scale)
+                        setScaleY(scale)
+                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.16f, ConstantNode(1f)))
+                    }
                 },
                 tip { setCornerRounding(1f) },
             )
