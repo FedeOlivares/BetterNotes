@@ -86,6 +86,17 @@ internal object InkBrushes {
         .setInputModel(BrushFamily.InputModel.SlidingWindowModel())
         .build()
 
+    /** One tip per lane, from [from] to [to] in multiples of the brush size; the lane offset is passed in. */
+    private fun lanes(from: Float, to: Float, step: Float, build: BrushTip.Builder.(BrushBehavior, Int) -> Unit): Array<BrushTip> {
+        val count = Math.round((to - from) / step) + 1
+        return Array(count) { i ->
+            val offset = from + i * step
+            // A constant input v maps to lerp(from, to, v), so (offset + 1) / 2 gives the offset on -1..1.
+            val lane = vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, ConstantNode((offset + 1f) / 2f))
+            BrushTip.builder().apply { build(lane, i) }.build()
+        }
+    }
+
     private fun tip(build: BrushTip.Builder.() -> Unit) = BrushTip.builder().apply(build).build()
 
     private val creative = ConcurrentHashMap<BrushKind, BrushFamily>()
@@ -99,13 +110,13 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.8f, 1.05f, noise(2, 0.5f)))
                 },
             )
+            // Bristle streaks: thin parallel lanes of uneven opacity.
             BrushKind.OIL -> brushFamily(
-                tip {
+                *lanes(-0.45f, 0.45f, 0.15f) { lane, i ->
                     setCornerRounding(0.3f)
-                    setScaleY(0.6f)
-                    setRotationDegrees(20f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 1f, noise(3, 0.12f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.08f, 0.08f, noise(4, 0.2f)))
+                    setScaleY(0.2f)
+                    addBehavior(lane)
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.4f, 1f, noise(30 + i, 0.15f)))
                 },
             )
             BrushKind.SPILL -> brushFamily(
@@ -135,14 +146,14 @@ internal object InkBrushes {
                     addBehavior(aimedAtDirection())
                 },
             )
+            // Parallel dotted lines of different weight.
             BrushKind.SCRATCHES -> brushFamily(
-                tip {
-                    setScaleY(0.06f)
+                *lanes(-0.5f, 0.5f, 0.2f) { lane, i ->
+                    setScaleY(0.05f + 0.02f * (i % 3))
+                    setScaleX(0.1f)
                     setCornerRounding(0.5f)
-                    setParticleGapDistanceScale(0.35f)
-                    addBehavior(aimedAtDirection())
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.7f, 0.7f, noise(11, 0.06f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.3f, 1.2f, noise(12, 0.08f)))
+                    setParticleGapDistanceScale(0.4f)
+                    addBehavior(lane)
                 },
             )
             BrushKind.DOTS -> brushFamily(
@@ -166,15 +177,16 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.5f, 0.5f, noise(16, 0.07f)))
                 },
             )
+            // Thin straight needles at random angles.
             BrushKind.CROSS -> brushFamily(
                 tip {
                     setCornerRounding(0f)
-                    setScaleX(0.12f)
-                    setScaleY(0.12f)
-                    setRotationDegrees(45f)
-                    setParticleGapDistanceScale(0.9f)
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.6f, 0.6f, noise(17, 0.05f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.6f, 1.4f, noise(18, 0.06f)))
+                    setScaleX(0.9f)
+                    setScaleY(0.025f)
+                    setParticleGapDistanceScale(0.12f)
+                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(17, 0.02f)))
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.8f, 0.8f, noise(19, 0.03f)))
+                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1.4f, noise(18, 0.04f)))
                 },
             )
             // A wide, faint stroke under a normal one.
@@ -183,7 +195,7 @@ internal object InkBrushes {
                     setCornerRounding(1f)
                     setScaleX(2.6f)
                     setScaleY(2.6f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.3f, 0.3f, ConstantNode(1f)))
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.3f, ConstantNode(1f)))
                 },
                 tip { setCornerRounding(1f) },
             )
