@@ -202,13 +202,15 @@ Checked on 2026-11-03.
 - ML Kit digital-ink-recognition 19.0.0
 
 ## 6. Current project state
-Location: `D:\code\better-notes`, a local git repository with no remote. **The foundation and `:core` build on the PC and `:core`'s unit tests pass; nothing has run on a device or emulator yet.**
+Location: `D:\code\better-notes`, a local git repository with no remote. **The foundation, `:core` and the canvas build and pass their tests on the PC and on an x86_64 phone emulator (API 37). Nothing has run on the Pad 7 yet, so no performance number below comes from it.**
 
 ### Build and test
 `java` is not on PATH, so set `JAVA_HOME` to `D:\Android\Android Studio\jbr` before calling `gradlew` directly. `scripts\check.ps1` does this for you.
 - All checks (unit tests, lint, debug and release builds): `.\scripts\check.ps1`
 - Core unit tests: `.\gradlew.bat :core:test`
 - Debug APK: `.\gradlew.bat :app:assembleDebug`
+- Canvas tests on a connected device or emulator: `.\gradlew.bat :app:connectedDebugAndroidTest`
+- Measure on a device: `.\scripts\measure-device.ps1 [-Serial <serial>] [-Strokes 3000] [-HandSeconds 60]`
 
 Toolchain in use: Gradle 9.6.0 with a pinned checksum, AGP 9.5.0, Kotlin 2.4.21, JDK 25 (JBR) targeting Java 17. `local.properties` is git-ignored and holds the SDK path.
 
@@ -217,7 +219,7 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 
 ### Files that exist
 - Gradle config and wrapper, `.gitignore`, `.gitattributes`, `scripts/check.ps1`
-- `app/`: manifest, `strings.xml`, and a placeholder `MainActivity` that requests the highest refresh rate and shows a text label
+- `app/`: the canvas, the measuring tools, and a temporary way in. See "Canvas" below.
 - `core/` (`app.betternotes.core`), pure Kotlin with JVM tests. See "Core" below.
 - `reference/notewise/`: the owner's screenshots (git-ignored)
 
@@ -225,7 +227,11 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
-- The ink engine and all real UI do not exist yet. `:core` has only run on the desktop JVM, not on Android.
+- All real UI is still missing. `DevChrome` is a plain stand-in for the toolbars, with no reference to match, and `MainActivity` opens a scratch note or canvas until the library exists.
+- The canvas paints only strokes and the page background. Shapes, images, text, sticky notes, tables, recordings and PDF pages are in the model but are not drawn yet.
+- The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
+- Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
+- `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
 
 ### Core
 - `geometry`: bounds, affine, rotated `Frame`, convex clipping (`Capsule`, `RectClipper`), units, viewport.
@@ -243,6 +249,24 @@ Choices in `:core` that have no reference and may need the owner's input:
 - The guitar layout is 6-line tablature. Cornell and legal proportions, template colors and gesture timings are defaults chosen without a reference.
 - Stroke samples are stored uncompressed, favoring load speed over disk use (24 bytes per sample).
 - Library folders are not in `:core` yet; the library workstream adds them.
+
+### Canvas
+In `app/.../canvas/`:
+- `CanvasView`: the drawing surface. Touches go to `GestureRecognizer`. The stroke in progress goes through androidx.ink's `InProgressStrokesView`, with motion prediction and unbuffered dispatch. Also handles pan, pinch, fling and the eraser.
+- `TileLayerView`: finished content as 512 px tiles, each a `RenderNode` with a GPU layer, in a fixed square of slots. Moving the page only composites textures and rasterizes the tiles it uncovers. During a pinch the tiles stretch, and they redraw past a set stretch and when the fingers lift.
+- `PagePainter`: paints paper, template and items into a tile. New item types go in `paintItems`.
+- `NoteEditor`: the open document on the main thread, with disk work and meshing on one background thread. Meshing a page uses all cores. Saves 1 s after the last edit, and on `onStop`.
+- `StrokeCache` and `InkBrushes`: ink meshes per `StrokeItem`, and `InkStyle` to `Brush`, with stock brushes pinned to a version.
+
+`DocumentLayout` and `TileGrid` in `:core` hold the math. Stroke coordinates are the page's own points. `app/.../perf/` holds `PerfProbe` (logcat tag `BetterNotesPerf`, debug and profile builds) and `CanvasBenchmark`. Time things on the `profile` build type, which runs like a release.
+
+Choices in the canvas that have no reference and may need the owner's input:
+- A stroke that starts off a page, in the gap or margin, is ignored. Ink past the page's edge is clipped.
+- Page gap 12 pt, margin around the document 24 dp, backdrop color near-black, tile redraw at stretches past 0.6x and 1.6x.
+- A note at 100% wider than the screen opens at its top-left corner.
+- The infinite canvas stops about 18 m from the origin in each direction, to keep float coordinates accurate at 1500%.
+- The stylus's eraser end erases partially, with a 6 pt radius.
+- Calligraphy is a flat 45-degree nib, and a square tip ignores pressure.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 
