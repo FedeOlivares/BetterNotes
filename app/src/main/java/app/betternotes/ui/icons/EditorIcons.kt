@@ -36,16 +36,34 @@ internal object EditorIcons {
                 "M5 10V3 M3 5l2-2 2 2 M3 8l2 2 2-2",
         )
     }
-    val Pen by lazy { line("pen", "M4 20l1.5-5.5L16 4a2.1 2.1 0 0 1 3 0l1 1a2.1 2.1 0 0 1 0 3L9.5 18.5z M14 6l4 4") }
+    val Pen by lazy { line("pen", "M4 20l1.2-4.6L16.6 4a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z") }
     val Pencil by lazy {
-        line("pencil", "M4 20l1.2-5L15.5 4.7a1.8 1.8 0 0 1 2.5 0l1.8 1.8a1.8 1.8 0 0 1 0 2.5L9.5 19.2z M5.2 15l4.3 4.2 M13.5 6.7l3.8 3.8")
+        line("pencil", "M12 11.5L18.2 4a1.8 1.8 0 0 1 2.6 2.6L13.5 13 M12 11.5l1.5 1.5c.4 3-2.4 6.5-9.5 7 1.6-1.6 2-3.2 2.2-4.6.3-2.3 3.2-4.6 5.8-3.9z")
     }
-    val Highlighter by lazy { line("highlighter", "M9 13l6.5-9.5 5 3.5L14 16.5 M9 13l5 3.5-2.5 2.5-4.5-3z M7 16l-3 4h5l1.5-1.5") }
-    val Eraser by lazy { line("eraser", "M8.5 20L3.8 15.3a1.8 1.8 0 0 1 0-2.6L12.5 4a1.8 1.8 0 0 1 2.6 0l5 5a1.8 1.8 0 0 1 0 2.6L11.7 20z M8 8.5l7.5 7.5 M8.5 20H21") }
-    val Lasso by lazy { line("lasso", "M6 15C3.5 13.5 3 11.5 3 10c0-3.9 4-6.5 9-6.5s9 2.6 9 6.5-4 6.5-9 6.5c-1 0-2-.1-3-.3 M6 15a2.2 2.2 0 1 0 3 1.2 M7.2 17.5c0 1.5-.5 2.5-1.7 3.5") }
-    val Shapes by lazy { line("shapes", rrect(3.5f, 11.5f, 9f, 9f, 1.5f) + "M17 3.5l4 7h-8z M16.5 14.5a3 3 0 1 0 .01 0") }
+    val Highlighter by lazy {
+        line("highlighter", "M5.5 14.5L16 4a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L9.5 18.5z M5.5 14.5L4 20l5.5-1.5 M13.5 6.5l4 4")
+    }
+    val Eraser by lazy {
+        line("eraser", "M3.9 15l10.6-10.6a2 2 0 0 1 2.8 0l2.8 2.8a2 2 0 0 1 0 2.8L9.5 20.6a2 2 0 0 1-2.8 0l-2.8-2.8a2 2 0 0 1 0-2.8z M8.5 10.5l5.5 5.5")
+    }
+    val Lasso by lazy {
+        line("lasso", dashedArc() + "M8.5 15.5a2.6 2.6 0 1 1-2.7-2.4c1 0 2.2.5 2.7 2.4zM8.5 15.5c.3 1.9-.6 3.8-2.5 5")
+    }
+    val Shapes by lazy {
+        line("shapes", rrect(3.5f, 8f, 9.5f, 9.5f, 1.5f) + "M12.5 3a5 5 0 0 1 5 5 M13 16.5L17 9.5l4.5 11h-9z")
+    }
+    /** The tagged strip between the eraser and the shapes. What it does is unconfirmed. */
+    val Tape by lazy { line("tape", "M4.2 13.8L13.8 4.2l2 2 1.5-1 1.5 1.5-1 1.5 2 2-9.6 9.6-2-2-1.5 1-1.5-1.5 1-1.5z") }
+    val Text by lazy { line("text", rrect(3.5f, 3.5f, 17f, 17f, 2.5f) + "M8 8.5h8 M12 8.5v8 M10.3 16.5h3.4") }
+    val Sticker by lazy {
+        line("sticker", "M12 3a9 9 0 1 0 9 9c-1 3-3 5-5.5 6.5 M8 14.5c1 2.2 5 3 7.5 0 M9 9.5v.2 M15 9.5v.2 M21 12c-2.5-.5-5 .5-5.5 6.5")
+    }
+    val AddElement by lazy { line("add-element", rrect(3.5f, 4f, 9f, 7f, 1.5f) + rrect(3.5f, 14f, 17f, 6f, 1.5f) + "M18 4.5v6 M15 7.5h6") }
+    val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
+    val Insert by lazy { line("insert", rrect(4f, 4f, 16f, 16f, 2.5f) + "M12 8v8 M8 12h8") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }
     val Camera by lazy { line("camera", "M4 7.5h3.5L9 5h6l1.5 2.5H20a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18V9A1.5 1.5 0 0 1 4 7.5z M12 9.8a3.5 3.5 0 1 0 .01 0") }
+    val StickyNote by lazy { line("sticky", "M6 3.5h12A2.5 2.5 0 0 1 20.5 6v8l-6.5 6.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5z M20.5 14H16a2 2 0 0 0-2 2v4.5") }
     val Table by lazy { line("table", rrect(3f, 5f, 18f, 14f, 2.5f) + "M3 10h18 M3 14.5h18 M12 10v9") }
     val Tray by lazy { line("tray", rrect(3f, 6.5f, 18f, 13.5f, 3f) + "M6 6.5V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1.5 M8 13c1.5-3 2.5-3 3 0s2 3 3 0 1.5-2 2-1") }
     val StickyAdd by lazy { line("sticky-add", rrect(4f, 4f, 9f, 7f, 1.5f) + rrect(4f, 14f, 16f, 6f, 1.5f) + "M18 4v6 M15 7h6") }
@@ -106,6 +124,16 @@ internal object EditorIcons {
         }
     }
 
+    /** A circle of dashes, open at the lower left for the lasso's loop. */
+    private fun dashedArc(): String = buildString {
+        for (k in 0 until LASSO_DASHES) {
+            val from = (LASSO_START_DEGREES + k * LASSO_STEP_DEGREES) * DEGREES_TO_RADIANS
+            val to = (LASSO_START_DEGREES + (k + 1) * LASSO_STEP_DEGREES - DASH_GAP_DEGREES) * DEGREES_TO_RADIANS
+            append("M${13f + 8f * cos(from)} ${10.5f + 8f * sin(from)}")
+            append("A8 8 0 0 1 ${13f + 8f * cos(to)} ${10.5f + 8f * sin(to)} ")
+        }
+    }
+
     private fun gear(): String = buildString {
         val step = 360f / GEAR_TEETH
         for (k in 0 until GEAR_TEETH) {
@@ -127,6 +155,9 @@ internal object EditorIcons {
     private const val STROKE_WIDTH = 1.7f
     private const val DASHES = 8
     private const val DASH_GAP_DEGREES = 8f
+    private const val LASSO_DASHES = 5
+    private const val LASSO_START_DEGREES = 170f
+    private const val LASSO_STEP_DEGREES = 58f
     private const val GEAR_TEETH = 8
     private const val GEAR_INNER = 7.2f
     private const val GEAR_OUTER = 9.4f

@@ -6,6 +6,8 @@
     <string name="editor_page_grid">All pages</string>
     <string name="editor_page_stack">Page switcher</string>
     <string name="editor_chevrons">Previous or next page</string>
+    <string name="editor_previous_page">Previous page</string>
+    <string name="editor_next_page">Next page</string>
     <string name="editor_undo">Undo</string>
     <string name="editor_redo">Redo</string>
     <string name="editor_finger_mode">Finger mode</string>
@@ -26,6 +28,10 @@
     <string name="tool_highlighter">Highlighter</string>
     <string name="tool_eraser">Eraser</string>
     <string name="tool_lasso">Lasso</string>
+    <string name="tool_tape">Tape</string>
+    <string name="tool_text">Text</string>
+    <string name="tool_sticker">Sticker</string>
+    <string name="tool_add_element">Add element</string>
     <string name="tool_shapes">Shapes</string>
     <string name="tool_image">Image</string>
     <string name="tool_camera">Photo</string>

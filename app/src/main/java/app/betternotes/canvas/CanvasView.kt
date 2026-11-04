@@ -37,14 +37,19 @@ import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.EraseSession
+import app.betternotes.core.tools.Ruler
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
-/** What the stylus does: lay down ink, or erase. */
+/** What the stylus does: lay down ink, erase, or point. */
 sealed interface CanvasTool {
     /** Holding the pen still for [holdToLineMs] turns the stroke into a straight line. 0 turns that off. */
     data class Ink(val style: InkStyle, val holdToLineMs: Int = 0) : CanvasTool
     data class Eraser(val mode: EraseMode, val radiusPt: Float) : CanvasTool
+
+    /** Shows where the pen is, with a fading tail, and leaves nothing on the page. */
+    data object Laser : CanvasTool
 }
 
 /** Reports what happens in the view, for the performance probe. */
@@ -64,6 +69,39 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Called whenever the zoom changes. */
     var onZoomChanged: (zoom: Float) -> Unit = {}
+
+    /** Called whenever the page moves under the view, for the page and zoom indicator. */
+    var onViewMoved: () -> Unit = {}
+
+    /** The page at the middle of the view, counting from 0. */
+    val currentPage: Int
+        get() {
+            val layout = layout ?: return 0
+            if (width == 0) return 0
+            val index = layout.pageIndexAt(viewport.toWorldX(width / 2f), viewport.toWorldY(height / 2f))
+            return if (index >= 0) index else lastCurrentPage
+        }
+
+    val pageCount get() = editor?.document?.pages?.size ?: 0
+
+    /** How thick the laser's tail is, relative to its middle setting. */
+    var laserScale: Float
+        get() = overlay.laserScale
+        set(value) {
+            overlay.laserScale = value
+        }
+
+    /** Brings a page to the view at the current zoom. */
+    fun goToPage(index: Int) {
+        val layout = layout ?: return
+        if (index !in 0 until pageCount || width == 0) return
+        stopFling()
+        lastCurrentPage = index
+        layout.moveToPage(viewport, index, width, height, pageMarginPx)
+        clampPan()
+        settlePan()
+        onViewMoved()
+    }
 
     /** Called whenever [canUndo] or [canRedo] may have changed. */
     var onHistoryChanged: () -> Unit = {}
@@ -95,6 +133,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             rebuildLayout()
         }
 
+    /** A ruler over the page, which two fingers on it can move and which strokes near its edges follow. */
+    var rulerVisible: Boolean
+        get() = overlay.ruler != null
+        set(value) {
+            if (value == rulerVisible) return
+            overlay.ruler = if (value) newRuler() else null
+            draggingRuler = false
+        }
+
     internal var observer: CanvasObserver? = null
         set(value) {
             field = value
@@ -107,9 +154,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var layout: DocumentLayout? = null
     private var layoutVersion = -1L
     private var hasPlacedPage = false
+    private var lastCurrentPage = 0
 
     private val tiles = TileLayerView(context, viewport, ::paintTile, backdropColor)
     private val wet = InProgressStrokesView(context)
+    private val overlay = CanvasOverlayView(context, viewport)
     private val predictor = MotionEventPredictor.newInstance(this)
     private val recognizer = GestureRecognizer(
         GestureConfig(touchSlopPx = ViewConfiguration.get(context).scaledTouchSlop.toFloat()),
@@ -137,6 +186,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             viewport.panX = scroller.currX.toFloat()
             viewport.panY = scroller.currY.toFloat()
             tiles.invalidate()
+            onViewMoved()
             postOnAnimation(this)
         }
     }
@@ -166,12 +216,22 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private val pageToScreen = Matrix()
     private val holdCheck = Runnable { checkHold() }
 
+    // The ruler's two-finger move, and the edge a stroke is following.
+    private var draggingRuler = false
+    private var waitingForAllUp = false
+    private var rulerFinger0 = -1
+    private var rulerFinger1 = -1
+    private var strokeEdge = Ruler.NO_EDGE
+
+    private var laserPointer = -1
+
     private class PendingStroke(val editor: NoteEditor, val pageId: Long, val style: InkStyle)
 
     init {
         setBackgroundColor(backdropColor)
         addView(tiles, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         wet.addFinishedStrokesListener(this)
     }
 
@@ -252,6 +312,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         observer?.onTouch(event)
+        if (handleRulerTouch(event)) return true
         currentEvent = event
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_DOWN) {
@@ -324,9 +385,76 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
+    // ---- The ruler ----
+
+    private fun newRuler(): Ruler {
+        val density = resources.displayMetrics.density
+        return Ruler(
+            centerX = width / 2f,
+            centerY = height / 2f,
+            length = hypot(width.toFloat(), height.toFloat()) * RULER_LENGTH_OF_DIAGONAL,
+            thickness = RULER_THICKNESS_DP * density,
+        )
+    }
+
+    /**
+     * Two fingers landing on the ruler pick it up, and the page never hears of them again: what the
+     * recognizer took for a pan or a tap so far is cancelled. Returns true if the ruler used the event.
+     */
+    private fun handleRulerTouch(event: MotionEvent): Boolean {
+        val ruler = overlay.ruler
+        val action = event.actionMasked
+        if (waitingForAllUp) {
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) waitingForAllUp = false
+            return true
+        }
+        if (ruler == null) return false
+        if (!draggingRuler) {
+            if (action != MotionEvent.ACTION_POINTER_DOWN || event.pointerCount != 2 || !bothFingersOn(ruler, event)) {
+                return false
+            }
+            for (i in 0 until event.pointerCount) recognizer.pointerCancel(event.getPointerId(i), event.eventTime)
+            rulerFinger0 = event.getPointerId(0)
+            rulerFinger1 = event.getPointerId(1)
+            ruler.grab(event.getX(0), event.getY(0), event.getX(1), event.getY(1))
+            draggingRuler = true
+            return true
+        }
+        when (action) {
+            MotionEvent.ACTION_MOVE -> {
+                val i0 = event.findPointerIndex(rulerFinger0)
+                val i1 = event.findPointerIndex(rulerFinger1)
+                if (i0 >= 0 && i1 >= 0) {
+                    ruler.drag(event.getX(i0), event.getY(i0), event.getX(i1), event.getY(i1))
+                    overlay.invalidate()
+                }
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                draggingRuler = false
+                waitingForAllUp = true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> draggingRuler = false
+        }
+        return true
+    }
+
+    private fun bothFingersOn(ruler: Ruler, event: MotionEvent): Boolean {
+        val margin = RULER_GRAB_MARGIN_DP * resources.displayMetrics.density
+        for (i in 0 until event.pointerCount) {
+            if (event.getToolType(i) != MotionEvent.TOOL_TYPE_FINGER) return false
+            if (!ruler.contains(event.getX(i), event.getY(i), margin)) return false
+        }
+        return true
+    }
+
     // ---- Drawing ----
 
     override fun onDrawStart(pointerId: Int, kind: PointerKind, x: Float, y: Float) {
+        if (tool is CanvasTool.Laser && kind != PointerKind.STYLUS_ERASER) {
+            laserPointer = pointerId
+            overlay.laserStart(x, y)
+            return
+        }
         val editor = editor ?: return
         val layout = layout ?: return
         val index = layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
@@ -343,6 +471,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         } else if (tool is CanvasTool.Ink) {
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
+            val reach = RULER_EDGE_REACH_DP * resources.displayMetrics.density
+            strokeEdge = overlay.ruler?.edgeNear(x, y, reach) ?: Ruler.NO_EDGE
             // A stroke that starts when a tap times out has no event yet, and ink needs one.
             val event = currentEvent
             if (event != null) startStroke(event) else strokeWaitingForEvent = true
@@ -350,10 +480,18 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawMove(pointerId: Int, x: Float, y: Float) {
+        if (pointerId == laserPointer) {
+            overlay.laserMove(x, y)
+            return
+        }
         if (erase != null) eraseAt(x, y)
     }
 
     override fun onDrawEnd(pointerId: Int) {
+        if (pointerId == laserPointer) {
+            laserPointer = -1
+            return
+        }
         strokeWaitingForEvent = false
         val session = erase
         if (session != null) {
@@ -373,6 +511,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawCancel(pointerId: Int) {
+        if (pointerId == laserPointer) {
+            laserPointer = -1
+            return
+        }
         strokeWaitingForEvent = false
         val session = erase
         if (session != null) {
@@ -384,6 +526,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val id = strokeId ?: return
         removeCallbacks(holdCheck)
         straightening = false
+        strokeEdge = Ruler.NO_EDGE
         wet.cancelStroke(id, currentEvent)
         pendingStrokes.remove(id)
         strokeId = null
@@ -404,6 +547,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         screenToPage.postScale(1f / scale, 1f / scale)
         screenToPage.postTranslate(-layout.originX(drawPageIndex), -layout.originY(drawPageIndex))
         updateWetMask(layout, drawPageIndex)
+        if (strokeEdge != Ruler.NO_EDGE) {
+            startStrokeAlongRuler(event, editor, page.id)
+            return
+        }
         val id = wet.startStroke(event, drawPointerId, InkBrushes.brush(drawStyle), screenToPage)
         pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle)
         strokeId = id
@@ -416,7 +563,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val id = strokeId ?: return
         // A stroke that started partway through this event already has its latest sample.
         if (strokeStartedInThisEvent) return
-        if (holdDelayMs > 0L) {
+        if (holdDelayMs > 0L || straightening) {
             val index = event.findPointerIndex(drawPointerId)
             if (index >= 0) hold.move(event.getX(index), event.getY(index), event.eventTime)
         }
@@ -430,6 +577,27 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     // ---- Holding the pen still to draw a straight line ----
+
+    /** A stroke that starts by a ruler's edge runs along the edge, wherever the pen wanders. */
+    private fun startStrokeAlongRuler(event: MotionEvent, editor: NoteEditor, pageId: Long) {
+        val index = event.findPointerIndex(drawPointerId)
+        val ruler = overlay.ruler
+        if (index < 0 || ruler == null) return
+        val x = event.getX(index)
+        val y = event.getY(index)
+        hold.start(x, y, event.eventTime)
+        strokeStartMs = event.eventTime
+        val start = floatArrayOf(ruler.projectX(x, y, strokeEdge), ruler.projectY(x, y, strokeEdge))
+        screenToPage.mapPoints(start)
+        strokeStartX = start[0]
+        strokeStartY = start[1]
+        screenToPage.invert(pageToScreen)
+        val id = wet.startStroke(strokeInput(strokeStartX, strokeStartY, 0L), InkBrushes.brush(drawStyle), pageToScreen)
+        pendingStrokes[id] = PendingStroke(editor, pageId, drawStyle)
+        strokeId = id
+        straightening = true
+        strokeStartedInThisEvent = true
+    }
 
     private fun watchForHold(event: MotionEvent) {
         val index = event.findPointerIndex(drawPointerId)
@@ -479,12 +647,19 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private fun finishStraightStroke(event: MotionEvent, id: InProgressStrokeId) {
         val index = event.findPointerIndex(drawPointerId)
         if (index >= 0) hold.move(event.getX(index), event.getY(index), event.eventTime)
+        val end = currentLineEnd(event.eventTime)
         straightening = false
-        wet.finishStroke(currentLineEnd(event.eventTime), id)
+        strokeEdge = Ruler.NO_EDGE
+        wet.finishStroke(end, id)
     }
 
     private fun currentLineEnd(timeMs: Long): StrokeInput {
-        val end = floatArrayOf(hold.x, hold.y)
+        val ruler = overlay.ruler
+        val end = if (strokeEdge != Ruler.NO_EDGE && ruler != null) {
+            floatArrayOf(ruler.projectX(hold.x, hold.y, strokeEdge), ruler.projectY(hold.x, hold.y, strokeEdge))
+        } else {
+            floatArrayOf(hold.x, hold.y)
+        }
         screenToPage.mapPoints(end)
         return strokeInput(end[0], end[1], (timeMs - strokeStartMs).coerceAtLeast(1L))
     }
@@ -554,6 +729,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         clampPan()
         tiles.invalidate()
+        onViewMoved()
     }
 
     override fun onTransformEnd() {
@@ -695,6 +871,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         /** How far a held pen can wander and still count as still. */
         const val HOLD_SLOP_DP = 3f
         const val MIN_HOLD_CHECK_MS = 8L
+
+        /** Long enough to cross the screen at any angle, wherever two fingers carry it. */
+        const val RULER_LENGTH_OF_DIAGONAL = 3f
+        const val RULER_THICKNESS_DP = 140f
+        const val RULER_GRAB_MARGIN_DP = 12f
+
+        /** How close to a ruler's edge a stroke must start to run along it. */
+        const val RULER_EDGE_REACH_DP = 14f
         const val STRAIGHT_LINE_PRESSURE = 0.5f
 
         /** Pages kept in memory on each side of the view, so that turning back finds them ready. */

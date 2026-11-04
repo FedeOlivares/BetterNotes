@@ -268,6 +268,56 @@ class CanvasViewTest {
     }
 
     @Test
+    fun theLaserLeavesNothingOnThePage() {
+        onMain { canvas.tool = CanvasTool.Laser }
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitForIdle()
+        SystemClock.sleep(100)
+        assertEquals(0, pageContent().size)
+        assertFalse(onMain { canvas.canUndo })
+    }
+
+    @Test
+    fun aStrokeStartingByTheRulerRunsAlongItsEdge() {
+        onMain { canvas.rulerVisible = true }
+        // The ruler sits level at the center of the view, so its lower edge is a fixed screen line.
+        val edgeY = onMain { canvas.height / 2f + 70f * canvas.resources.displayMetrics.density }
+        val centerX = onMain { canvas.width / 2f }
+        val toPageY = { y: Float -> onMain { canvas.viewport.toWorldY(y) } }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, centerX - 200f to edgeY + 6f, centerX + 200f to edgeY + 60f)
+        val stroke = onlyStroke()
+        assertEquals(2, stroke.points.size)
+        assertEquals(stroke.points.y(0), stroke.points.y(1), 0.01f)
+        val pageOriginY = onMain { canvas.viewport.toWorldY(canvas.viewport.toScreenY(0f)) }
+        assertEquals(toPageY(edgeY) - pageOriginY, stroke.points.y(0), 1f)
+    }
+
+    @Test
+    fun twoFingersOnTheRulerMoveItAndNotThePage() {
+        onMain { canvas.rulerVisible = true }
+        val cx = onMain { canvas.width / 2f }
+        val cy = onMain { canvas.height / 2f }
+        val panBefore = onMain { canvas.viewport.panY }
+        val tool = MotionEvent.TOOL_TYPE_FINGER
+        val down = SystemClock.uptimeMillis() - 200
+        val start = listOf(cx - 100f to cy, cx + 100f to cy)
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(start[0])))
+        send(event(down, down + 10, pointerAction(MotionEvent.ACTION_POINTER_DOWN, 1), tool, start))
+        val moved = listOf(cx - 100f to cy + 300f, cx + 100f to cy + 300f)
+        send(event(down, down + 40, MotionEvent.ACTION_MOVE, tool, moved))
+        send(event(down, down + 50, pointerAction(MotionEvent.ACTION_POINTER_UP, 1), tool, moved))
+        send(event(down, down + 60, MotionEvent.ACTION_UP, tool, listOf(moved[0])))
+        waitForIdle()
+        assertEquals(panBefore, onMain { canvas.viewport.panY }, 0f)
+
+        // The ruler is no longer at the center, so a stroke there is free again.
+        SystemClock.sleep(200)
+        val edgeY = cy + 70f * onMain { canvas.resources.displayMetrics.density }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, cx - 100f to edgeY, cx + 100f to edgeY + 40f)
+        assertTrue(onlyStroke().points.size > 2)
+    }
+
+    @Test
     fun theEraserEndOfAStylusSplitsAStroke() {
         stylusStroke(worldToScreen(50f, 100f), worldToScreen(250f, 100f))
         waitUntil { pageContent().size == 1 }

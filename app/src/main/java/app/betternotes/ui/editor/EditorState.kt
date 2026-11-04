@@ -19,6 +19,7 @@ internal enum class ActiveTool(val ink: InkTool?) {
     PENCIL(InkTool.PENCIL),
     HIGHLIGHTER(InkTool.HIGHLIGHTER),
     ERASER(null),
+    LASER(null),
 }
 
 /** What the color wheel's result is for. */
@@ -42,6 +43,19 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var fingerDraws by mutableStateOf(false)
         private set
+    var rulerOn by mutableStateOf(false)
+        private set
+    var laserWidthSlot by mutableStateOf(1)
+    var currentPage by mutableStateOf(0)
+        private set
+    var pageCount by mutableStateOf(0)
+        private set
+    var zoom by mutableStateOf(1f)
+        private set
+
+    /** Bumped each time the page moves, which shows the indicator for a while. */
+    var viewMoves by mutableStateOf(0)
+        private set
     var canUndo by mutableStateOf(false)
         private set
     var canRedo by mutableStateOf(false)
@@ -59,6 +73,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
         canUndo = canvas.canUndo
         canRedo = canvas.canRedo
+        canvas.onViewMoved = ::refreshPosition
+        canvas.onZoomChanged = { refreshPosition() }
+        refreshPosition()
         applyTool()
     }
 
@@ -109,6 +126,30 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
     }
 
+    fun toggleRuler() {
+        rulerOn = !rulerOn
+        canvas.rulerVisible = rulerOn
+    }
+
+    fun selectLaserWidth(slot: Int) {
+        laserWidthSlot = slot
+        canvas.laserScale = LASER_SCALES[slot]
+    }
+
+    fun previousPage() = canvas.goToPage(canvas.currentPage - 1)
+
+    fun nextPage() = canvas.goToPage(canvas.currentPage + 1)
+
+    fun zoomToRealSize() = canvas.zoomTo(1f)
+
+    /** The document under the canvas changed, so the page count may have too. */
+    fun refreshPosition() {
+        currentPage = canvas.currentPage
+        pageCount = canvas.pageCount
+        zoom = canvas.viewport.zoom
+        viewMoves++
+    }
+
     fun undo() = canvas.undo()
 
     fun redo() = canvas.redo()
@@ -121,14 +162,15 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     private fun applyTool() {
         val current = preset
-        canvas.tool = if (current != null) {
-            CanvasTool.Ink(current.style(), current.holdToLineMs)
-        } else {
-            CanvasTool.Eraser(EraseMode.PARTIAL, DEFAULT_ERASER_RADIUS_PT)
+        canvas.tool = when {
+            current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs)
+            activeTool == ActiveTool.LASER -> CanvasTool.Laser
+            else -> CanvasTool.Eraser(EraseMode.PARTIAL, DEFAULT_ERASER_RADIUS_PT)
         }
     }
 
     private companion object {
         const val DEFAULT_ERASER_RADIUS_PT = 6f
+        val LASER_SCALES = floatArrayOf(0.5f, 1f, 1.6f)
     }
 }

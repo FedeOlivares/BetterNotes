@@ -1,17 +1,26 @@
 package app.betternotes.ui.editor
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -20,13 +29,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
@@ -34,8 +46,7 @@ import app.betternotes.core.model.LineKind
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
-import androidx.compose.material3.Icon
-import androidx.compose.ui.graphics.vector.ImageVector
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
 /** What the toolbars ask of whoever hosts the editor. */
@@ -59,6 +70,12 @@ private val PanelGap = 7.dp
 private const val SAVE_DELAY_MS = 400L
 
 /**
+ * The sizes in this package were read off screenshots at 2.5 pixels per unit, and the tablet those
+ * screenshots came from has 2.75 pixels per dp. This makes them come out the same size on it.
+ */
+private const val SCREENSHOT_SCALE = 2.5f / 2.75f
+
+/**
  * The floating controls over the canvas, laid out from the owner's Notewise screenshots: the left,
  * center and right pills in a row, and the active tool's row centered under the center pill.
  */
@@ -72,6 +89,15 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
         state.saveTools()
     }
 
+    val density = LocalDensity.current
+    val designDensity = Density(density.density * SCREENSHOT_SCALE, density.fontScale)
+    CompositionLocalProvider(LocalDensity provides designDensity) {
+        EditorControls(state, actions, notices, preset)
+    }
+}
+
+@Composable
+private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
     Box(Modifier.fillMaxSize()) {
         Layout(
             content = {
@@ -80,8 +106,12 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
                     CenterPill(state, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
                 }
                 RightPill(state, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
-                if (!state.viewOnly && !state.toolRowCollapsed && preset != null) {
-                    ToolRow(state, preset, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                if (!state.viewOnly && !state.toolRowCollapsed) {
+                    if (preset != null) {
+                        ToolRow(state, preset, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.LASER) {
+                        LaserRow(state, notices, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    }
                 }
             },
             modifier = Modifier.fillMaxSize(),
@@ -114,6 +144,8 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
             }
         }
 
+        PositionControls(state, Modifier.align(Alignment.BottomStart), Modifier.align(Alignment.CenterEnd))
+
         val panelTop = EdgeMargin + PillHeight + PillGap + PillHeight + PanelGap
         val panelModifier = Modifier
             .align(Alignment.TopEnd)
@@ -140,23 +172,27 @@ private fun LeftPill(state: EditorState, actions: EditorActions, notices: Notice
 /** One button in the strip that scrolls. A tool without a reference screenshot only says so for now. */
 private class StripItem(val icon: ImageVector, val label: Int, val tool: ActiveTool? = null)
 
+/** In the order of the owner's screenshots. */
 private val StripItems by lazy {
     listOf(
+        StripItem(EditorIcons.Lasso, R.string.tool_lasso),
         StripItem(EditorIcons.Pen, R.string.tool_pen, ActiveTool.PEN),
         StripItem(EditorIcons.Pencil, R.string.tool_pencil, ActiveTool.PENCIL),
         StripItem(EditorIcons.Highlighter, R.string.tool_highlighter, ActiveTool.HIGHLIGHTER),
         StripItem(EditorIcons.Eraser, R.string.tool_eraser, ActiveTool.ERASER),
-        StripItem(EditorIcons.Lasso, R.string.tool_lasso),
+        StripItem(EditorIcons.Tape, R.string.tool_tape),
         StripItem(EditorIcons.Shapes, R.string.tool_shapes),
         StripItem(EditorIcons.Image, R.string.tool_image),
-        StripItem(EditorIcons.Camera, R.string.tool_camera),
+        StripItem(EditorIcons.Text, R.string.tool_text),
+        StripItem(EditorIcons.StickyNote, R.string.tool_sticky),
+        StripItem(EditorIcons.Sticker, R.string.tool_sticker),
         StripItem(EditorIcons.Table, R.string.tool_table),
         StripItem(EditorIcons.Tray, R.string.tool_clipboard),
-        StripItem(EditorIcons.StickyAdd, R.string.tool_sticky),
+        StripItem(EditorIcons.AddElement, R.string.tool_add_element),
         StripItem(EditorIcons.Loupe, R.string.tool_loupe),
         StripItem(EditorIcons.Ruler, R.string.tool_ruler),
         StripItem(EditorIcons.Mic, R.string.tool_recorder),
-        StripItem(EditorIcons.Laser, R.string.tool_laser),
+        StripItem(EditorIcons.Laser, R.string.tool_laser, ActiveTool.LASER),
         StripItem(EditorIcons.Settings, R.string.tool_settings),
     )
 }
@@ -184,8 +220,14 @@ private fun CenterPill(state: EditorState, notices: Notices, modifier: Modifier)
                 ToolbarIcon(
                     item.icon,
                     stringResource(item.label),
-                    selected = tool != null && tool == state.activeTool,
-                    onClick = { if (tool != null) state.select(tool) else notices.notBuilt() },
+                    selected = if (item.label == R.string.tool_ruler) state.rulerOn else tool == state.activeTool,
+                    onClick = {
+                        when {
+                            tool != null -> state.select(tool)
+                            item.label == R.string.tool_ruler -> state.toggleRuler()
+                            else -> notices.notBuilt()
+                        }
+                    },
                 )
             }
         }
@@ -247,6 +289,93 @@ private fun RightPill(state: EditorState, actions: EditorActions, modifier: Modi
 @Composable
 private fun MenuEntry(label: Int, onClick: () -> Unit) {
     DropdownMenuItem(text = { Text(stringResource(label), fontSize = 14.sp) }, onClick = onClick)
+}
+
+/** The laser's row: its color, three sizes, and the way into its options. */
+@Composable
+private fun LaserRow(state: EditorState, notices: Notices, modifier: Modifier) {
+    Pill(modifier) {
+        ToolbarCellBox(onClick = notices::notBuilt) { ColorDot(LASER_COLOR, diameter = 24.dp) }
+        for (slot in 0..2) {
+            ToolbarCellBox(onClick = { state.selectLaserWidth(slot) }) {
+                if (slot == 0) {
+                    Box(Modifier.size(5.dp).background(LocalEditorColors.current.icon, CircleShape))
+                } else {
+                    WidthGlyph(if (slot == 1) LASER_MIDDLE_GLYPH else LASER_THICK_GLYPH)
+                }
+                if (slot == state.laserWidthSlot) SelectedDot()
+            }
+        }
+        PillDivider()
+        ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options), onClick = notices::notBuilt)
+    }
+}
+
+/**
+ * The page and zoom readout at the lower left and the page buttons at the right edge. They show while the
+ * page moves and go away soon after, as in the screenshots, where they are only sometimes there.
+ */
+@Composable
+private fun PositionControls(state: EditorState, readoutModifier: Modifier, buttonsModifier: Modifier) {
+    val colors = LocalEditorColors.current
+    var visible by remember { mutableStateOf(false) }
+    val moves = state.viewMoves
+    LaunchedEffect(moves) {
+        if (moves <= 1) return@LaunchedEffect
+        visible = true
+        delay(POSITION_VISIBLE_MS)
+        visible = false
+    }
+    if (!visible) return
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = readoutModifier
+            .padding(start = 9.dp, bottom = 12.dp)
+            .masksInk(state, "readout")
+            .height(PillHeight)
+            .shadow(4.dp, CircleShape, clip = false)
+            .clip(CircleShape)
+            .background(colors.pill)
+            .border(1.dp, colors.pillBorder, CircleShape)
+            .tappable(radius = 60.dp, onClick = state::zoomToRealSize)
+            .padding(horizontal = 12.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(46.dp)) {
+            Text("${state.currentPage + 1}", color = colors.title, fontSize = 12.sp, lineHeight = 14.sp)
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.pillDivider))
+            Text("${state.pageCount}", color = colors.label, fontSize = 12.sp, lineHeight = 14.sp)
+        }
+        PillDivider()
+        Text(
+            "${(state.zoom * 100).roundToInt()}%",
+            color = colors.title,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+    }
+    Column(
+        modifier = buttonsModifier
+            .padding(end = 2.dp)
+            .masksInk(state, "page-buttons")
+            .shadow(4.dp, CircleShape, clip = false)
+            .clip(CircleShape)
+            .background(colors.pill)
+            .border(1.dp, colors.pillBorder, CircleShape),
+    ) {
+        PageButton(EditorIcons.ChevronUp, stringResource(R.string.editor_previous_page), state::previousPage)
+        PageButton(EditorIcons.ChevronDown, stringResource(R.string.editor_next_page), state::nextPage)
+    }
+}
+
+@Composable
+private fun PageButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.size(22.dp, 28.dp).tappable(radius = 14.dp, onClick = onClick),
+    ) {
+        Icon(icon, description, tint = LocalEditorColors.current.icon, modifier = Modifier.size(20.dp))
+    }
 }
 
 /** The second row: line type, three widths, the colors, and the way into the panel. */
@@ -313,3 +442,7 @@ private fun WidthGlyph(thickness: Int) {
 }
 
 private const val WIDTH_GLYPH_DP_PER_UNIT = 0.27f
+private const val LASER_COLOR = 0xFFE8321E.toInt()
+private const val LASER_MIDDLE_GLYPH = 6
+private const val LASER_THICK_GLYPH = 12
+private const val POSITION_VISIBLE_MS = 2000L

@@ -117,13 +117,13 @@ internal fun ToolbarIcon(
             .size(ToolbarCell, PillHeight)
             .tappable(radius = 20.dp, enabled = enabled, onClick = onClick),
     ) {
-        if (selected) Box(Modifier.size(36.dp).background(colors.accentContainer, CircleShape))
+        if (selected) Box(Modifier.size(42.dp).background(colors.toolSelected, CircleShape))
         Icon(
             icon,
             description,
             tint = when {
                 !enabled -> colors.iconDisabled
-                selected -> colors.accent
+                selected -> colors.toolSelectedIcon
                 else -> colors.icon
             },
             modifier = Modifier.size(24.dp),
