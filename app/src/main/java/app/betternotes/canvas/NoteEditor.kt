@@ -28,6 +28,12 @@ class NoteEditor(
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
 
+    /** Called whenever what can be undone or redone may have changed. */
+    var onHistoryChanged: () -> Unit = {}
+
+    val canUndo get() = session.history.canUndo
+    val canRedo get() = session.history.canRedo
+
     private val main = Handler(Looper.getMainLooper())
     private val background = Executors.newSingleThreadExecutor { task -> Thread(task, "note-io") }
     private val loading = HashSet<Long>()
@@ -52,12 +58,14 @@ class NoteEditor(
     fun perform(edit: Edit) {
         session.history.perform(edit, session)
         scheduleSave()
+        onHistoryChanged()
     }
 
     /** Records an edit whose changes are already on the page. */
     fun record(edit: Edit) {
         session.history.record(edit)
         scheduleSave()
+        onHistoryChanged()
     }
 
     /** Takes back an edit that was never recorded. */
@@ -66,9 +74,9 @@ class NoteEditor(
         scheduleSave()
     }
 
-    fun undo(): Boolean = session.history.undo(session).also { if (it) scheduleSave() }
+    fun undo(): Boolean = session.history.undo(session).also { if (it) historyStepped() }
 
-    fun redo(): Boolean = session.history.redo(session).also { if (it) scheduleSave() }
+    fun redo(): Boolean = session.history.redo(session).also { if (it) historyStepped() }
 
     fun retainPages(pageIds: Set<Long>) {
         session.retainPages(pageIds)
@@ -88,6 +96,11 @@ class NoteEditor(
         saveNow()
         closed = true
         background.shutdown()
+    }
+
+    private fun historyStepped() {
+        scheduleSave()
+        onHistoryChanged()
     }
 
     private fun scheduleSave() {

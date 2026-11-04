@@ -15,7 +15,11 @@ import android.widget.OverScroller
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
+import androidx.ink.brush.InputToolType
+import androidx.ink.strokes.ImmutableStrokeInputBatch
+import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
+import androidx.ink.strokes.StrokeInput
 import androidx.input.motionprediction.MotionEventPredictor
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Bounds
@@ -23,6 +27,7 @@ import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.gesture.GestureConfig
 import app.betternotes.core.gesture.GestureListener
 import app.betternotes.core.gesture.GestureRecognizer
+import app.betternotes.core.gesture.HoldDetector
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.gesture.PointerKind
 import app.betternotes.core.layout.DocumentLayout
@@ -37,7 +42,8 @@ import kotlin.math.roundToInt
 
 /** What the stylus does: lay down ink, or erase. */
 sealed interface CanvasTool {
-    data class Ink(val style: InkStyle) : CanvasTool
+    /** Holding the pen still for [holdToLineMs] turns the stroke into a straight line. 0 turns that off. */
+    data class Ink(val style: InkStyle, val holdToLineMs: Int = 0) : CanvasTool
     data class Eraser(val mode: EraseMode, val radiusPt: Float) : CanvasTool
 }
 
@@ -58,6 +64,21 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Called whenever the zoom changes. */
     var onZoomChanged: (zoom: Float) -> Unit = {}
+
+    /** Called whenever [canUndo] or [canRedo] may have changed. */
+    var onHistoryChanged: () -> Unit = {}
+
+    val canUndo get() = editor?.canUndo == true
+    val canRedo get() = editor?.canRedo == true
+
+    /** The color around the pages. */
+    var backdropColor = 0xFF0E1013.toInt()
+        set(value) {
+            field = value
+            setBackgroundColor(value)
+            tiles.backdropColor = value
+            tiles.invalidateAll()
+        }
 
     var tool: CanvasTool = CanvasTool.Ink(InkStyle())
 
@@ -81,7 +102,6 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             tiles.onTileRecorded = value?.let { it::onTileRecorded }
         }
 
-    private val backdropColor = 0xFF0E1013.toInt()
     private var editor: NoteEditor? = null
     private var painter: PagePainter? = null
     private var layout: DocumentLayout? = null
@@ -132,7 +152,19 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var drawStyle = InkStyle()
     private val screenToPage = Matrix()
     private val pendingStrokes = HashMap<InProgressStrokeId, PendingStroke>()
-    private val maskRect = RectF()
+    private var overlayBounds: List<RectF> = emptyList()
+    private var maskedPage: RectF? = null
+    private var maskIsCurrent = false
+
+    // A stroke the pen has straightened. Its far end is ink's prediction, so that it can keep moving.
+    private val hold = HoldDetector(HOLD_SLOP_DP * resources.displayMetrics.density)
+    private var holdDelayMs = 0L
+    private var straightening = false
+    private var strokeStartMs = 0L
+    private var strokeStartX = 0f
+    private var strokeStartY = 0f
+    private val pageToScreen = Matrix()
+    private val holdCheck = Runnable { checkHold() }
 
     private class PendingStroke(val editor: NoteEditor, val pageId: Long, val style: InkStyle)
 
@@ -148,6 +180,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         this.editor = editor
         painter = PagePainter(editor)
         editor.onPageLoaded = ::redrawPage
+        editor.onHistoryChanged = { onHistoryChanged() }
+        onHistoryChanged()
         hasPlacedPage = false
         rebuildLayout()
     }
@@ -158,7 +192,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
      */
     fun close() {
         editor?.onPageLoaded = {}
+        editor?.onHistoryChanged = {}
         editor = null
+        onHistoryChanged()
     }
 
     /** Sets the zoom about the center of the view. Zoom 1 is real size. */
@@ -167,6 +203,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         settlePan()
         onZoomChanged(viewport.zoom)
+    }
+
+    /**
+     * Where other views sit over this one, in its coordinates. Wet ink is drawn on top of everything in
+     * the window, so it has to be told to stay out from under them.
+     */
+    fun setOverlayBounds(bounds: List<RectF>) {
+        overlayBounds = bounds
+        maskIsCurrent = false
     }
 
     fun undo() {
@@ -188,12 +233,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         removeCallbacks(deadlineCheck)
+        removeCallbacks(holdCheck)
         stopFling()
         recognizer.reset()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        maskIsCurrent = false
         placeFirstPage()
         clampPan()
         settlePan()
@@ -295,6 +342,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             eraseAt(x, y)
         } else if (tool is CanvasTool.Ink) {
             drawStyle = tool.style
+            holdDelayMs = tool.holdToLineMs.toLong()
             // A stroke that starts when a tap times out has no event yet, and ink needs one.
             val event = currentEvent
             if (event != null) startStroke(event) else strokeWaitingForEvent = true
@@ -315,7 +363,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         val id = strokeId ?: return
         val event = currentEvent ?: return
-        wet.finishStroke(event, pointerId, id)
+        removeCallbacks(holdCheck)
+        if (straightening) {
+            finishStraightStroke(event, id)
+        } else {
+            wet.finishStroke(event, pointerId, id)
+        }
         strokeId = null
     }
 
@@ -329,6 +382,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return
         }
         val id = strokeId ?: return
+        removeCallbacks(holdCheck)
+        straightening = false
         wet.cancelStroke(id, currentEvent)
         pendingStrokes.remove(id)
         strokeId = null
@@ -348,11 +403,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         screenToPage.setTranslate(-viewport.panX, -viewport.panY)
         screenToPage.postScale(1f / scale, 1f / scale)
         screenToPage.postTranslate(-layout.originX(drawPageIndex), -layout.originY(drawPageIndex))
-        maskOutsidePage(layout, drawPageIndex)
+        updateWetMask(layout, drawPageIndex)
         val id = wet.startStroke(event, drawPointerId, InkBrushes.brush(drawStyle), screenToPage)
         pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle)
         strokeId = id
         strokeStartedInThisEvent = true
+        if (holdDelayMs > 0L) watchForHold(event)
     }
 
     /** Passes a whole motion event to ink, along with a guess at what comes next. */
@@ -360,9 +416,82 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val id = strokeId ?: return
         // A stroke that started partway through this event already has its latest sample.
         if (strokeStartedInThisEvent) return
+        if (holdDelayMs > 0L) {
+            val index = event.findPointerIndex(drawPointerId)
+            if (index >= 0) hold.move(event.getX(index), event.getY(index), event.eventTime)
+        }
+        if (straightening) {
+            moveStraightEnd(id, event.eventTime)
+            return
+        }
         val predicted = predictor.predict()
         wet.addToStroke(event, drawPointerId, id, predicted)
         predicted?.recycle()
+    }
+
+    // ---- Holding the pen still to draw a straight line ----
+
+    private fun watchForHold(event: MotionEvent) {
+        val index = event.findPointerIndex(drawPointerId)
+        if (index < 0) return
+        val x = event.getX(index)
+        val y = event.getY(index)
+        hold.start(x, y, event.eventTime)
+        strokeStartMs = event.eventTime
+        val start = floatArrayOf(x, y)
+        screenToPage.mapPoints(start)
+        strokeStartX = start[0]
+        strokeStartY = start[1]
+        postDelayed(holdCheck, holdDelayMs)
+    }
+
+    /** Runs only once per delay, rather than rescheduling on each of the pen's 240 samples a second. */
+    private fun checkHold() {
+        if (strokeId == null || straightening) return
+        val now = SystemClock.uptimeMillis()
+        if (hold.isHeld(now, holdDelayMs)) {
+            straighten()
+        } else {
+            postDelayed(holdCheck, (hold.heldAtMs(holdDelayMs) - now).coerceIn(MIN_HOLD_CHECK_MS, holdDelayMs))
+        }
+    }
+
+    /** Replaces the wet stroke with a line from where it began to where the pen is. */
+    private fun straighten() {
+        val old = strokeId ?: return
+        val pending = pendingStrokes.remove(old) ?: return
+        wet.cancelStroke(old)
+        screenToPage.invert(pageToScreen)
+        val first = strokeInput(strokeStartX, strokeStartY, 0L)
+        val id = wet.startStroke(first, InkBrushes.brush(drawStyle), pageToScreen)
+        pendingStrokes[id] = pending
+        strokeId = id
+        straightening = true
+        moveStraightEnd(id, SystemClock.uptimeMillis())
+    }
+
+    private fun moveStraightEnd(id: InProgressStrokeId, timeMs: Long) {
+        val end = currentLineEnd(timeMs)
+        val prediction = MutableStrokeInputBatch().add(end)
+        wet.addToStroke(ImmutableStrokeInputBatch.EMPTY, id, prediction)
+    }
+
+    private fun finishStraightStroke(event: MotionEvent, id: InProgressStrokeId) {
+        val index = event.findPointerIndex(drawPointerId)
+        if (index >= 0) hold.move(event.getX(index), event.getY(index), event.eventTime)
+        straightening = false
+        wet.finishStroke(currentLineEnd(event.eventTime), id)
+    }
+
+    private fun currentLineEnd(timeMs: Long): StrokeInput {
+        val end = floatArrayOf(hold.x, hold.y)
+        screenToPage.mapPoints(end)
+        return strokeInput(end[0], end[1], (timeMs - strokeStartMs).coerceAtLeast(1L))
+    }
+
+    /** A straight line has no pressure to speak of, so it comes out at an even width. */
+    private fun strokeInput(x: Float, y: Float, elapsedMs: Long) = StrokeInput().apply {
+        update(x, y, elapsedMs, InputToolType.STYLUS, STROKE_UNIT_CM, STRAIGHT_LINE_PRESSURE)
     }
 
     private fun eraseAt(x: Float, y: Float) {
@@ -371,28 +500,34 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         redrawChanges(drawPageIndex)
     }
 
-    /** Hides wet ink past the page's edge, where the finished stroke will be clipped anyway. */
-    private fun maskOutsidePage(layout: DocumentLayout, index: Int) {
+    /**
+     * Hides wet ink past the page's edge, where the finished stroke will be clipped anyway, and under
+     * the views on top of this one.
+     */
+    private fun updateWetMask(layout: DocumentLayout, index: Int) {
         val size = editor?.document?.pages?.get(index)?.size
-        if (size == null) {
-            if (wet.maskPath != null) wet.maskPath = null
-            return
+        val page = size?.let {
+            val originX = layout.originX(index)
+            val originY = layout.originY(index)
+            RectF(
+                viewport.toScreenX(originX),
+                viewport.toScreenY(originY),
+                viewport.toScreenX(originX + it.widthPt),
+                viewport.toScreenY(originY + it.heightPt),
+            )
         }
-        val originX = layout.originX(index)
-        val originY = layout.originY(index)
-        val rect = RectF(
-            viewport.toScreenX(originX),
-            viewport.toScreenY(originY),
-            viewport.toScreenX(originX + size.widthPt),
-            viewport.toScreenY(originY + size.heightPt),
-        )
-        if (rect == maskRect && wet.maskPath != null) return
-        maskRect.set(rect)
-        wet.maskPath = Path().apply {
-            fillType = Path.FillType.EVEN_ODD
-            addRect(0f, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
-            addRect(rect, Path.Direction.CW)
+        if (maskIsCurrent && page == maskedPage) return
+        maskIsCurrent = true
+        maskedPage = page
+        val mask = Path()
+        if (page != null) {
+            mask.addRect(0f, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
+            mask.op(Path().apply { addRect(page, Path.Direction.CW) }, Path.Op.DIFFERENCE)
         }
+        for (overlay in overlayBounds) {
+            mask.op(Path().apply { addRect(overlay, Path.Direction.CW) }, Path.Op.UNION)
+        }
+        wet.maskPath = if (mask.isEmpty) null else mask
     }
 
     override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
@@ -556,6 +691,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private companion object {
         const val PAGE_MARGIN_DP = 24f
+
+        /** How far a held pen can wander and still count as still. */
+        const val HOLD_SLOP_DP = 3f
+        const val MIN_HOLD_CHECK_MS = 8L
+        const val STRAIGHT_LINE_PRESSURE = 0.5f
 
         /** Pages kept in memory on each side of the view, so that turning back finds them ready. */
         const val NEARBY_PAGES = 2

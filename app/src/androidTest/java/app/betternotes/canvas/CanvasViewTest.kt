@@ -14,6 +14,7 @@ import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageBackground
@@ -211,6 +212,59 @@ class CanvasViewTest {
         val (x0, _) = worldToScreen(0f, 0f)
         val (x1, _) = worldToScreen(72f / 2.54f, 0f)
         assertEquals(expected, x1 - x0, 0.01f)
+    }
+
+    @Test
+    fun holdingThePenStillStraightensTheStrokeAndItsEndKeepsFollowing() {
+        val holdMs = 100
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), holdToLineMs = holdMs) }
+        val tool = MotionEvent.TOOL_TYPE_STYLUS
+        val down = SystemClock.uptimeMillis()
+        val start = worldToScreen(100f, 100f)
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(start)))
+        // A wobbly path, which must not survive.
+        for (i in 1..10) {
+            val at = worldToScreen(100f + i * 10f, 100f + (i % 2) * 40f)
+            send(event(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, tool, listOf(at)))
+        }
+        SystemClock.sleep(holdMs * 3L)
+        waitForIdle()
+        val end = worldToScreen(260f, 180f)
+        send(event(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, tool, listOf(end)))
+        send(event(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, tool, listOf(end)))
+
+        val stroke = onlyStroke()
+        assertEquals(2, stroke.points.size)
+        assertEquals(100f, stroke.points.x(0), 0.5f)
+        assertEquals(100f, stroke.points.y(0), 0.5f)
+        assertEquals(260f, stroke.points.x(1), 0.5f)
+        assertEquals(180f, stroke.points.y(1), 0.5f)
+    }
+
+    @Test
+    fun aStrokeWithoutAHoldKeepsItsShape() {
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), holdToLineMs = 5000) }
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        assertTrue(onlyStroke().points.size > 2)
+    }
+
+    @Test
+    fun theHistoryReportsWhatCanBeUndone() {
+        var reports = 0
+        onMain {
+            canvas.onHistoryChanged = { reports++ }
+            assertFalse(canvas.canUndo)
+        }
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        onMain {
+            assertTrue(canvas.canUndo)
+            assertFalse(canvas.canRedo)
+            canvas.undo()
+            assertFalse(canvas.canUndo)
+            assertTrue(canvas.canRedo)
+        }
+        assertTrue(reports >= 2)
     }
 
     @Test
