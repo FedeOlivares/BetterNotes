@@ -90,6 +90,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     var playingVideo by mutableStateOf<VideoPlayRequest?>(null)
     var pagesOpen by mutableStateOf(false)
     var sidebarMenuOpen by mutableStateOf(false)
+
+    /** A photo taken in scan mode, waiting for its corners to be set. */
+    var scanPhoto by mutableStateOf<Uri?>(null)
     var quickSwitchOpen by mutableStateOf(false)
 
     /** Bumped by every edit, so lists drawn from the document know to look again. */
