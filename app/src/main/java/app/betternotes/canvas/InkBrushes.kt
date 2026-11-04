@@ -121,18 +121,13 @@ internal object InkBrushes {
                     }
                 },
             )
-            // A layer of paint with darker bristle streaks drawn over it.
+            // Dense bristle lanes whose ink pulses dark and light along the stroke, leaving thin gaps.
             BrushKind.OIL -> brushFamily(
-                tip {
+                *lanes(-0.45f, 0.45f, 0.1f) { lane, i ->
                     setCornerRounding(0.3f)
-                    setScaleY(1.05f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.35f, 0.65f, noise(3, 0.2f)))
-                },
-                *lanes(-0.45f, 0.45f, 0.15f) { lane, i ->
-                    setCornerRounding(0.3f)
-                    setScaleY(0.1f)
+                    setScaleY(0.13f)
                     addBehavior(lane)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.1f, 1f, noise(30 + i, 0.12f)))
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 1f, noise(30 + i, 0.06f + 0.01f * (i % 3))))
                 },
             )
             BrushKind.SPILL -> brushFamily(
@@ -152,10 +147,11 @@ internal object InkBrushes {
             // Wet washes: big translucent blobs that overlap into darker patches.
             BrushKind.WATERCOLOR -> brushFamily(
                 tip {
-                    setCornerRounding(1f)
+                    setCornerRounding(0.85f)
                     setScaleX(0.9f)
                     setScaleY(0.9f)
                     setParticleGapDistanceScale(0.25f)
+                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(62, 0.2f)))
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.25f, noise(9, 0.15f)))
                     addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(60, 0.1f)))
                     addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(61, 0.1f)))
