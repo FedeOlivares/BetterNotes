@@ -74,6 +74,16 @@ internal object InkBrushes {
     private fun vary(target: TargetNode.Target, from: Float, to: Float, input: ValueNode) =
         BrushBehavior(TargetNode(target, from, to, input))
 
+    private fun oilBristles(bleed: Boolean) = lanes(-0.36f, 0.36f, 0.24f) { lane, i ->
+        setCornerRounding(0.4f)
+        setScaleY(if (bleed) 0.2f else 0.1f)
+        addBehavior(lane)
+        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.25f)))
+        addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1.2f, noise(40 + i, 0.18f)))
+        addBehavior(startPoint(1f + 0.5f * (i % 4)))
+        if (bleed) addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.67f, ConstantNode(1f)))
+    }
+
     /** Grows from a point to full size over [length] brush sizes of travel. */
     private fun startPoint(length: Float) = vary(
         TargetNode.Target.SIZE_MULTIPLIER,
@@ -129,8 +139,10 @@ internal object InkBrushes {
                     }
                 },
             )
-            // A thin wash (30% of the stroke opacity) with eight bristles on it at full opacity. Each bristle
-            // wanders sideways, swells and thins, and starts at a point, later the further out it sits.
+            // A thin wash (30% of the stroke opacity) with four bristles at full opacity on it. Each bristle
+            // wanders sideways, swells and thins, and starts at a point, later the further out it sits. Under
+            // it, a bleed as wide as the bristle again (half its width each side) at two thirds opacity. The
+            // library allows ten layers, which is why there are only four bristles.
             BrushKind.OIL -> brushFamily(
                 tip {
                     setCornerRounding(0.3f)
@@ -138,14 +150,8 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.3f, ConstantNode(1f)))
                     addBehavior(startPoint(1f))
                 },
-                *lanes(-0.42f, 0.42f, 0.12f) { lane, i ->
-                    setCornerRounding(0.4f)
-                    setScaleY(0.07f)
-                    addBehavior(lane)
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.25f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1.2f, noise(40 + i, 0.18f)))
-                    addBehavior(startPoint(1f + 0.5f * (i % 4)))
-                },
+                *oilBristles(bleed = true),
+                *oilBristles(bleed = false),
             )
             BrushKind.SPILL -> brushFamily(
                 *Array(2) { c ->
