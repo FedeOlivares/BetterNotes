@@ -24,6 +24,11 @@ private const val SECTION_FINGERS = 7
 private const val SECTION_STYLUS = 8
 private const val SECTION_CANVAS = 9
 private const val SECTION_NOTE_NAME = 10
+private const val SECTION_SNAP = 11
+private const val SECTION_AUTO_NAME = 12
+private const val SECTION_POMODORO = 13
+
+private val AUTO_NAMES = WireEnum(AutoName.AUTO, AutoName.OFF)
 
 private val ONE_FINGER = WireEnum(OneFingerSetting.IGNORED, OneFingerSetting.DRAW, OneFingerSetting.SCROLL)
 private val TWO_FINGERS = WireEnum(TwoFingerAction.IGNORED, TwoFingerAction.ZOOM_AND_PAN, TwoFingerAction.SCROLL)
@@ -99,6 +104,17 @@ object SettingsCodec {
             bool(settings.canvas.hideSystemBars)
         }
         section(SECTION_NOTE_NAME) { NOTE_NAMES.write(this, settings.newNoteName) }
+        section(SECTION_SNAP) { bool(settings.canvas.snapToAlign) }
+        section(SECTION_AUTO_NAME) { AUTO_NAMES.write(this, settings.autoName) }
+        section(SECTION_POMODORO) {
+            val p = settings.pomodoro
+            varint(p.focusMinutes)
+            varint(p.shortBreakMinutes)
+            varint(p.longBreakMinutes)
+            varint(p.sessionsBeforeLongBreak)
+            bool(p.autoStartNext)
+            bool(p.notify)
+        }
     }
 
     fun decode(bytes: ByteArray): AppSettings = decodeFile(bytes, SETTINGS_MAGIC) {
@@ -129,8 +145,15 @@ object SettingsCodec {
                         ERASER_ENDS.read(this),
                     ),
                 )
-                SECTION_CANVAS -> settings.copy(canvas = CanvasSettings(bool(), bool(), bool()))
+                SECTION_CANVAS -> settings.copy(
+                    canvas = settings.canvas.copy(continueFromLastPage = bool(), keepScreenOn = bool(), hideSystemBars = bool()),
+                )
                 SECTION_NOTE_NAME -> settings.copy(newNoteName = NOTE_NAMES.read(this))
+                SECTION_SNAP -> settings.copy(canvas = settings.canvas.copy(snapToAlign = bool()))
+                SECTION_AUTO_NAME -> settings.copy(autoName = AUTO_NAMES.read(this))
+                SECTION_POMODORO -> settings.copy(
+                    pomodoro = PomodoroSettings(varint(), varint(), varint(), varint(), bool(), bool()),
+                )
                 SECTION_SCROLL -> settings.copy(scrollDirection = SCROLL_DIRECTIONS.read(this))
                 SECTION_NEW_PAGES -> settings.copy(
                     newPages = NewPageDefaults(pageSize(), PageBackground(int(), template())),

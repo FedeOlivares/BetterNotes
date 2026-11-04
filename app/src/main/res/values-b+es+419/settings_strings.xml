@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_close">Cerrar</string>
+    <string name="settings_back">Atrás</string>
+    <string name="settings_less">Disminuir</string>
+    <string name="settings_more">Aumentar</string>
+    <string name="settings_title">Configuración</string>
+    <string name="settings_notes">Notas</string>
+    <string name="settings_new_note_name">Nombre de nota nueva</string>
+    <string name="settings_note_dated">Nota nueva %1$s</string>
+    <string name="settings_note_untitled">Sin título</string>
+    <string name="settings_auto_name">Nombrar notas automáticamente</string>
+    <string name="settings_auto_name_detail">Usa las primeras palabras escritas en una nota nueva</string>
+    <string name="settings_auto_name_auto">Automático</string>
+    <string name="settings_auto_name_off">Desactivado</string>
+    <string name="settings_language">Idioma</string>
+    <string name="language_english">English</string>
+    <string name="language_spanish">Español (Latinoamérica)</string>
+    <string name="settings_canvas">Lienzo</string>
+    <string name="settings_continue">Continuar desde la última página abierta</string>
+    <string name="settings_keep_on">Mantener la pantalla encendida</string>
+    <string name="settings_keep_on_detail">La pantalla seguirá encendida mientras haya notas abiertas</string>
+    <string name="settings_hide_bars">Ocultar las barras del sistema</string>
+    <string name="settings_hide_bars_detail">Oculta las barras de estado y de navegación mientras haya notas abiertas</string>
+    <string name="settings_snap">Ajustar para alinear</string>
+    <string name="settings_snap_detail">Los elementos se alinean entre sí al moverlos</string>
+    <string name="settings_scroll_layout">Desplazamiento y diseño</string>
+    <string name="settings_shortcuts">Atajos de teclado</string>
+    <string name="settings_calibration">Calibración de tamaño real</string>
+    <string name="settings_calibration_detail">Haz que 1 cm en pantalla mida 1 cm en una regla</string>
+    <string name="settings_handwriting">Búsqueda de escritura a mano</string>
+    <string name="settings_models">Modelos de inglés y español</string>
+    <string name="settings_models_checking">Comprobando…</string>
+    <string name="settings_models_ready">En este dispositivo. El reconocimiento no necesita red.</string>
+    <string name="settings_models_missing">No están en este dispositivo. No se puede buscar en la escritura a mano hasta descargarlos, unos 40 MB.</string>
+    <string name="settings_models_working">Descargando…</string>
+    <string name="settings_models_failed">La descarga falló. Conéctate a una red o usa una versión con acceso a internet.</string>
+    <string name="settings_models_download">Descargar</string>
+    <string name="settings_storage">Administrar almacenamiento</string>
+    <string name="settings_storage_notes">Notas</string>
+    <string name="settings_storage_notes_detail">Incluye tus notas, imágenes, PDF y grabaciones de audio.</string>
+    <string name="settings_storage_cache">Caché</string>
+    <string name="settings_storage_cache_detail">La caché ayuda a mejorar el rendimiento de la app.</string>
+    <string name="settings_storage_size">%1$.2f MB</string>
+    <string name="settings_clear_cache">Borrar caché</string>
+    <string name="scroll_vertical">Vertical</string>
+    <string name="scroll_left_to_right">De lado a lado, de izquierda a derecha</string>
+    <string name="scroll_right_to_left">De lado a lado, de derecha a izquierda</string>
+    <string name="shortcuts_hint">Toca una acción y luego presiona sus teclas.</string>
+    <string name="shortcuts_press">Presiona las teclas para esta acción.</string>
+    <string name="shortcuts_taken">Eso lo tenía %1$s, que ahora no tiene atajo (%2$s).</string>
+    <string name="shortcuts_waiting">Presiona teclas…</string>
+    <string name="shortcuts_none">Ninguno</string>
+    <string name="shortcuts_reset">Restablecer todo</string>
+    <string name="calibration_hint">Esta línea debe medir %1$d cm. Mídela en la pantalla con una regla. Si no coincide, ingresa lo que mediste.</string>
+    <string name="calibration_density">Densidad de pantalla en uso, en dpi</string>
+    <string name="calibration_measured">Longitud medida, en cm</string>
+    <string name="calibration_apply">Aplicar</string>
+    <string name="calibration_reset">Usar el valor del dispositivo</string>
+    <string name="stylus_finger_title">Lápiz y dedos</string>
+    <string name="stylus">Lápiz</string>
+    <string name="stylus_latency">Optimización de latencia</string>
+    <string name="stylus_latency_detail">Rápida dibuja un poco por delante del lápiz, por predicción.</string>
+    <string name="stylus_latency_fast">Rápida</string>
+    <string name="stylus_latency_normal">Normal</string>
+    <string name="stylus_primary">Acción principal</string>
+    <string name="stylus_secondary">Acción secundaria</string>
+    <string name="stylus_hold">Mantener presionado el botón principal</string>
+    <string name="stylus_hold_erase">Borrar</string>
+    <string name="stylus_eraser_end">Reasignar el borrador del lápiz</string>
+    <string name="stylus_eraser">Borrador</string>
+    <string name="stylus_none">Ninguna</string>
+    <string name="stylus_switch_pen">Cambiar a pluma</string>
+    <string name="stylus_switch_highlighter">Cambiar a resaltador</string>
+    <string name="stylus_switch_eraser">Cambiar a borrador</string>
+    <string name="stylus_switch_lasso">Cambiar a lazo</string>
+    <string name="stylus_undo">Deshacer</string>
+    <string name="stylus_redo">Rehacer</string>
+    <string name="stylus_note">Las acciones compatibles dependen de tu lápiz.</string>
+    <string name="single_finger">Un dedo</string>
+    <string name="double_finger">Dos dedos</string>
+    <string name="finger_ignored">Ignorado</string>
+    <string name="finger_draw">Dibujar</string>
+    <string name="finger_scroll">Desplazar</string>
+    <string name="finger_zoom_pan">Zoom y desplazamiento</string>
+    <string name="more_gestures">Más gestos</string>
+    <string name="gesture_zoom_tap">Doble toque para cambiar el zoom</string>
+    <string name="gesture_undo">Deshacer</string>
+    <string name="gesture_undo_on">Doble toque con dos dedos</string>
+    <string name="gesture_redo">Rehacer</string>
+    <string name="gesture_redo_on">Triple toque con dos dedos</string>
+    <string name="gesture_off">Desactivado</string>
+    <string name="gesture_timing">Tiempo entre toques</string>
+    <string name="gesture_timing_detail">Cuánto espera deshacer un tercer toque.</string>
+    <string name="gesture_timing_value">%1$d ms</string>
+    <string name="template_title">Plantilla</string>
+    <string name="template_built_in">Integradas</string>
+    <string name="template_custom">Personalizadas</string>
+    <string name="template_size">Tamaño: %1$d x %2$d</string>
+    <string name="template_density">Densidad</string>
+    <string name="template_line_width">Grosor de línea</string>
+    <string name="template_group_basic">Básicas</string>
+    <string name="template_group_education">Educación</string>
+    <string name="template_group_music">Música</string>
+    <string name="template_blank">En blanco</string>
+    <string name="template_rule">Renglones</string>
+    <string name="template_grid">Cuadrícula</string>
+    <string name="template_dot">Puntos</string>
+    <string name="template_hexagonal">Cuadrícula hexagonal</string>
+    <string name="template_cornell_a">Cornell A</string>
+    <string name="template_cornell_b">Cornell B</string>
+    <string name="template_legal">Legal</string>
+    <string name="template_engineering">Cuadrícula de ingeniería</string>
+    <string name="template_music">Partitura</string>
+    <string name="template_guitar_tab">Tablatura de guitarra</string>
+    <string name="template_guitar_score">Partitura de guitarra</string>
+    <string name="template_apply_current">Aplicar a la página actual</string>
+    <string name="template_apply_all">Aplicar a todas las páginas</string>
+    <string name="template_apply_more">Más formas de aplicar</string>
+    <string name="size_a4">A4</string>
+    <string name="size_a5">A5</string>
+    <string name="size_letter">Carta</string>
+    <string name="size_legal">Oficio</string>
+    <string name="layout_title">Diseño personalizado</string>
+    <string name="layout_new">Nuevo diseño</string>
+    <string name="layout_edit">Editar</string>
+    <string name="layout_name">Nombre</string>
+    <string name="layout_size">Tamaño de página</string>
+    <string name="layout_add_line">Línea</string>
+    <string name="layout_add_box">Recuadro</string>
+    <string name="layout_add_table">Tabla</string>
+    <string name="layout_add_ruled">Renglones</string>
+    <string name="layout_rows">Filas</string>
+    <string name="layout_columns">Columnas</string>
+    <string name="layout_spacing">Espaciado de líneas</string>
+    <string name="layout_element_size">Tamaño</string>
+    <string name="layout_remove_element">Quitar este</string>
+    <string name="layout_delete">Eliminar diseño</string>
+    <string name="layout_save">Guardar</string>
+    <string name="unit_px">px</string>
+    <string name="unit_cm">cm</string>
+    <string name="unit_inch">pulg</string>
+    <string name="export_title">Exportar</string>
+    <string name="export_select_pages">Seleccionar páginas</string>
+    <string name="export_select_all">Seleccionar todo</string>
+    <string name="export_deselect_all">Deseleccionar todo</string>
+    <string name="export_range_hint">Ingresa el rango de páginas a exportar, p. ej. 2-5, 8</string>
+    <string name="export_as">Exportar como</string>
+    <string name="export_pdf">PDF</string>
+    <string name="export_image">Imagen</string>
+    <string name="export_page_scale">Escala de página</string>
+    <string name="export_percent">%1$d%%</string>
+    <string name="export_size_mm">%1$d × %2$d mm</string>
+    <string name="export_size_px">%1$d × %2$d px</string>
+    <string name="export_invert">Invertir color</string>
+    <string name="export_rasterize">Rasterización</string>
+    <string name="export_rasterize_detail">El PDF exportado se rasterizará y se convertirá en una imagen fija donde el texto y los gráficos no se pueden editar.</string>
+    <string name="export_png">PNG</string>
+    <string name="export_jpeg">JPEG</string>
+    <string name="export_cancel">Cancelar</string>
+    <string name="export_action">Exportar</string>
+    <string name="export_working">Exportando…</string>
+    <string name="export_done">Exportación lista</string>
+    <string name="export_nothing">No hay nada que exportar en esas páginas</string>
+    <string name="export_failed">La exportación falló</string>
+    <string name="pomodoro_title">Temporizador Pomodoro</string>
+    <string name="pomodoro_phase_focus">Enfoque</string>
+    <string name="pomodoro_phase_short">Descanso corto</string>
+    <string name="pomodoro_phase_long">Descanso largo</string>
+    <string name="pomodoro_start">Iniciar</string>
+    <string name="pomodoro_pause">Pausar</string>
+    <string name="pomodoro_skip">Saltar</string>
+    <string name="pomodoro_reset">Reiniciar</string>
+    <string name="pomodoro_focus_minutes">Minutos de enfoque</string>
+    <string name="pomodoro_short_minutes">Minutos de descanso corto</string>
+    <string name="pomodoro_long_minutes">Minutos de descanso largo</string>
+    <string name="pomodoro_sessions">Sesiones antes de un descanso largo</string>
+    <string name="pomodoro_auto_start">Iniciar la siguiente fase automáticamente</string>
+    <string name="pomodoro_notify">Notificar cuando termine cada fase</string>
+    <string name="pomodoro_notify_detail">Las notificaciones se quedan en este dispositivo</string>
+    <string name="pomodoro_focus_done">Terminó la sesión de enfoque</string>
+    <string name="pomodoro_break_done">Terminó el descanso</string>
+    <string name="pomodoro_next_focus">Es hora de enfocarte.</string>
+    <string name="pomodoro_next_short">Toma un descanso corto.</string>
+    <string name="pomodoro_next_long">Toma un descanso largo.</string>
+    <string name="search_title">Buscar</string>
+    <string name="search_hint">Buscar en esta nota</string>
+    <string name="search_close">Cerrar búsqueda</string>
+    <string name="search_none">Sin resultados</string>
+    <string name="search_searching">Buscando…</string>
+    <string name="search_pending">Parte de la escritura aún no se ha leído, así que pueden faltar resultados.</string>
+    <string name="search_page">Página %1$d</string>
+    <string name="search_previous">Resultado anterior</string>
+    <string name="search_next">Resultado siguiente</string>
+    <plurals name="search_matches">
+        <item quantity="one">%d coincidencia</item>
+        <item quantity="other">%d coincidencias</item>
+    </plurals>
+    <string-array name="editor_action_names">
+        <item>Deshacer</item>
+        <item>Rehacer</item>
+        <item>Alternar dibujo con el dedo</item>
+        <item>Alternar solo lectura</item>
+        <item>Alternar barra de herramientas</item>
+        <item>Pluma</item>
+        <item>Lápiz</item>
+        <item>Resaltador</item>
+        <item>Lazo</item>
+        <item>Borrador</item>
+        <item>Forma</item>
+        <item>Imagen</item>
+        <item>Cámara</item>
+        <item>Nota adhesiva</item>
+        <item>Tabla</item>
+        <item>Lupa</item>
+        <item>Grabadora</item>
+        <item>Regla</item>
+        <item>Puntero láser</item>
+        <item>Abrir panel de la herramienta</item>
+        <item>Color 1</item>
+        <item>Color 2</item>
+        <item>Color 3</item>
+        <item>Color 4</item>
+        <item>Color 5</item>
+        <item>Grosor 1</item>
+        <item>Grosor 2</item>
+        <item>Grosor 3</item>
+        <item>Alternar modo de borrado</item>
+        <item>Borrar página</item>
+        <item>Copiar</item>
+        <item>Cortar</item>
+        <item>Pegar</item>
+        <item>Eliminar selección</item>
+        <item>Página siguiente</item>
+        <item>Página anterior</item>
+        <item>Primera página</item>
+        <item>Última página</item>
+        <item>Agregar página</item>
+        <item>Cuadrícula de páginas</item>
+        <item>Selector de páginas</item>
+        <item>Acercar</item>
+        <item>Alejar</item>
+        <item>Tamaño real</item>
+        <item>Buscar</item>
+        <item>Exportar</item>
+        <item>Configuración</item>
+    </string-array>
+</resources>

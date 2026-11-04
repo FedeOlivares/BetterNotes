@@ -169,7 +169,8 @@ class FingerSettingsTest {
         val settings = AppSettings(
             gestures = GestureSettings(oneFinger = OneFingerSetting.DRAW, twoFingers = TwoFingerAction.IGNORED, undoTaps = false, doubleTapZoom = false),
             stylus = StylusSettings(false, StylusAction.LASSO, StylusAction.REDO, StylusHoldAction.NONE, StylusEraserEnd.IGNORED),
-            canvas = CanvasSettings(continueFromLastPage = false, keepScreenOn = false, hideSystemBars = false),
+            canvas = CanvasSettings(continueFromLastPage = false, keepScreenOn = false, hideSystemBars = false, snapToAlign = false),
+            autoName = AutoName.OFF,
             newNoteName = NewNoteName.UNTITLED,
         )
         assertEquals(settings, SettingsCodec.decode(SettingsCodec.encode(settings)))

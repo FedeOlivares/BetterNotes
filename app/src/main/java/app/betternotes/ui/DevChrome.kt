@@ -88,6 +88,8 @@ internal fun DevChrome(
             ChromeButton("Settings") { openSettings(SettingsOverlay.SCREEN) }
             ChromeButton("Stylus") { openSettings(SettingsOverlay.STYLUS_FINGER) }
             ChromeButton("Template") { openSettings(SettingsOverlay.TEMPLATE) }
+            ChromeButton("Search") { openSettings(SettingsOverlay.SEARCH) }
+            ChromeButton("Export") { openSettings(SettingsOverlay.EXPORT) }
             if (BuildConfig.PERF_TOOLS) {
                 ChromeButton(if (showReadout) "Perf on" else "Perf off") { showReadout = !showReadout }
             }

@@ -77,6 +77,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** The open document, for changes made from outside the canvas. */
     val openDocument: Document? get() = editor?.document
 
+    /** The open editor, for what works on the saved files, such as export and search. */
+    val openEditor: NoteEditor? get() = editor
+
     /** Called for a stylus button or shortcut's action that isn't the canvas's, as for choosing a tool. */
     var onToolAction: (EditorAction) -> Boolean = { false }
 

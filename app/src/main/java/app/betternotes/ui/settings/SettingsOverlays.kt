@@ -24,10 +24,11 @@ import androidx.compose.ui.unit.dp
 import app.betternotes.canvas.CanvasView
 import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.changeAppearance
+import app.betternotes.search.DocumentSearch
 import app.betternotes.settings.SettingsRepository
 
 /** What the settings UI is showing over the editor, if anything. */
-enum class SettingsOverlay { SCREEN, STYLUS_FINGER, TEMPLATE }
+enum class SettingsOverlay { SCREEN, STYLUS_FINGER, TEMPLATE, EXPORT, SEARCH }
 
 /** The dimming behind a sheet, measured from the reference. */
 private val Scrim = Color(0x54000000)
@@ -36,6 +37,8 @@ private val StylusSheetWidth = 770.dp
 private val StylusSheetTop = 100.dp
 private val StylusSheetBottom = 100.dp
 private val TemplateSheetWidth = 854.dp
+private val ExportSheetWidth = 790.dp
+private val ExportSheetMargin = 70.dp
 private val TemplateSheetMargin = 36.dp
 
 /**
@@ -49,11 +52,18 @@ fun SettingsOverlayHost(
     canvas: CanvasView,
     onDismiss: () -> Unit,
     dark: Boolean = true,
+    search: DocumentSearch? = null,
 ) {
     if (overlay == null) return
     val settings by repository.settings.collectAsState()
     SettingsTheme(dark) {
         when (overlay) {
+            SettingsOverlay.EXPORT -> canvas.openEditor?.let { editor ->
+                SheetFrame(ExportSheetWidth, ExportSheetMargin, ExportSheetMargin, onDismiss) { modifier ->
+                    ExportSheet(editor, onDismiss, modifier)
+                }
+            }
+            SettingsOverlay.SEARCH -> canvas.openEditor?.let { SearchHost(it, search, canvas, onDismiss) }
             SettingsOverlay.SCREEN -> SettingsScreen(settings, canvas.reportedDpi, repository::update, onDismiss)
             SettingsOverlay.STYLUS_FINGER -> SheetFrame(StylusSheetWidth, StylusSheetTop, StylusSheetBottom, onDismiss) { modifier ->
                 StylusFingerSheet(settings, repository::update, onDismiss, modifier)
