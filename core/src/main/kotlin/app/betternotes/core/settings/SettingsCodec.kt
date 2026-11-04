@@ -8,6 +8,7 @@ import app.betternotes.core.format.decodeFile
 import app.betternotes.core.format.encodeFile
 import app.betternotes.core.format.pageSize
 import app.betternotes.core.format.template
+import app.betternotes.core.gesture.TwoFingerAction
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.template.PageBackground
 
@@ -19,6 +20,25 @@ private const val SECTION_NEW_PAGES = 3
 private const val SECTION_LAYOUTS = 4
 private const val SECTION_KEYS = 5
 private const val SECTION_CALIBRATION = 6
+private const val SECTION_FINGERS = 7
+private const val SECTION_STYLUS = 8
+private const val SECTION_CANVAS = 9
+private const val SECTION_NOTE_NAME = 10
+
+private val ONE_FINGER = WireEnum(OneFingerSetting.IGNORED, OneFingerSetting.DRAW, OneFingerSetting.SCROLL)
+private val TWO_FINGERS = WireEnum(TwoFingerAction.IGNORED, TwoFingerAction.ZOOM_AND_PAN, TwoFingerAction.SCROLL)
+private val STYLUS_ACTIONS = WireEnum(
+    StylusAction.NONE,
+    StylusAction.PEN,
+    StylusAction.HIGHLIGHTER,
+    StylusAction.ERASER,
+    StylusAction.LASSO,
+    StylusAction.UNDO,
+    StylusAction.REDO,
+)
+private val HOLD_ACTIONS = WireEnum(StylusHoldAction.NONE, StylusHoldAction.ERASE)
+private val ERASER_ENDS = WireEnum(StylusEraserEnd.ERASER, StylusEraserEnd.IGNORED)
+private val NOTE_NAMES = WireEnum(NewNoteName.DATED, NewNoteName.UNTITLED)
 
 private val SCROLL_DIRECTIONS =
     WireEnum(ScrollDirection.VERTICAL, ScrollDirection.LEFT_TO_RIGHT, ScrollDirection.RIGHT_TO_LEFT)
@@ -59,6 +79,26 @@ object SettingsCodec {
             }
         }
         settings.calibration?.let { calibration -> section(SECTION_CALIBRATION) { float(calibration.dpi) } }
+        section(SECTION_FINGERS) {
+            ONE_FINGER.write(this, settings.gestures.oneFinger)
+            TWO_FINGERS.write(this, settings.gestures.twoFingers)
+            bool(settings.gestures.undoTaps)
+            bool(settings.gestures.redoTaps)
+            bool(settings.gestures.doubleTapZoom)
+        }
+        section(SECTION_STYLUS) {
+            bool(settings.stylus.predictInk)
+            STYLUS_ACTIONS.write(this, settings.stylus.primaryButton)
+            STYLUS_ACTIONS.write(this, settings.stylus.secondaryButton)
+            HOLD_ACTIONS.write(this, settings.stylus.primaryHold)
+            ERASER_ENDS.write(this, settings.stylus.eraserEnd)
+        }
+        section(SECTION_CANVAS) {
+            bool(settings.canvas.continueFromLastPage)
+            bool(settings.canvas.keepScreenOn)
+            bool(settings.canvas.hideSystemBars)
+        }
+        section(SECTION_NOTE_NAME) { NOTE_NAMES.write(this, settings.newNoteName) }
     }
 
     fun decode(bytes: ByteArray): AppSettings = decodeFile(bytes, SETTINGS_MAGIC) {
@@ -68,7 +108,29 @@ object SettingsCodec {
             val size = count(1)
             val endsWithRemaining = remaining - size
             settings = when (tag) {
-                SECTION_GESTURES -> settings.copy(gestures = GestureSettings(long(), long()))
+                SECTION_GESTURES -> settings.copy(
+                    gestures = settings.gestures.copy(multiTapWindowMs = long(), tapMaxDurationMs = long()),
+                )
+                SECTION_FINGERS -> settings.copy(
+                    gestures = settings.gestures.copy(
+                        oneFinger = ONE_FINGER.read(this),
+                        twoFingers = TWO_FINGERS.read(this),
+                        undoTaps = bool(),
+                        redoTaps = bool(),
+                        doubleTapZoom = bool(),
+                    ),
+                )
+                SECTION_STYLUS -> settings.copy(
+                    stylus = StylusSettings(
+                        bool(),
+                        STYLUS_ACTIONS.read(this),
+                        STYLUS_ACTIONS.read(this),
+                        HOLD_ACTIONS.read(this),
+                        ERASER_ENDS.read(this),
+                    ),
+                )
+                SECTION_CANVAS -> settings.copy(canvas = CanvasSettings(bool(), bool(), bool()))
+                SECTION_NOTE_NAME -> settings.copy(newNoteName = NOTE_NAMES.read(this))
                 SECTION_SCROLL -> settings.copy(scrollDirection = SCROLL_DIRECTIONS.read(this))
                 SECTION_NEW_PAGES -> settings.copy(
                     newPages = NewPageDefaults(pageSize(), PageBackground(int(), template())),

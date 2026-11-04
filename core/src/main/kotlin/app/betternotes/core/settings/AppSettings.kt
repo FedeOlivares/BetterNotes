@@ -2,25 +2,39 @@ package app.betternotes.core.settings
 
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.gesture.GestureConfig
+import app.betternotes.core.gesture.OneFingerAction
+import app.betternotes.core.gesture.TwoFingerAction
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.template.PageTemplate
 
-/** The timings of the two-finger taps that undo and redo. */
+/** What fingers do, and the timings of the two-finger taps that undo and redo. */
 data class GestureSettings(
     /** How long a tap sequence stays open. Undo waits this long, since a third tap would make it a redo. */
     val multiTapWindowMs: Long = DEFAULT_MULTI_TAP_WINDOW_MS,
     /** The longest a two-finger tap may stay down. */
     val tapMaxDurationMs: Long = DEFAULT_TAP_MAX_DURATION_MS,
+    val oneFinger: OneFingerSetting = OneFingerSetting.SCROLL,
+    val twoFingers: TwoFingerAction = TwoFingerAction.ZOOM_AND_PAN,
+    val undoTaps: Boolean = true,
+    val redoTaps: Boolean = true,
+    val doubleTapZoom: Boolean = true,
 ) {
     init {
         require(multiTapWindowMs in MULTI_TAP_WINDOW_RANGE_MS) { "Window out of range: $multiTapWindowMs" }
         require(tapMaxDurationMs in TAP_DURATION_RANGE_MS) { "Tap duration out of range: $tapMaxDurationMs" }
     }
 
-    fun applyTo(config: GestureConfig) =
-        config.copy(multiTapWindowMs = multiTapWindowMs, tapMaxDurationMs = tapMaxDurationMs)
+    fun applyTo(config: GestureConfig) = config.copy(
+        multiTapWindowMs = multiTapWindowMs,
+        tapMaxDurationMs = tapMaxDurationMs,
+        oneFinger = if (oneFinger == OneFingerSetting.IGNORED) OneFingerAction.IGNORED else OneFingerAction.SCROLL,
+        twoFingers = twoFingers,
+        undoTaps = undoTaps,
+        redoTaps = redoTaps,
+        zoomTaps = doubleTapZoom,
+    )
 
     companion object {
         const val DEFAULT_MULTI_TAP_WINDOW_MS = 300L
@@ -31,6 +45,37 @@ data class GestureSettings(
         val TAP_DURATION_RANGE_MS = 100L..1000L
     }
 }
+
+/** What one finger does. [DRAW] is the toolbar's finger mode, kept here so that it survives a restart. */
+enum class OneFingerSetting { IGNORED, DRAW, SCROLL }
+
+/** What a stylus button can do. Whether a stylus has such a button depends on the stylus. */
+enum class StylusAction { NONE, PEN, HIGHLIGHTER, ERASER, LASSO, UNDO, REDO }
+
+/** What holding the primary button does. */
+enum class StylusHoldAction { NONE, ERASE }
+
+/** What the eraser end of a stylus does. */
+enum class StylusEraserEnd { ERASER, IGNORED }
+
+data class StylusSettings(
+    /** Draws ahead of the pen using motion prediction. Off, ink only ever shows where the pen has been. */
+    val predictInk: Boolean = true,
+    val primaryButton: StylusAction = StylusAction.PEN,
+    val secondaryButton: StylusAction = StylusAction.HIGHLIGHTER,
+    val primaryHold: StylusHoldAction = StylusHoldAction.ERASE,
+    val eraserEnd: StylusEraserEnd = StylusEraserEnd.ERASER,
+)
+
+/** How a new note gets its name. */
+enum class NewNoteName { DATED, UNTITLED }
+
+/** The behavior of an open note or canvas. */
+data class CanvasSettings(
+    val continueFromLastPage: Boolean = true,
+    val keepScreenOn: Boolean = true,
+    val hideSystemBars: Boolean = true,
+)
 
 /**
  * A measured screen density, for when the device misreports its own. Real size depends on this: the
@@ -74,6 +119,9 @@ data class AppSettings(
     val keyBindings: KeyBindings = KeyBindings.Default,
     /** Null trusts the density the device reports. */
     val calibration: ScreenCalibration? = null,
+    val stylus: StylusSettings = StylusSettings(),
+    val canvas: CanvasSettings = CanvasSettings(),
+    val newNoteName: NewNoteName = NewNoteName.DATED,
 ) {
     /** Saves [layout], replacing any layout with the same name. */
     fun withCustomLayout(layout: CustomLayout): AppSettings {

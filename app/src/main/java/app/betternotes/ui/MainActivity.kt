@@ -3,6 +3,7 @@ package app.betternotes.ui
 import android.os.Bundle
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.WindowManager
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
@@ -20,6 +21,9 @@ import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
 import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.format.DocumentStore
+import app.betternotes.core.gesture.InputMode
+import app.betternotes.core.settings.AppSettings
+import app.betternotes.core.settings.OneFingerSetting
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
 import app.betternotes.core.template.PageBackground
@@ -32,6 +36,8 @@ import app.betternotes.search.DocumentSearch
 import app.betternotes.search.MlKitRecognizer
 import app.betternotes.settings.SettingsRepository
 import app.betternotes.settings.actionFor
+import app.betternotes.ui.settings.SettingsOverlay
+import app.betternotes.ui.settings.SettingsOverlayHost
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -46,15 +52,18 @@ class MainActivity : ComponentActivity() {
     private var search: DocumentSearch? = null
     private lateinit var settings: SettingsRepository
     private val readout = mutableStateOf("")
+    private val shownOverlay = mutableStateOf<SettingsOverlay?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestHighestRefreshRate()
-        goFullscreen()
 
         canvas = CanvasView(this)
         settings = SettingsRepository(this)
-        lifecycleScope.launch { settings.settings.collect(canvas::applySettings) }
+        canvas.onInputModeChanged = ::rememberFingerMode
+        // Applied once here so that the document opens with them, and again whenever they change.
+        apply(settings.settings.value)
+        lifecycleScope.launch { settings.settings.collect(::apply) }
         if (BuildConfig.PERF_TOOLS) {
             val perf = PerfProbe(window)
             perf.onSummary = { readout.value = it }
@@ -66,8 +75,13 @@ class MainActivity : ComponentActivity() {
         val chrome = ComposeView(this).apply {
             setContent {
                 MaterialTheme(colorScheme = darkColorScheme()) {
-                    DevChrome(canvas, readout, ::openScratch)
+                    DevChrome(canvas, readout, ::openScratch) { shownOverlay.value = it }
                 }
+            }
+        }
+        val overlays = ComposeView(this).apply {
+            setContent {
+                SettingsOverlayHost(shownOverlay.value, settings, canvas, onDismiss = { shownOverlay.value = null })
             }
         }
         setContentView(
@@ -77,6 +91,7 @@ class MainActivity : ComponentActivity() {
                     chrome,
                     FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL),
                 )
+                addView(overlays, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             },
         )
 
@@ -97,6 +112,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        canvas.rememberPage()
         editor?.saveNow()
         LibraryRepository.get(this).refresh()
     }
@@ -155,11 +171,34 @@ class MainActivity : ComponentActivity() {
         canvas.post { CanvasBenchmark.run(canvas, perf) { finish() } }
     }
 
-    private fun goFullscreen() {
+    private fun apply(next: AppSettings) {
+        canvas.applySettings(next)
+        if (next.canvas.keepScreenOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (next.canvas.hideSystemBars) {
+                hide(WindowInsetsCompat.Type.systemBars())
+                systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    /** The finger mode button and the sheet's "single finger" are one setting, so it survives a restart. */
+    private fun rememberFingerMode(mode: InputMode) {
+        settings.update { current ->
+            val finger = current.gestures.oneFinger
+            val next = when {
+                mode == InputMode.FINGER_DRAW -> OneFingerSetting.DRAW
+                mode == InputMode.STYLUS_DRAW && finger == OneFingerSetting.DRAW -> OneFingerSetting.SCROLL
+                else -> finger
+            }
+            current.copy(gestures = current.gestures.copy(oneFinger = next))
         }
     }
 

@@ -43,6 +43,14 @@ class SettingsTest {
     }
 
     @Test
+    fun `templates added after format version 1 keep their values`() {
+        for (template in listOf(PageTemplate.CornellRuled(20f, 0.6f, 7), PageTemplate.Engineering(11f, 0.4f, 8), PageTemplate.GuitarScore(8f, 40f, 1f, 6))) {
+            val settings = AppSettings(newPages = NewPageDefaults(background = PageBackground(template = template)))
+            assertEquals(settings, SettingsCodec.decode(SettingsCodec.encode(settings)))
+        }
+    }
+
+    @Test
     fun `a section this version does not know is skipped`() {
         val bytes = encodeFile("BNST") {
             varint(99)

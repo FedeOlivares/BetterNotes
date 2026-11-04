@@ -116,7 +116,7 @@
 - That recognition works on the Pad 7 with no network: run `.\scripts\verify-handwriting-offline.ps1 -Serial <serial>`. On an x86_64 emulator (API 37) it worked in airplane mode and with no `INTERNET` permission, with the models surviving that update and 0 bytes of the app's traffic while recognizing. `TrafficStats` sees only the app's own traffic, not Google Play services'.
 
 ## 4. UI reference
-Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
+The owner's screenshots of Notewise in dark mode are in `D:\code\better-notes\reference\notewise\`, named for what they show.
 
 They contain personal notes and a profile photo. `reference/` is git-ignored so they stay out of every repository; a fresh clone will not have them.
 
@@ -241,7 +241,8 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 - The pencil and dotted lines have no brush of their own yet: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores the dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check this on the tablet, and spread the work over frames if it shows.
 - `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
-- Settings, export, search, the model download and calibration have logic and tests but no screens, because no reference screenshots exist. Nothing in the app calls the download yet, except the check script.
+- Export and search have logic and tests but no screens, because no reference screenshots of them exist.
+- The settings screens are reached from `DevChrome` until the real toolbars take over. Whoever owns those shows them through `SettingsOverlayHost`.
 - Export paints what `PagePainter` paints, so it has the same gap as the canvas: only strokes, paper, templates and PDF pages for now.
 - ML Kit's native libraries make the APK large: about 73 MB for debug and 39 MB for offline, with every ABI included. Only arm64-v8a is needed on the tablet.
 
@@ -258,7 +259,7 @@ Choices in `:core` that have no reference and may need the owner's input:
 - The eraser skips images, text, tables, sticky notes and recordings. Only the lasso and "clear page" remove them.
 - On an infinite canvas, "clear page" removes items inside the view, cuts strokes at its edge and keeps other items that cross it.
 - A stroke is lassoed if at least half of it is inside. Other items are lassoed by their center.
-- The guitar layout is 6-line tablature. Cornell and legal proportions, template colors and gesture timings are defaults chosen without a reference.
+- Guitar Tablature is 6-line staves, and Guitar Score pairs a 5-line staff with a 6-line one. Cornell and legal proportions, template colors and gesture timings are defaults chosen without a reference.
 - Stroke samples are stored uncompressed, favoring load speed over disk use (24 bytes per sample).
 - Library folders are not in `:core` yet; the library workstream adds them.
 
@@ -303,13 +304,20 @@ Library choices with no reference, which need the owner's screenshots or input:
 - Export: `core/.../export/ExportPlan` holds the math and file names. `app/.../export/DocumentExporter` writes PDFs (vector, one point per point) and PNG or JPEG images (300 dpi by default) from the saved files on a background thread. `NoteEditor.exporter()` saves first.
 - `PagePainter` draws from a `PaintSource`, so that export can use it off the main thread. New item types added there reach exports too, if what they need is on `PaintSource`.
 - Search: `core/.../search` has the `HandwritingRecognizer` interface, `groupInkLines`, `SearchIndex` and `SearchIndexer`, which saves `search.bni` in the document's folder and only recognizes lines that changed. `app/.../search` has `MlKitRecognizer`, `InkModels` and `DocumentSearch`, which refreshes after each save on a low-priority thread.
+- Screens: `app/.../ui/settings/`. `SettingsScreen`, `StylusFingerSheet` and `TemplateSheet` follow the owner's screenshots `options.jpg`, `finger and stylus options.jpg` and `template view.jpg`, with colors and sizes measured from them. Scroll and layout, shortcuts, calibration, handwriting models and `CustomLayoutSheet` have no screenshot, so they only follow the same style. `SettingsTheme` scales one dp to one reference pixel.
+- Stylus buttons: `StylusButtons` tells a click from a hold. `CanvasView.onToolAction` receives the tool choices, which the toolbars must act on.
 - The `offline` build type has no `INTERNET` permission. It uses the same package and key as debug, so it installs over a debug build that has downloaded the models. Debug and profile keep the permission, and so does release, which is not used yet. ML Kit needs the keep rules in `app/proguard-rules.pro`, or minified builds crash at startup.
 - `perf/HandwritingCheck` and `SyntheticInk` run the check script's recognition. The words are drawn by program, so they show the pipeline works, not how well it reads real writing.
 
+Left out of the reference's screens, on purpose: notifications, password, Link, Snap to align, "Auto name notes and sources", "Learn more" and the info icon. They are online, unrequested or have nothing behind them.
+
 Choices here that have no reference and may need the owner's input:
+- "Fast" latency means motion prediction is on. Nothing else in the app differs between the two levels.
+- Double tap with one finger zooms to 200%, and from any other zoom back to real size.
+- Density runs 1 to 10, higher is denser, and 7 is each template's default. Line width runs 1 to 10, and 3 is the default.
+- The size chooser offers A4, A5, Letter and Legal. The reference's options aren't visible.
 - All default shortcuts. Single letters choose tools, and Ctrl combinations do the rest.
-- Undo's tap window can be set from 100 to 1000 ms, and the default stays 300 ms.
-- Templates' density can be set from 4 to 96 pt, and line weight from 0.1 to 4 pt.
+- Undo's tap window can be set from 100 to 1000 ms, and the default stays 300 ms. The slider sits under Redo on the stylus and finger sheet, past what the screenshot shows.
 - A custom layout resizes the page to its own size, and can't go on a PDF page or a canvas. Changing the template of a PDF page does nothing.
 - An exported canvas shows its items plus a 24 pt margin, and an empty one is left out. Images stop at 64 million pixels, and a canvas larger than a PDF page shrinks to fit.
 - Search needs all the query's words on one line, ignores case and accents, and lets handwriting differ by one letter from 4 letters up, and two from 8 up. Those near matches are flagged `exact = false`.

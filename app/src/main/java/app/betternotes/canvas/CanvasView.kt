@@ -30,10 +30,16 @@ import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.InkStyle
+import app.betternotes.core.model.Document
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.search.TextMatch
 import app.betternotes.core.settings.AppSettings
 import app.betternotes.core.settings.EditorAction
+import app.betternotes.core.settings.OneFingerSetting
+import app.betternotes.core.settings.StylusAction
+import app.betternotes.core.settings.StylusButtonListener
+import app.betternotes.core.settings.StylusButtons
+import app.betternotes.core.settings.StylusEraserEnd
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.EraseSession
 import kotlin.math.abs
@@ -58,7 +64,8 @@ internal interface CanvasObserver {
  * next frame. Touches go straight to a [GestureRecognizer], which decides what they mean.
  */
 class CanvasView(context: Context) : FrameLayout(context), GestureListener, InProgressStrokesFinishedListener {
-    private val reportedDpi = physicalDpi(context)
+    /** The density the device claims, which calibration can correct. */
+    val reportedDpi = physicalDpi(context)
 
     val viewport = Viewport(reportedDpi)
 
@@ -66,6 +73,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     var onZoomChanged: (zoom: Float) -> Unit = {}
 
     var tool: CanvasTool = CanvasTool.Ink(InkStyle())
+
+    /** The open document, for changes made from outside the canvas. */
+    val openDocument: Document? get() = editor?.document
+
+    /** Called for a stylus button or shortcut's action that isn't the canvas's, as for choosing a tool. */
+    var onToolAction: (EditorAction) -> Boolean = { false }
 
     /** Called whenever the input mode changes, so that the toolbars can follow a shortcut. */
     var onInputModeChanged: (InputMode) -> Unit = {}
@@ -115,6 +128,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var layoutVersion = -1L
     private var hasPlacedPage = false
     private var modeBeforeViewOnly = InputMode.STYLUS_DRAW
+    private var continueFromLastPage = false
+    private var predictInk = true
+    private var eraserEnd = StylusEraserEnd.ERASER
+    private var holdErasing = false
+    private var stylusButtonState = 0
 
     private val tiles = TileLayerView(context, viewport, ::paintTile, backdropColor)
     private val wet = InProgressStrokesView(context)
@@ -127,6 +145,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         recognizer.onDeadline(SystemClock.uptimeMillis())
         scheduleDeadline()
     }
+    private val stylusButtons = StylusButtons(
+        object : StylusButtonListener {
+            override fun onStylusAction(action: StylusAction) {
+                val editorAction = when (action) {
+                    StylusAction.NONE -> return
+                    StylusAction.PEN -> EditorAction.PEN
+                    StylusAction.HIGHLIGHTER -> EditorAction.HIGHLIGHTER
+                    StylusAction.ERASER -> EditorAction.ERASER
+                    StylusAction.LASSO -> EditorAction.LASSO
+                    StylusAction.UNDO -> EditorAction.UNDO
+                    StylusAction.REDO -> EditorAction.REDO
+                }
+                if (!perform(editorAction)) onToolAction(editorAction)
+            }
+
+            override fun onHoldStart() {
+                holdErasing = true
+            }
+
+            override fun onHoldEnd() {
+                holdErasing = false
+            }
+        },
+    )
+    private val stylusHoldCheck = Runnable { stylusButtons.onDeadline(SystemClock.uptimeMillis()) }
 
     // Navigation.
     private val pageMarginPx = PAGE_MARGIN_DP * resources.displayMetrics.density
@@ -186,6 +229,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
      * page it was drawn on, because it remembers its editor.
      */
     fun close() {
+        rememberPage()
         editor?.onPageLoaded = {}
         editor?.pdf?.onRegionReady = { _, _ -> }
         editor = null
@@ -234,6 +278,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         settlePan()
     }
 
+    /** Saves which page is on screen, for the next time this document opens. */
+    fun rememberPage() {
+        val editor = editor ?: return
+        if (!continueFromLastPage || !hasPlacedPage || width == 0) return
+        val index = currentPageIndex
+        if (index in editor.document.pages.indices) editor.rememberLastPage(editor.document.pages[index].id)
+    }
+
     /** Sets the zoom about the center of the view. Zoom 1 is real size. */
     fun zoomTo(zoom: Float) {
         viewport.zoomTo(zoom, width / 2f, height / 2f)
@@ -246,6 +298,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun applySettings(settings: AppSettings) {
         recognizer.config = settings.gestures.applyTo(recognizer.config)
         scrollDirection = settings.scrollDirection
+        stylusButtons.settings = settings.stylus
+        predictInk = settings.stylus.predictInk
+        eraserEnd = settings.stylus.eraserEnd
+        continueFromLastPage = settings.canvas.continueFromLastPage
+        if (inputMode != InputMode.VIEW_ONLY) {
+            inputMode = if (settings.gestures.oneFinger == OneFingerSetting.DRAW) InputMode.FINGER_DRAW else InputMode.STYLUS_DRAW
+        }
         val dpi = settings.calibration?.dpi ?: reportedDpi
         if (dpi != viewport.screenDpi) {
             viewport.changeDpi(dpi, width / 2f, height / 2f)
@@ -316,6 +375,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
         removeCallbacks(deadlineCheck)
+        removeCallbacks(stylusHoldCheck)
         stopFling()
         recognizer.reset()
     }
@@ -329,10 +389,39 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     override fun onInterceptTouchEvent(event: MotionEvent) = true
 
+    /** A stylus hovering reports its buttons here, and one touching reports them in [onTouchEvent]. */
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        trackStylusButtons(event)
+        return super.onGenericMotionEvent(event)
+    }
+
+    private fun trackStylusButtons(event: MotionEvent) {
+        val tool = event.getToolType(0)
+        if (tool != MotionEvent.TOOL_TYPE_STYLUS && tool != MotionEvent.TOOL_TYPE_ERASER) return
+        val state = event.buttonState
+        val changed = state xor stylusButtonState
+        if (changed == 0) return
+        stylusButtonState = state
+        if (changed and MotionEvent.BUTTON_STYLUS_PRIMARY != 0) {
+            if (state and MotionEvent.BUTTON_STYLUS_PRIMARY != 0) {
+                stylusButtons.primaryDown(event.eventTime)
+            } else {
+                stylusButtons.primaryUp(event.eventTime)
+            }
+        }
+        if (changed and state and MotionEvent.BUTTON_STYLUS_SECONDARY != 0) stylusButtons.secondaryDown()
+        removeCallbacks(stylusHoldCheck)
+        val deadline = stylusButtons.nextDeadlineMs
+        if (deadline != StylusButtons.NO_DEADLINE) {
+            postDelayed(stylusHoldCheck, (deadline - SystemClock.uptimeMillis()).coerceAtLeast(0L))
+        }
+    }
+
     // Drawing has no click to perform: a tap only ever means something to the recognizer.
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         observer?.onTouch(event)
+        trackStylusButtons(event)
         currentEvent = event
         val action = event.actionMasked
         if (action == MotionEvent.ACTION_DOWN) {
@@ -408,6 +497,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     // ---- Drawing ----
 
     override fun onDrawStart(pointerId: Int, kind: PointerKind, x: Float, y: Float) {
+        if (kind == PointerKind.STYLUS_ERASER && eraserEnd == StylusEraserEnd.IGNORED) return
         val editor = editor ?: return
         val layout = layout ?: return
         val index = layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
@@ -417,7 +507,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         drawPageIndex = index
 
         val tool = tool
-        if (kind == PointerKind.STYLUS_ERASER || tool is CanvasTool.Eraser) {
+        if (kind == PointerKind.STYLUS_ERASER || holdErasing || tool is CanvasTool.Eraser) {
             val eraser = tool as? CanvasTool.Eraser ?: DEFAULT_ERASER
             erase = EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt)
             eraseAt(x, y)
@@ -488,7 +578,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val id = strokeId ?: return
         // A stroke that started partway through this event already has its latest sample.
         if (strokeStartedInThisEvent) return
-        val predicted = predictor.predict()
+        val predicted = if (predictInk) predictor.predict() else null
         wet.addToStroke(event, drawPointerId, id, predicted)
         predicted?.recycle()
     }
@@ -559,6 +649,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     override fun onRedo() = redo()
 
+    override fun onZoomTap(x: Float, y: Float) {
+        val target = if (abs(viewport.zoom - 1f) > ZOOM_TAP_NEAR_REAL_SIZE) 1f else ZOOM_TAP_LEVEL
+        viewport.zoomTo(target, x, y)
+        clampPan()
+        settlePan()
+        onZoomChanged(viewport.zoom)
+    }
+
     private fun trackVelocity(event: MotionEvent) {
         if (event.getToolType(0) != MotionEvent.TOOL_TYPE_FINGER && recognizer.mode != InputMode.VIEW_ONLY) return
         val tracker = velocityTracker ?: VelocityTracker.obtain().also { velocityTracker = it }
@@ -621,7 +719,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private fun placeFirstPage() {
         if (hasPlacedPage || width == 0) return
         val layout = layout ?: return
-        layout.moveToPage(viewport, 0, width, height, pageMarginPx)
+        val saved = if (continueFromLastPage) editor?.lastPageIndex() ?: -1 else -1
+        layout.moveToPage(viewport, saved.coerceAtLeast(0), width, height, pageMarginPx)
         settlePan()
         hasPlacedPage = true
     }
@@ -701,6 +800,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
+
+        /** What a double tap zooms to from real size. From anything else it goes back to real size. */
+        const val ZOOM_TAP_LEVEL = 2f
+        const val ZOOM_TAP_NEAR_REAL_SIZE = 0.01f
 
         /** Pages kept in memory on each side of the view, so that turning back finds them ready. */
         const val NEARBY_PAGES = 2

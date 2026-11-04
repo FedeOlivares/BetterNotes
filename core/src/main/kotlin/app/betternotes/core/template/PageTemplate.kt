@@ -6,14 +6,17 @@ import app.betternotes.core.geometry.PageSize
 private const val DEFAULT_LINE_COLOR = 0xFFB9BDC4.toInt()
 private const val DEFAULT_MARGIN_COLOR = 0xFFD9534F.toInt()
 
+/** Staves read as printed music, so they are darker than the ruling on a page. Measured by eye from the reference. */
+private const val DEFAULT_STAFF_COLOR = 0xFF6B6E75.toInt()
+
 /** Paper color plus the pattern printed on it. Colors are ARGB throughout the model. */
 data class PageBackground(
     val color: Int = DEFAULT_PAPER_COLOR,
     val template: PageTemplate = PageTemplate.Blank,
 ) {
     companion object {
-        /** A by-eye match of the cream page in the reference screenshots, not a measured value. */
-        const val DEFAULT_PAPER_COLOR = 0xFFFAF6EA.toInt()
+        /** The cream page, measured from the reference's template picker. */
+        const val DEFAULT_PAPER_COLOR = 0xFFF8F6EA.toInt()
     }
 }
 
@@ -79,6 +82,15 @@ sealed interface PageTemplate {
         init { requireLength(spacing, lineWidth) }
     }
 
+    /** Like [Cornell], with the cue column ruled too. */
+    data class CornellRuled(
+        val spacing: Float = 24f,
+        val lineWidth: Float = 0.5f,
+        val color: Int = DEFAULT_LINE_COLOR,
+    ) : PageTemplate {
+        init { requireLength(spacing, lineWidth) }
+    }
+
     /** A legal pad: a blank head, ruled lines and a double margin line down the left. */
     data class Legal(
         val spacing: Float = 24f,
@@ -89,12 +101,25 @@ sealed interface PageTemplate {
         init { requireLength(spacing, lineWidth) }
     }
 
+    /** A framed fine grid, with every [MAJOR_EVERY]th line stronger. */
+    data class Engineering(
+        val spacing: Float = 10f,
+        val lineWidth: Float = 0.5f,
+        val color: Int = DEFAULT_LINE_COLOR,
+    ) : PageTemplate {
+        init { requireLength(spacing, lineWidth) }
+
+        companion object {
+            const val MAJOR_EVERY = 5
+        }
+    }
+
     /** Five-line staves. [lineGap] separates lines in a staff, [staffGap] separates staves. */
     data class MusicScore(
         val lineGap: Float = 7f,
         val staffGap: Float = 42f,
         val lineWidth: Float = 0.5f,
-        val color: Int = DEFAULT_LINE_COLOR,
+        val color: Int = DEFAULT_STAFF_COLOR,
     ) : PageTemplate {
         init { requireLength(lineGap, staffGap, lineWidth) }
     }
@@ -104,7 +129,17 @@ sealed interface PageTemplate {
         val lineGap: Float = 7f,
         val staffGap: Float = 42f,
         val lineWidth: Float = 0.5f,
-        val color: Int = DEFAULT_LINE_COLOR,
+        val color: Int = DEFAULT_STAFF_COLOR,
+    ) : PageTemplate {
+        init { requireLength(lineGap, staffGap, lineWidth) }
+    }
+
+    /** A five-line staff joined to a six-line tablature staff by a line down the left. */
+    data class GuitarScore(
+        val lineGap: Float = 7f,
+        val staffGap: Float = 42f,
+        val lineWidth: Float = 0.5f,
+        val color: Int = DEFAULT_STAFF_COLOR,
     ) : PageTemplate {
         init { requireLength(lineGap, staffGap, lineWidth) }
     }

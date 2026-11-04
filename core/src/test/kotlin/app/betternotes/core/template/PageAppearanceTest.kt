@@ -43,6 +43,66 @@ class PageAppearanceTest {
     }
 
     @Test
+    fun `slider steps land on each template and step 7 and 3 are its defaults`() {
+        for (kind in TemplateKind.entries) {
+            val template = kind.newTemplate()
+            if (kind == TemplateKind.BLANK) continue
+            assertEquals(7, template.densityLevel)
+            assertEquals(3, template.lineWeightLevel)
+            for (level in TEMPLATE_LEVELS) {
+                assertEquals("$kind density", level, template.withDensityLevel(level).densityLevel)
+                assertEquals("$kind weight", level, template.withLineWeightLevel(level).lineWeightLevel)
+            }
+        }
+    }
+
+    @Test
+    fun `higher density means closer lines`() {
+        val loose = PageTemplate.Lined().withDensityLevel(2).density!!
+        val tight = PageTemplate.Lined().withDensityLevel(9).density!!
+        assert(tight < loose)
+    }
+
+    @Test
+    fun `resizing skips what cannot change size`() {
+        val document = note()
+        val edit = document.resizePages(listOf(document.pages[0].id), PageSize.Letter)!!
+        edit.apply(FakeTarget(document))
+        assertEquals(PageSize.Letter, document.pages[0].size)
+        val pdfDoc = pdf()
+        assertNull(pdfDoc.resizePages(listOf(pdfDoc.pages[0].id), PageSize.A4))
+        val canvasDoc = canvas()
+        assertNull(canvasDoc.resizePages(listOf(canvasDoc.pages[0].id), PageSize.A4))
+    }
+
+    @Test
+    fun `applying the picker changes paper template and size as one undo`() {
+        val document = note()
+        val target = FakeTarget(document)
+        val before = document.pages[0]
+        val background = PageBackground(0xFF000000.toInt(), PageTemplate.Grid())
+        val edit = document.changeAppearance(listOf(before.id), background, PageSize.Letter)!!
+        edit.apply(target)
+        assertEquals(background, document.pages[0].background)
+        assertEquals(PageSize.Letter, document.pages[0].size)
+        edit.revert(target)
+        assertEquals(before, document.pages[0])
+    }
+
+    @Test
+    fun `applying the picker skips pages that cannot take it`() {
+        val background = PageBackground(template = PageTemplate.Custom(layout()))
+        val canvasDoc = canvas()
+        assertNull(canvasDoc.changeAppearance(listOf(canvasDoc.pages[0].id), background))
+        assertNull(canvasDoc.changeAppearance(listOf(canvasDoc.pages[0].id), PageBackground(template = PageTemplate.Legal())))
+        val pdfDoc = pdf()
+        assertNull(pdfDoc.changeAppearance(listOf(pdfDoc.pages[0].id), PageBackground(template = PageTemplate.Grid())))
+        val noteDoc = note()
+        noteDoc.changeAppearance(listOf(noteDoc.pages[0].id), background)!!.apply(FakeTarget(noteDoc))
+        assertEquals(layout().size, noteDoc.pages[0].size)
+    }
+
+    @Test
     fun `changing the background can be undone`() {
         val document = note()
         val target = FakeTarget(document)

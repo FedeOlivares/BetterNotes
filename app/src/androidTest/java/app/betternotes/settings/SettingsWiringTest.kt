@@ -2,7 +2,9 @@ package app.betternotes.settings
 
 import android.os.Looper
 import android.os.SystemClock
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -15,13 +17,18 @@ import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.Page
 import app.betternotes.core.settings.AppSettings
 import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.settings.KeyBindings
 import app.betternotes.core.settings.KeyChord
 import app.betternotes.core.settings.KeyCodes
+import app.betternotes.core.settings.GestureSettings
+import app.betternotes.core.settings.OneFingerSetting
 import app.betternotes.core.settings.ScreenCalibration
+import app.betternotes.core.settings.StylusAction
+import app.betternotes.core.settings.StylusSettings
 import app.betternotes.core.settings.SettingsStore
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.template.PageTemplate
@@ -221,6 +228,108 @@ class SettingsWiringTest {
         assertEquals(reported * 1.1f / 72f, canvas.viewport.pxPerPt, 0.01f)
         canvas.applySettings(AppSettings())
         assertEquals(reported, canvas.viewport.screenDpi)
+    }
+
+    @Test
+    fun oneFingerSettingSetsTheInputMode() = withCanvas { canvas, _, _ ->
+        canvas.applySettings(AppSettings(gestures = GestureSettings(oneFinger = OneFingerSetting.DRAW)))
+        assertEquals(InputMode.FINGER_DRAW, canvas.inputMode)
+        canvas.applySettings(AppSettings())
+        assertEquals(InputMode.STYLUS_DRAW, canvas.inputMode)
+    }
+
+    @Test
+    fun settingsDoNotBreakViewOnly() = withCanvas { canvas, _, _ ->
+        canvas.inputMode = InputMode.VIEW_ONLY
+        canvas.applySettings(AppSettings(gestures = GestureSettings(oneFinger = OneFingerSetting.DRAW)))
+        assertEquals(InputMode.VIEW_ONLY, canvas.inputMode)
+    }
+
+    @Test
+    fun zoomTapGoesToTwiceAndBack() = withCanvas { canvas, _, _ ->
+        canvas.onZoomTap(100f, 100f)
+        assertEquals(2f, canvas.viewport.zoom, 0.001f)
+        canvas.onZoomTap(100f, 100f)
+        assertEquals(1f, canvas.viewport.zoom, 0.001f)
+    }
+
+    private fun hover(canvas: CanvasView, buttons: Int, timeMs: Long) {
+        val properties = MotionEvent.PointerProperties().apply { toolType = MotionEvent.TOOL_TYPE_STYLUS }
+        val coords = MotionEvent.PointerCoords().apply {
+            x = 100f
+            y = 100f
+        }
+        val event = MotionEvent.obtain(
+            timeMs, timeMs, MotionEvent.ACTION_HOVER_MOVE, 1, arrayOf(properties), arrayOf(coords),
+            0, buttons, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0,
+        )
+        canvas.onGenericMotionEvent(event)
+        event.recycle()
+    }
+
+    @Test
+    fun stylusButtonsReachTheToolbars() = withCanvas { canvas, _, _ ->
+        val asked = ArrayList<EditorAction>()
+        canvas.onToolAction = {
+            asked += it
+            true
+        }
+        val now = SystemClock.uptimeMillis()
+        hover(canvas, MotionEvent.BUTTON_STYLUS_PRIMARY, now)
+        hover(canvas, 0, now + 50)
+        assertEquals(listOf(EditorAction.PEN), asked)
+        hover(canvas, MotionEvent.BUTTON_STYLUS_SECONDARY, now + 100)
+        assertEquals(listOf(EditorAction.PEN, EditorAction.HIGHLIGHTER), asked)
+        hover(canvas, 0, now + 150)
+    }
+
+    @Test
+    fun aStylusButtonCanUndo() = withCanvas { canvas, _, document ->
+        canvas.perform(InsertPage(1, Page(100, PageSize.A4)))
+        canvas.applySettings(AppSettings(stylus = StylusSettings(secondaryButton = StylusAction.UNDO)))
+        hover(canvas, MotionEvent.BUTTON_STYLUS_SECONDARY, SystemClock.uptimeMillis())
+        assertEquals(1, document.pages.size)
+        hover(canvas, 0, SystemClock.uptimeMillis())
+    }
+
+    @Test
+    fun aDocumentContinuesFromItsLastPage() {
+        val root = File(instrumentation.targetContext.cacheDir, "last-page-test").apply { deleteRecursively() }
+        val store = DocumentStore(root)
+        val pages = List(4) { Page(it + 1L, PageSize.A4) }
+        val document = Document(9, "Test", DocumentKind.NOTE, 0, 0, pages)
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            lateinit var canvas: CanvasView
+            lateinit var editor: NoteEditor
+            scenario.onActivity { activity ->
+                editor = NoteEditor(store, DocumentSession.create(store, document))
+                canvas = CanvasView(activity)
+                activity.setContentView(canvas)
+                canvas.applySettings(AppSettings())
+                canvas.open(editor)
+            }
+            waitFor { canvas.width > 0 }
+            scenario.onActivity {
+                canvas.goToPage(2)
+                canvas.close()
+                editor.close()
+            }
+            lateinit var second: NoteEditor
+            scenario.onActivity {
+                second = NoteEditor(store, DocumentSession.open(store))
+                canvas.open(second)
+                assertEquals(2, second.lastPageIndex())
+                assertEquals(2, canvas.currentPageIndex)
+                canvas.close()
+                second.close()
+            }
+        }
+        root.deleteRecursively()
+    }
+
+    private fun waitFor(condition: () -> Boolean) {
+        val deadline = SystemClock.uptimeMillis() + 5000
+        while (!condition() && SystemClock.uptimeMillis() < deadline) SystemClock.sleep(20)
     }
 
     @Test
