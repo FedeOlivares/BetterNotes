@@ -1,0 +1,35 @@
+[versions]
+# Android Studio Rabbit 2 (2026.2.2) supports AGP up to 9.5, which needs Gradle 9.6+.
+agp = "9.5.0"
+kotlin = "2.4.21"
+composeBom = "2026.09.00"
+activityCompose = "1.13.0"
+coreKtx = "1.19.1"
+lifecycle = "2.11.0"
+coroutines = "1.11.0"
+# 1.1 alpha: carries the InProgressStrokesView leak and flicker fixes plus the custom brush API.
+ink = "1.1.0-alpha10"
+motionPrediction = "1.0.0"
+junit = "4.13.2"
+
+[libraries]
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-ui = { module = "androidx.compose.ui:ui" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+ink-authoring = { module = "androidx.ink:ink-authoring", version.ref = "ink" }
+ink-brush = { module = "androidx.ink:ink-brush", version.ref = "ink" }
+ink-geometry = { module = "androidx.ink:ink-geometry", version.ref = "ink" }
+ink-rendering = { module = "androidx.ink:ink-rendering", version.ref = "ink" }
+ink-strokes = { module = "androidx.ink:ink-strokes", version.ref = "ink" }
+motion-prediction = { module = "androidx.input:input-motionprediction", version.ref = "motionPrediction" }
+junit = { module = "junit:junit", version.ref = "junit" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

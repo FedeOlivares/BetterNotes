@@ -1,0 +1,258 @@
+# Better Notes: Project Brief
+
+## 1. Product
+"Better Notes" is a stylus-first note-taking and PDF annotation app for Android tablets, modelled on Notewise for Android.
+- **Primary device:** Xiaomi Pad 7 with stylus. iPhone is a possible future target.
+- **Connectivity:** all features are offline and local.
+- **Branding:** the implementing agent decides, unless the owner specifies otherwise.
+- **UI:** must be identical to Notewise (see section 4).
+
+### Priorities
+1. Clean, efficient code.
+2. App speed, especially loading PDFs and registering input.
+
+### Performance targets
+- 144 Hz screen refresh rate
+- 360 Hz general touch sampling
+- 240 Hz stylus sampling
+
+## 2. Owner requirements
+
+### Library (home screen)
+- Opening the app shows loaded PDFs and notes as tiles, each showing part of the first page.
+- Folders can be created here.
+
+### Notes and pages
+- A note is either paged, with resizable pages, or an infinite canvas.
+- Zoom goes up to 1500%.
+- Default zoom is real size: 1 cm drawn on an A4 page equals 1 cm on the real page.
+- A canvas that already exists can change size. A PDF must not.
+
+### Inside a note or PDF
+- See all pages and rearrange them.
+- Quick page switcher: a list of all pages with thumbnails.
+- Add a page.
+- Search, which must attempt to recognize handwriting.
+
+### Toolbar
+**Input mode**
+- Switch between stylus draw and finger draw.
+- When stylus draw is active, fingers move the page.
+
+**Pen, pencil and highlighter (each has all of these)**
+- 5 colors, with the ability to add one custom color or change the defaults
+- 3 line widths
+- Opacity
+- An expanded panel with: fine-tuning of line width, round or square tip, a hold-to-draw-straight-line timer, and a color wheel
+
+**Lasso**
+- Select items and resize them.
+
+**Eraser**
+- Partial erasing
+- Tip size slider
+- Choice of partial or entire-path erase
+- "Clear page"; on an infinite canvas it clears only the displayed portion
+
+**Shapes**
+- Fill
+- Line width
+- Line continuity: dotted, dashed, dot/dash size
+- Corner radius
+
+**Images**
+- Add an image.
+- A dedicated "photo" button goes straight to the camera.
+- Photo border, corner radius and shape.
+
+**Sticky note**
+- A real sticky note that is smaller when closed.
+- Anything typed or drawn in it is contained in it.
+
+**Other tools**
+- Table
+- Clipboard button, which must support pasting photos copied from outside the app
+- Loupe
+- Recorder
+- Ruler displayed over the canvas to help draw lines
+- Laser pointer
+- "View only" toggle in a corner, which disables editing and removes the tools
+
+### Settings
+**Export**
+- Export to PDF and to image.
+
+**Stylus and fingers (defaults)**
+- One finger scrolls.
+- Two fingers zoom and pan.
+- Double tap undoes, with a setting to change its timing.
+- Triple tap with two fingers redoes.
+- Keyboard shortcuts for all tools and options.
+
+**Scroll and layout**
+- Side to side, to the left or right, or vertical.
+
+**Page appearance**
+- Change the template and background color.
+- Lined, dotted or grid, each with adjustable density and line width.
+- Page layouts: hexagonal, Cornell, legal, music score, guitar.
+- Build your own custom layout: set the size in px, cm or inches, and add lines, tables, etc.
+
+## 3. Owner decisions and open questions
+
+### Decided by the owner (2026-11-03)
+- **Undo gesture:** two fingers, so a two-finger double tap undoes and a two-finger triple tap redoes. Undo must wait out the triple-tap window before firing.
+- **Handwriting languages:** English and Spanish.
+- **Online features:** nothing online at all: no cloud, sync, sharing, AI or account. Leave out the cloud button, avatar and people filter.
+- **Distribution:** personal use. Still do not copy Notewise's assets.
+- **Themes:** light and dark, with dark as the default. No light-mode reference screenshots exist.
+
+### Still open
+Do not assume answers to these.
+1. **Handwriting model download:** ML Kit Digital Ink downloads its model on demand, about 20 MB per language, which conflicts with "nothing online". Is a one-time download of the English and Spanish models acceptable, or is another approach needed?
+   - Its docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Verify this.
+2. **Greeting:** what does the library greeting use in place of an account name?
+
+## 4. UI reference
+Three owner screenshots of Notewise in dark mode exist so far, in `reference/notewise/` (1.jpg, 2.jpg, 3.jpg).
+
+They contain personal notes and a profile photo. `reference/` is git-ignored so they stay out of every repository; a fresh clone will not have them.
+
+Colors below are descriptions by eye; none have been measured. Icon meanings marked "(?)" are unconfirmed.
+
+### Library
+- Near-black background with a subtle blue dotted glow along the top.
+- Large serif greeting ("Good evening, [name]") with a smaller sans-serif subtitle.
+- Top right: a cloud-status button, and a pill holding search and the avatar.
+- Filter row: a blue "All" chip, then star, tag, people and bin icons; a circled "..." at far right.
+- Portrait layout is a 3-column grid of rounded cards with a thin light border.
+- Document card: dark header (date, title up to 2 lines, "..."), with the first-page thumbnail filling the rest.
+- Folder card: solid blue folder illustration, "18 items" at top, "..." and the folder name at bottom.
+- Bottom left: floating pill with home (selected, blue), an asterisk (AI?) and a grid icon (?).
+- Bottom right: round blue "+" floating button.
+
+### Editor toolbars
+Dark floating pills sit over the canvas, with no full-width bar.
+- **Left pill:** back, sidebar panel, page grid, page stack (?), up/down chevrons (?).
+- **Center pill:** undo, redo, finger mode (hand with arrows), then a horizontally scrolling tool strip, then a divider and a collapse chevron.
+  - Visible in the strip: table, an unidentified tray icon, sticky/add (?), loupe (?), ruler, microphone, laser pointer (?), settings.
+  - A partly hidden icon at the left edge suggests more tools are scrolled out of view, likely including the pen.
+- **Right pill:** eye (view-only, shown in a lighter circle) and "...".
+- **Second-row pill (active tool):** line type, 3 widths, 5 color circles, add color, edit color, sliders button. Dividers separate the groups. A small blue dot marks the selected width and color.
+
+### Pen panel
+A dark rounded panel with these parts, top to bottom:
+- Title "Pen" and a circular close button.
+- Stroke preview on a dotted background.
+- Three type cards: Natural, Ball, Calligraphy. The selected card has a blue fill and border.
+- Thickness: value pill, then a slider with minus and plus buttons.
+- Line type selector.
+- Toggles: Hold to draw shape (with a "..." for options), Scribble to erase, Circle to lasso.
+- Stabilization value.
+- Color: add button, list button, a row of swatches with the selected one ringed, and a color wheel.
+
+### Editor canvas
+- The screenshots show a cream dotted page.
+
+### Screenshots still needed
+Without these, those screens can't be matched:
+- Eraser, lasso, shape, image, sticky note, table, ruler, loupe, recorder and laser pointer states
+- Page grid and quick page switcher
+- Sidebar, "..." menus and the add-page flow
+- Search results
+- New note/import flow
+- All settings screens
+- The template picker and custom layout builder
+- Lasso selection handles
+- Toolbar scrolled to show the pen, pencil, highlighter and eraser
+
+Also available: Play Store marketing images and the help site at help.notewise.dev. Treat the marketing images as approximate.
+
+## 5. Verified facts
+Checked on 2026-11-03.
+
+### Device (Xiaomi spec page)
+- 11.2 inch, 3200 x 2136, 345 ppi, up to 144 Hz.
+- Touch sampling up to 360 Hz, 240 Hz with pen.
+- OS is HyperOS 2. Xiaomi's pages don't state the Android version, so check it on the tablet.
+
+### Real-size implications at 345 ppi
+- 1 cm is about 135.8 px, so A4 width (210 mm) is about 2852 px.
+- The screen's short side is about 157 mm, so an A4 page at 100% does not fit the screen width in portrait, and shows only part of its height in landscape.
+- Reported device DPI may be inaccurate, so a calibration setting is worth considering.
+
+### Notewise behavior (help site)
+- By default, one finger scrolls and the stylus draws; a toolbar Finger Mode button changes this.
+- Some Xiaomi devices intercept three-finger gestures at system level, so avoid relying on them.
+- Pen settings include Stabilization and a Latency Optimization level.
+
+### Dev environment (Windows 11)
+- Android Studio is at `D:\Android\Android Studio`, build 262.10968.63 (the owner reports Rabbit 2).
+- The bundled JDK is OpenJDK 25.0.4; `java` is not on PATH.
+- The SDK is at `%LOCALAPPDATA%\Android\Sdk`. Installed platform versions have not been checked.
+- Android docs list Rabbit 2 as supporting AGP up to 9.5, and AGP 9.5 needs Gradle 9.6+.
+
+### Latest stable versions found
+- AGP 9.5.0
+- Kotlin 2.4.21
+- Compose BOM 2026.09.00
+- graphics-core 1.0.4
+- input-motionprediction 1.0.0
+- androidx.ink 1.0.0 (newest alpha: 1.1.0-alpha10, which adds a partial stroke eraser and the public custom brush API)
+- ML Kit digital-ink-recognition 19.0.0
+
+## 6. Current project state
+Location: `D:\code\better-notes`, a local git repository with no remote. **Foundation builds on the PC; nothing has run on a device or emulator yet.**
+
+### Build and test
+`java` is not on PATH, so set `JAVA_HOME` to `D:\Android\Android Studio\jbr` before calling `gradlew` directly. `scripts\check.ps1` does this for you.
+- All checks (unit tests, lint, debug and release builds): `.\scripts\check.ps1`
+- Core unit tests: `.\gradlew.bat :core:test`
+- Debug APK: `.\gradlew.bat :app:assembleDebug`
+
+Toolchain in use: Gradle 9.6.0 with a pinned checksum, AGP 9.5.0, Kotlin 2.4.21, JDK 25 (JBR) targeting Java 17. `local.properties` is git-ignored and holds the SDK path.
+
+### Installed SDK (checked 2026-11-03)
+Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdline-tools` or NDK. `compileSdk` and `targetSdk` are 37.
+
+### Files that exist
+- Gradle config and wrapper, `.gitignore`, `.gitattributes`, `scripts/check.ps1`
+- `app/`: manifest, `strings.xml`, and a placeholder `MainActivity` that requests the highest refresh rate and shows a text label
+- `core/.../geometry/`: `Geometry.kt`, `Units.kt`, `Viewport.kt`, with `ViewportTest` covering real-size mapping and the zoom limit
+- `reference/notewise/`: the owner's screenshots (git-ignored)
+
+### Known gaps
+- `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
+- Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
+- The release build is not signed, so it cannot be installed as is. The debug build can.
+- Document model, ink engine and all real UI do not exist yet.
+
+Treat the source files as an unverified starting point. Replace them if a better structure emerges.
+
+## 7. Proposed approach (not owner decisions)
+Open to challenge. These are one agent's suggestions, not validated by a build.
+- **Stack:** native Kotlin. Compose for the UI, and a custom View for the canvas.
+- **Ink:** androidx.ink `InProgressStrokesView` with `MotionEventPredictor` and `requestUnbufferedDispatch` for low-latency strokes. Its newer releases add iOS rendering work, which may help a future port.
+- **Modules:** a pure Kotlin `:core` (model, geometry, erase, lasso, gestures, templates, file format) with JVM tests, plus an Android `:app`.
+- **Coordinates:** world units in PDF points (1/72 inch), so PDFs and notes share one space. Zoom 1.0 equals physical size via screen DPI.
+- **Storage:** one binary file per page, so long documents only load the pages on screen.
+- **PDF:** platform `PdfRenderer`. Setting `minSdk` to 35 adds its text extraction, but only if the tablet runs Android 15, so confirm that first.
+- **Undo:** immutable items with reversible edits.
+
+## 8. Suggested workstreams
+Dependencies run top to bottom; workstreams 4 to 7 can run in parallel once 3 is stable.
+1. **Foundation:** get the Gradle project building, add the wrapper, initialize git, add CI-style test commands.
+2. **Core:** document model, geometry, undo, eraser, lasso, gestures, templates and file format, with unit tests.
+3. **Canvas and ink:** low-latency drawing, zoom and pan, real-size rendering, stylus and finger modes. Test early on the real tablet.
+4. **PDF:** import, fast tiled rendering, annotation, text search.
+5. **Library:** tiles, thumbnails, folders.
+6. **Editor UI and tools:** toolbars, panels, shapes, images and camera, sticky notes, tables, clipboard, loupe, ruler, recorder, laser pointer, view-only mode.
+7. **Settings and output:** gestures, keyboard shortcuts, scroll layouts, templates, custom layout builder, PDF and image export, handwriting search.
+
+## 9. Working rules
+- **Never add Claude or AI attribution to git commits (no `Co-Authored-By`).** All credit goes to the owner.
+- Verify performance on the actual Pad 7. Report measured numbers, and say plainly when something could not be measured.
+- HyperOS may limit an app's refresh rate; check the rate the app actually gets rather than assuming 144 Hz.
+- Report honestly what was and wasn't compiled, tested or run on the device.
+- Ask the owner when a screen's reference screenshot is missing rather than inventing it, since the UI must match.
+- Redraw icons and artwork instead of extracting them from Notewise.

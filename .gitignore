@@ -1,0 +1,15 @@
+.gradle/
+build/
+local.properties
+.idea/
+.kotlin/
+*.iml
+captures/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Owner screenshots of Notewise: they contain personal notes and a profile photo. Never commit them.
+reference/
