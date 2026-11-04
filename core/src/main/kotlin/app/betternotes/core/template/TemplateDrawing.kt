@@ -27,6 +27,7 @@ private const val STAFF_SIDE_MARGIN_PT = 36f
 private const val STAFF_TOP_MARGIN_PT = 36f
 private const val MUSIC_STAFF_LINES = 5
 private const val GUITAR_STAFF_LINES = 6
+private const val ENGINEERING_MARGIN_PT = 18f
 
 /**
  * Emits the part of this template inside [region].
@@ -46,12 +47,15 @@ fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink) {
             verticalLines(area, page, spacing, lineWidth, color, sink)
         }
         is PageTemplate.Hexagonal -> hexagons(area, this, sink)
-        is PageTemplate.Cornell -> page?.let { cornell(it, this, sink) }
+        is PageTemplate.Cornell -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = false, sink) }
+        is PageTemplate.CornellRuled -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = true, sink) }
+        is PageTemplate.Engineering -> page?.let { engineering(it, this, sink) }
         is PageTemplate.Legal -> page?.let { legal(it, this, sink) }
         is PageTemplate.MusicScore ->
             page?.let { staves(it, MUSIC_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
         is PageTemplate.GuitarTab ->
             page?.let { staves(it, GUITAR_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
+        is PageTemplate.GuitarScore -> page?.let { guitarScore(it, this, sink) }
         is PageTemplate.Custom -> if (page != null) layout.elements.forEach { it.draw(sink) }
     }
 }
@@ -128,17 +132,57 @@ private fun hexagons(area: Bounds, t: PageTemplate.Hexagonal, sink: TemplateSink
     }
 }
 
-private fun cornell(page: PageSize, t: PageTemplate.Cornell, sink: TemplateSink) {
+private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ruledCue: Boolean, sink: TemplateSink) {
     val titleBottom = page.heightPt * CORNELL_TITLE_FRACTION
     val summaryTop = page.heightPt * (1f - CORNELL_SUMMARY_FRACTION)
     val cueRight = page.widthPt * CORNELL_CUE_FRACTION
-    sink.line(0f, titleBottom, page.widthPt, titleBottom, t.lineWidth * 2f, t.color)
-    sink.line(0f, summaryTop, page.widthPt, summaryTop, t.lineWidth * 2f, t.color)
-    sink.line(cueRight, titleBottom, cueRight, summaryTop, t.lineWidth * 2f, t.color)
-    var y = titleBottom + t.spacing
+    sink.line(0f, titleBottom, page.widthPt, titleBottom, width * 2f, color)
+    sink.line(0f, summaryTop, page.widthPt, summaryTop, width * 2f, color)
+    sink.line(cueRight, titleBottom, cueRight, summaryTop, width * 2f, color)
+    val ruleStart = if (ruledCue) 0f else cueRight
+    var y = titleBottom + spacing
     while (y < summaryTop) {
-        sink.line(cueRight, y, page.widthPt, y, t.lineWidth, t.color)
-        y += t.spacing
+        sink.line(ruleStart, y, page.widthPt, y, width, color)
+        y += spacing
+    }
+}
+
+private fun engineering(page: PageSize, t: PageTemplate.Engineering, sink: TemplateSink) {
+    val left = ENGINEERING_MARGIN_PT
+    val top = ENGINEERING_MARGIN_PT
+    val columns = ((page.widthPt - left * 2f) / t.spacing).toInt()
+    val rows = ((page.heightPt - top * 2f) / t.spacing).toInt()
+    val right = left + columns * t.spacing
+    val bottom = top + rows * t.spacing
+    for (column in 0..columns) {
+        val major = column % PageTemplate.Engineering.MAJOR_EVERY == 0 || column == columns
+        val x = left + column * t.spacing
+        sink.line(x, top, x, bottom, if (major) t.lineWidth * 2f else t.lineWidth, t.color)
+    }
+    for (row in 0..rows) {
+        val major = row % PageTemplate.Engineering.MAJOR_EVERY == 0 || row == rows
+        val y = top + row * t.spacing
+        sink.line(left, y, right, y, if (major) t.lineWidth * 2f else t.lineWidth, t.color)
+    }
+}
+
+private fun guitarScore(page: PageSize, t: PageTemplate.GuitarScore, sink: TemplateSink) {
+    val left = STAFF_SIDE_MARGIN_PT
+    val right = page.widthPt - STAFF_SIDE_MARGIN_PT
+    val musicHeight = t.lineGap * (MUSIC_STAFF_LINES - 1)
+    val tabHeight = t.lineGap * (GUITAR_STAFF_LINES - 1)
+    val inner = t.lineGap * 2f
+    var top = STAFF_TOP_MARGIN_PT
+    while (top + musicHeight + inner + tabHeight <= page.heightPt - STAFF_TOP_MARGIN_PT) {
+        for (line in 0 until MUSIC_STAFF_LINES) {
+            sink.line(left, top + line * t.lineGap, right, top + line * t.lineGap, t.lineWidth, t.color)
+        }
+        val tabTop = top + musicHeight + inner
+        for (line in 0 until GUITAR_STAFF_LINES) {
+            sink.line(left, tabTop + line * t.lineGap, right, tabTop + line * t.lineGap, t.lineWidth, t.color)
+        }
+        sink.line(left, top, left, tabTop + tabHeight, t.lineWidth, t.color)
+        top = tabTop + tabHeight + t.staffGap
     }
 }
 

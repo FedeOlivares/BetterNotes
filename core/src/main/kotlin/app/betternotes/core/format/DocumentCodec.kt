@@ -26,6 +26,9 @@ private const val TEMPLATE_LEGAL = 6
 private const val TEMPLATE_MUSIC = 7
 private const val TEMPLATE_GUITAR = 8
 private const val TEMPLATE_CUSTOM = 9
+private const val TEMPLATE_CORNELL_RULED = 10
+private const val TEMPLATE_ENGINEERING = 11
+private const val TEMPLATE_GUITAR_SCORE = 12
 
 private const val ELEMENT_LINE = 0
 private const val ELEMENT_RECTANGLE = 1
@@ -150,6 +153,25 @@ internal fun ByteWriter.template(template: PageTemplate) {
             float(template.lineWidth)
             int(template.color)
         }
+        is PageTemplate.CornellRuled -> {
+            byte(TEMPLATE_CORNELL_RULED)
+            float(template.spacing)
+            float(template.lineWidth)
+            int(template.color)
+        }
+        is PageTemplate.Engineering -> {
+            byte(TEMPLATE_ENGINEERING)
+            float(template.spacing)
+            float(template.lineWidth)
+            int(template.color)
+        }
+        is PageTemplate.GuitarScore -> {
+            byte(TEMPLATE_GUITAR_SCORE)
+            float(template.lineGap)
+            float(template.staffGap)
+            float(template.lineWidth)
+            int(template.color)
+        }
         is PageTemplate.Custom -> {
             byte(TEMPLATE_CUSTOM)
             customLayout(template.layout)
@@ -168,6 +190,9 @@ internal fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_MUSIC -> PageTemplate.MusicScore(float(), float(), float(), int())
     TEMPLATE_GUITAR -> PageTemplate.GuitarTab(float(), float(), float(), int())
     TEMPLATE_CUSTOM -> PageTemplate.Custom(customLayout())
+    TEMPLATE_CORNELL_RULED -> PageTemplate.CornellRuled(float(), float(), int())
+    TEMPLATE_ENGINEERING -> PageTemplate.Engineering(float(), float(), int())
+    TEMPLATE_GUITAR_SCORE -> PageTemplate.GuitarScore(float(), float(), float(), int())
     else -> throw CorruptFileException("Unknown template $tag")
 }
 

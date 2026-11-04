@@ -14,6 +14,7 @@ import java.nio.file.StandardCopyOption
  * document.bnd        the description and page order
  * pages/<id>.bnp      one file per page, so a long document loads only what is on screen
  * assets/<assetId>    images, recordings and imported PDFs
+ * last-page           the page to continue from
  * ```
  *
  * Every write is atomic: the new bytes reach the disk under a temporary name and only then replace
@@ -25,6 +26,7 @@ class DocumentStore(val root: File) {
     private val documentFile = File(root, "document.bnd")
     private val pagesDir = File(root, "pages")
     private val assetsDir = File(root, "assets")
+    private val lastPageFile = File(root, "last-page")
 
     /** True if a document has been written here. */
     fun exists() = documentFile.exists()
@@ -44,6 +46,15 @@ class DocumentStore(val root: File) {
 
     fun writePage(pageId: Long, items: List<PageItem>) =
         writeAtomically(pageFile(pageId), PageCodec.encode(items))
+
+    /** The page last looked at, to continue from, or null if none was saved. */
+    fun readLastPage(): Long? = try {
+        if (lastPageFile.exists()) lastPageFile.readText().toLongOrNull() else null
+    } catch (_: java.io.IOException) {
+        null
+    }
+
+    fun writeLastPage(pageId: Long) = writeAtomically(lastPageFile, pageId.toString().toByteArray())
 
     /** Where an asset lives. The folder exists after this returns, so the caller can write to it. */
     fun assetFile(assetId: String): File {

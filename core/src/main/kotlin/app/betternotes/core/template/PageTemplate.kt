@@ -12,8 +12,8 @@ data class PageBackground(
     val template: PageTemplate = PageTemplate.Blank,
 ) {
     companion object {
-        /** A by-eye match of the cream page in the reference screenshots, not a measured value. */
-        const val DEFAULT_PAPER_COLOR = 0xFFFAF6EA.toInt()
+        /** The cream page, measured from the reference's template picker. */
+        const val DEFAULT_PAPER_COLOR = 0xFFF8F6EA.toInt()
     }
 }
 
@@ -79,6 +79,15 @@ sealed interface PageTemplate {
         init { requireLength(spacing, lineWidth) }
     }
 
+    /** Like [Cornell], with the cue column ruled too. */
+    data class CornellRuled(
+        val spacing: Float = 24f,
+        val lineWidth: Float = 0.5f,
+        val color: Int = DEFAULT_LINE_COLOR,
+    ) : PageTemplate {
+        init { requireLength(spacing, lineWidth) }
+    }
+
     /** A legal pad: a blank head, ruled lines and a double margin line down the left. */
     data class Legal(
         val spacing: Float = 24f,
@@ -87,6 +96,19 @@ sealed interface PageTemplate {
         val marginColor: Int = DEFAULT_MARGIN_COLOR,
     ) : PageTemplate {
         init { requireLength(spacing, lineWidth) }
+    }
+
+    /** A framed fine grid, with every [MAJOR_EVERY]th line stronger. */
+    data class Engineering(
+        val spacing: Float = 10f,
+        val lineWidth: Float = 0.5f,
+        val color: Int = DEFAULT_LINE_COLOR,
+    ) : PageTemplate {
+        init { requireLength(spacing, lineWidth) }
+
+        companion object {
+            const val MAJOR_EVERY = 5
+        }
     }
 
     /** Five-line staves. [lineGap] separates lines in a staff, [staffGap] separates staves. */
@@ -101,6 +123,16 @@ sealed interface PageTemplate {
 
     /** Six-line guitar tablature staves. */
     data class GuitarTab(
+        val lineGap: Float = 7f,
+        val staffGap: Float = 42f,
+        val lineWidth: Float = 0.5f,
+        val color: Int = DEFAULT_LINE_COLOR,
+    ) : PageTemplate {
+        init { requireLength(lineGap, staffGap, lineWidth) }
+    }
+
+    /** A five-line staff joined to a six-line tablature staff by a line down the left. */
+    data class GuitarScore(
         val lineGap: Float = 7f,
         val staffGap: Float = 42f,
         val lineWidth: Float = 0.5f,

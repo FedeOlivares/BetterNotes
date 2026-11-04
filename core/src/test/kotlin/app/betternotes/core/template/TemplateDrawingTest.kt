@@ -167,4 +167,28 @@ class TemplateDrawingTest {
     fun `spacing below the minimum is rejected`() {
         PageTemplate.Lined(spacing = 0f)
     }
+
+    @Test
+    fun `ruled cornell rules the cue column too and plain cornell does not`() {
+        fun startsAtEdge(t: PageTemplate) = t.record().lines.count { it.x0 == 0f && it.y0 == it.y1 }
+        assertEquals(2, startsAtEdge(PageTemplate.Cornell()))
+        assertTrue(startsAtEdge(PageTemplate.CornellRuled()) > 4)
+    }
+
+    @Test
+    fun `engineering grid stays inside its frame and has no pattern on a canvas`() {
+        val lines = PageTemplate.Engineering().record().lines
+        assertTrue(lines.isNotEmpty())
+        assertTrue(lines.all { it.x0 >= 18f && it.x1 <= page.widthPt - 18f && it.y0 >= 18f && it.y1 <= page.heightPt - 18f })
+        assertTrue(PageTemplate.Engineering().record(p = null).lines.isEmpty())
+    }
+
+    @Test
+    fun `guitar score pairs a five line staff with a six line one, joined on the left`() {
+        val lines = PageTemplate.GuitarScore().record().lines
+        val horizontal = lines.count { it.y0 == it.y1 }
+        val vertical = lines.count { it.x0 == it.x1 }
+        assertTrue(vertical > 0)
+        assertEquals(vertical * 11, horizontal)
+    }
 }
