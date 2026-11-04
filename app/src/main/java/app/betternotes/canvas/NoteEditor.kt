@@ -11,7 +11,10 @@ import app.betternotes.core.format.PendingSave
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.search.TextMatch
+import app.betternotes.pdf.PdfPages
 import java.io.IOException
 import java.util.concurrent.Executors
 
@@ -24,6 +27,10 @@ class NoteEditor(
     private val session: DocumentSession,
 ) {
     internal val strokes = StrokeCache()
+
+    /** The PDF behind this document's pages, if it has any. */
+    internal val pdf: PdfPages? =
+        if (session.document.pages.any { it.source is PageSource.PdfPage }) PdfPages(store, session.document) else null
 
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
@@ -66,6 +73,19 @@ class NoteEditor(
         scheduleSave()
     }
 
+    /**
+     * Searches the text of the document's PDF pages, in page order, and replaces any search under way.
+     * [onMatches] gets each page's matches as they are found. A document with no PDF finishes at once.
+     */
+    fun searchPdfText(query: String, onMatches: (List<TextMatch>) -> Unit, onFinished: () -> Unit) {
+        val pdf = pdf
+        if (pdf == null) onFinished() else pdf.search(query, onMatches, onFinished)
+    }
+
+    fun cancelPdfSearch() {
+        pdf?.cancelSearch()
+    }
+
     fun undo(): Boolean = session.history.undo(session).also { if (it) scheduleSave() }
 
     fun redo(): Boolean = session.history.redo(session).also { if (it) scheduleSave() }
@@ -88,6 +108,7 @@ class NoteEditor(
         saveNow()
         closed = true
         background.shutdown()
+        pdf?.close()
     }
 
     private fun scheduleSave() {

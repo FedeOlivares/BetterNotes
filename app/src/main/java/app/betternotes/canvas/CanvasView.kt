@@ -30,6 +30,7 @@ import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.search.TextMatch
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.EraseSession
 import kotlin.math.abs
@@ -148,6 +149,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         this.editor = editor
         painter = PagePainter(editor)
         editor.onPageLoaded = ::redrawPage
+        editor.pdf?.onRegionReady = ::redrawPageRegion
         hasPlacedPage = false
         rebuildLayout()
     }
@@ -158,7 +160,50 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
      */
     fun close() {
         editor?.onPageLoaded = {}
+        editor?.pdf?.onRegionReady = { _, _ -> }
         editor = null
+        painter = null
+    }
+
+    /**
+     * Marks text on the pages, such as search results, in place of whatever was marked before. Pass
+     * [current] to make one match stand out, and an empty list to clear.
+     */
+    fun showMatches(matches: List<TextMatch>, current: TextMatch? = null) {
+        val byPage = HashMap<Long, ArrayList<PageHighlight>>()
+        for (match in matches) {
+            val highlights = byPage.getOrPut(match.pageId) { ArrayList() }
+            for (rect in match.rects) highlights += PageHighlight(rect, match === current)
+        }
+        painter?.highlights = byPage
+        tiles.invalidateAll()
+    }
+
+    /**
+     * Brings a match into view, at the current zoom. A match already on screen stays where it is, so
+     * stepping through nearby ones does not make the page jump.
+     */
+    fun reveal(match: TextMatch) {
+        val editor = editor ?: return
+        val layout = layout ?: return
+        val index = editor.document.indexOfPage(match.pageId)
+        if (index < 0 || width == 0) return
+        stopFling()
+        val originX = layout.originX(index)
+        val originY = layout.originY(index)
+        val visible = viewport.visibleWorld(width, height)
+        if (match.rects.isEmpty()) {
+            layout.moveToPage(viewport, index, width, height, pageMarginPx)
+        } else {
+            val first = match.rects[0]
+            val box = match.rects.fold(first) { all, rect -> all.union(rect) }
+            val target = Bounds(box.left + originX, box.top + originY, box.right + originX, box.bottom + originY)
+            if (visible.contains(target)) return
+            viewport.panX = width / 2f - target.centerX * viewport.pxPerPt
+            viewport.panY = height / 2f - target.centerY * viewport.pxPerPt
+            clampPan()
+        }
+        settlePan()
     }
 
     /** Sets the zoom about the center of the view. Zoom 1 is real size. */
@@ -414,6 +459,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         viewport.panY += dy
         if (scale != 1f) {
             pinchedThisGesture = true
+            editor?.pdf?.pinching = true
             viewport.zoomTo(viewport.zoom * scale, focusX, focusY)
             onZoomChanged(viewport.zoom)
         }
@@ -469,6 +515,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private fun settlePan() {
         viewport.panX = viewport.panX.roundToInt().toFloat()
         viewport.panY = viewport.panY.roundToInt().toFloat()
+        if (editor?.pdf?.endPinch() == true) tiles.invalidateAll()
         tiles.settle()
         retainNearbyPages()
     }
@@ -531,8 +578,20 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         )
     }
 
+    /** New PDF pixels for a point on a page have arrived, which its tile is still waiting for. */
+    private fun redrawPageRegion(pageId: Long, region: Bounds) {
+        val editor = editor ?: return
+        val layout = layout ?: return
+        val index = editor.document.indexOfPage(pageId)
+        if (index < 0) return
+        val x = layout.originX(index)
+        val y = layout.originY(index)
+        tiles.invalidateRegion(Bounds(region.left + x, region.top + y, region.right + x, region.bottom + y))
+    }
+
     private fun paintTile(canvas: Canvas, region: Bounds, leftPx: Double, topPx: Double, scale: Float) {
         val layout = layout ?: return
+        editor?.pdf?.setFocus(viewport.toWorldX(width / 2f), viewport.toWorldY(height / 2f))
         painter?.paint(canvas, layout, region, leftPx, topPx, scale)
     }
 

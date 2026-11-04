@@ -1,5 +1,6 @@
 package app.betternotes.canvas
 
+import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -9,6 +10,7 @@ import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageContent
+import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.TemplateSink
@@ -20,6 +22,10 @@ internal class PagePainter(private val editor: NoteEditor) {
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
+    private val highlightPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
+
+    /** What to mark on each page, by page id, such as search results. */
+    var highlights: Map<Long, List<PageHighlight>> = emptyMap()
 
     /**
      * Paints [region], given in document points. [leftPx] and [topPx] are where the canvas's origin
@@ -31,21 +37,32 @@ internal class PagePainter(private val editor: NoteEditor) {
         layout.forEachPageIn(region) { index ->
             val originX = layout.originX(index)
             val originY = layout.originY(index)
-            val x = (originX * scale.toDouble() - leftPx).toFloat()
-            val y = (originY * scale.toDouble() - topPx).toFloat()
-            canvas.withTranslation(x, y) {
+            val x = originX * scale.toDouble() - leftPx
+            val y = originY * scale.toDouble() - topPx
+            val page = pages[index]
+            val pdfSource = page.source as? PageSource.PdfPage
+            // Before the translation below, because PDF rasters sit on the tile's own pixels.
+            if (pdfSource != null) editor.pdf?.paint(canvas, page, pdfSource, originX, originY, x, y, scale)
+            canvas.withTranslation(x.toFloat(), y.toFloat()) {
                 scale(scale, scale)
                 val local = Bounds(region.left - originX, region.top - originY, region.right - originX, region.bottom - originY)
-                paintPage(this, pages[index], local, scale)
+                paintPage(this, page, local, scale)
             }
         }
     }
 
     private fun paintPage(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
         val size = page.size
+        if (size != null) canvas.clipRect(0f, 0f, size.widthPt, size.heightPt)
+        if (page.source == PageSource.Blank) paintPaper(canvas, page, region, scale)
+        highlights[page.id]?.let { paintHighlights(canvas, it) }
+        editor.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
+    }
+
+    private fun paintPaper(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
+        val size = page.size
         paper.color = page.background.color
         if (size != null) {
-            canvas.clipRect(0f, 0f, size.widthPt, size.heightPt)
             canvas.drawRect(0f, 0f, size.widthPt, size.heightPt, paper)
         } else {
             canvas.drawRect(region.left, region.top, region.right, region.bottom, paper)
@@ -56,7 +73,15 @@ internal class PagePainter(private val editor: NoteEditor) {
             pattern.draw(size, region, template)
             template.flush()
         }
-        editor.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
+    }
+
+    /** Multiplying keeps the text under a highlight readable, as a marker on paper does. */
+    private fun paintHighlights(canvas: Canvas, rects: List<PageHighlight>) {
+        for (highlight in rects) {
+            highlightPaint.color = if (highlight.isCurrent) CURRENT_HIGHLIGHT_COLOR else HIGHLIGHT_COLOR
+            val r = highlight.rect
+            canvas.drawRect(r.left, r.top, r.right, r.bottom, highlightPaint)
+        }
     }
 
     /** Only ink for now. The other item types arrive with their tools. */
@@ -76,8 +101,13 @@ internal class PagePainter(private val editor: NoteEditor) {
 
     private companion object {
         const val MIN_PATTERN_SPACING_PX = 4f
+        const val HIGHLIGHT_COLOR = 0xFFFFE680.toInt()
+        const val CURRENT_HIGHLIGHT_COLOR = 0xFFFFA726.toInt()
     }
 }
+
+/** A rectangle to mark on a page, in the page's own points. */
+internal class PageHighlight(val rect: Bounds, val isCurrent: Boolean)
 
 /** Draws template lines directly, and batches dots, of which a dotted page has thousands. */
 private class CanvasTemplateSink : TemplateSink {
