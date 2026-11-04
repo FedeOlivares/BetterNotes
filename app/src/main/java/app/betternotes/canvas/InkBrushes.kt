@@ -121,13 +121,18 @@ internal object InkBrushes {
                     }
                 },
             )
-            // Bristle streaks: thin parallel lanes of uneven opacity.
+            // A layer of paint with darker bristle streaks drawn over it.
             BrushKind.OIL -> brushFamily(
-                *lanes(-0.45f, 0.45f, 0.15f) { lane, i ->
+                tip {
                     setCornerRounding(0.3f)
-                    setScaleY(0.2f)
+                    setScaleY(1.05f)
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.35f, 0.65f, noise(3, 0.2f)))
+                },
+                *lanes(-0.45f, 0.45f, 0.1f) { lane, i ->
+                    setCornerRounding(0.3f)
+                    setScaleY(0.1f)
                     addBehavior(lane)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.4f, 1f, noise(30 + i, 0.15f)))
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.1f, 1f, noise(30 + i, 0.12f)))
                 },
             )
             BrushKind.SPILL -> brushFamily(
