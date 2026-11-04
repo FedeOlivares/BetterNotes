@@ -19,6 +19,7 @@ import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.TableItem
+import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageBackground
@@ -28,6 +29,7 @@ import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.TapeOptions
 import app.betternotes.ui.MainActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -418,6 +420,47 @@ class CanvasViewTest {
         // The box is 45% of what the view shows across, and the window shows that box across all of it.
         val expected = drag * 0.45f / pxPerPt
         assertEquals(expected, stroke.points.x(stroke.points.size - 1) - stroke.points.x(0), 1f)
+    }
+
+    @Test
+    fun aMovedSelectionLinesUpWithThePageUnlessToldNotTo() {
+        for (snapping in listOf(true, false)) {
+            onMain {
+                canvas.undo()
+                canvas.snapToAlign = snapping
+                canvas.tool = CanvasTool.Shape(ShapeOptions())
+            }
+            drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(100f, 100f), worldToScreen(150f, 150f))
+            waitUntil { pageContent().size == 1 }
+            onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = ALL_ITEM_KINDS, fullOnly = false) }
+            drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(170f, 170f))
+            // To within a point of the page's left edge, on the box of the border too.
+            val shape = onMain { pageContent()[0] as ShapeItem }
+            val toEdge = -shape.bounds.left + 1f
+            drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(125f, 125f), worldToScreen(125f + toEdge, 125f))
+            val moved = onMain { pageContent()[0] as ShapeItem }
+            if (snapping) {
+                assertEquals(0f, moved.bounds.left, 0.2f)
+            } else {
+                assertEquals(1f, moved.bounds.left, 0.3f)
+            }
+            onMain { canvas.undo() }
+        }
+    }
+
+    @Test
+    fun tapeAndEmojiLandOnThePage() {
+        onMain { canvas.tool = CanvasTool.Tape(TapeOptions()) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(100f, 100f), worldToScreen(200f, 100f))
+        waitUntil { pageContent().size == 1 }
+        assertEquals(ShapeKind.TAPE, onMain { (pageContent()[0] as ShapeItem).kind })
+
+        SystemClock.sleep(100)
+        onMain { canvas.tool = CanvasTool.Emoji("⭐", 28) }
+        val at = worldToScreen(300f, 300f)
+        drag(MotionEvent.TOOL_TYPE_STYLUS, at, at.first + 1f to at.second)
+        waitUntil { pageContent().size == 2 }
+        assertEquals("⭐", onMain { (pageContent()[1] as TextItem).text })
     }
 
     @Test

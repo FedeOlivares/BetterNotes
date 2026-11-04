@@ -14,6 +14,7 @@ import app.betternotes.R
 import app.betternotes.canvas.CanvasTool
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.TextEditRequest
+import app.betternotes.canvas.VideoPlayRequest
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.InkTool
@@ -26,6 +27,7 @@ import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.TapeOptions
 
 /** The tools the strip can put in the pen's hand so far. */
 internal enum class ActiveTool(val ink: InkTool?) {
@@ -40,9 +42,11 @@ internal enum class ActiveTool(val ink: InkTool?) {
     TEXT(null),
     TABLE(null),
     IMAGE(null),
+    TAPE(null),
+    EMOJI(null),
 }
 
-private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.LASER
+private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.LASER && this != ActiveTool.TAPE
 
 /** What the color wheel's result is for. */
 internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL }
@@ -74,6 +78,15 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var loupeOpen by mutableStateOf(false)
         private set
+    var tape by mutableStateOf(store.tape())
+        private set
+    var emoji by mutableStateOf(EMOJI.first())
+        private set
+    var recentEmoji by mutableStateOf(EMOJI.take(RECENT_EMOJI))
+        private set
+    var emojiSize by mutableIntStateOf(DEFAULT_EMOJI)
+        private set
+    var playingVideo by mutableStateOf<VideoPlayRequest?>(null)
     var pagesOpen by mutableStateOf(false)
     var sidebarMenuOpen by mutableStateOf(false)
 
@@ -125,6 +138,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canUndo = canvas.canUndo
         canRedo = canvas.canRedo
         canvas.onTextEdit = { textEdit = it }
+        canvas.onPlayVideo = { playingVideo = it }
         canvas.onViewMoved = ::refreshPosition
         canvas.onZoomChanged = { refreshPosition() }
         refreshPosition()
@@ -198,6 +212,24 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         image = change(image)
     }
 
+    fun updateTape(change: (TapeOptions) -> TapeOptions) {
+        tape = change(tape)
+        applyTool()
+    }
+
+    fun chooseEmoji(next: String) {
+        emoji = next
+        if (next !in recentEmoji) recentEmoji = (listOf(next) + recentEmoji).take(RECENT_EMOJI)
+        applyTool()
+    }
+
+    fun resizeEmoji(size: Int) {
+        emojiSize = size.coerceIn(MIN_EMOJI, MAX_EMOJI)
+        applyTool()
+    }
+
+    fun importVideo(uri: Uri) = canvas.importVideo(uri) { say(R.string.notice_video_failed) }
+
     fun importImage(uri: Uri) = canvas.importImage(uri, image) { say(R.string.notice_image_failed) }
 
     /** Pastes a picture or text from outside the app, or says there is nothing to paste. */
@@ -261,6 +293,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         store.save(note)
         store.save(table)
         store.save(image)
+        store.save(tape)
     }
 
     fun applyColor(color: Int) {
@@ -349,13 +382,19 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             activeTool == ActiveTool.STICKY -> CanvasTool.Sticky(note)
             activeTool == ActiveTool.TEXT -> CanvasTool.Text(note)
             activeTool == ActiveTool.TABLE -> CanvasTool.Table(table)
+            activeTool == ActiveTool.TAPE -> CanvasTool.Tape(tape)
+            activeTool == ActiveTool.EMOJI -> CanvasTool.Emoji(emoji, emojiSize)
             activeTool == ActiveTool.IMAGE -> CanvasTool.Lasso(rectangle = true, ALL_ITEM_KINDS, fullOnly = false)
             else -> CanvasTool.Eraser(eraser.mode, eraser.radiusPt, eraser.kinds)
         }
     }
 
-    private companion object {
+    companion object {
+        const val MIN_EMOJI = 12
+        const val MAX_EMOJI = 96
         val LASER_SCALES = floatArrayOf(0.5f, 1f, 1.6f)
+        private const val RECENT_EMOJI = 5
+        private const val DEFAULT_EMOJI = 28
         const val ALPHA_SHIFT = 24
         const val DEFAULT_FILL = 0xFF5F9FFB.toInt()
     }

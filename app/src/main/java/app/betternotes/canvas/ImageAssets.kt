@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.media.ExifInterface
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Log
 import android.util.LruCache
@@ -19,6 +20,9 @@ import kotlin.math.max
 
 /** An imported picture, sized in pixels. */
 internal class ImportedImage(val assetId: String, val width: Int, val height: Int)
+
+/** An imported video, with the picture that stands for it until it plays. */
+internal class ImportedVideo(val assetId: String, val posterAssetId: String, val width: Int, val height: Int, val durationMs: Long)
 
 /**
  * The document's pictures: copying them in, and decoding them for painting. Decoded pictures are held
@@ -76,6 +80,34 @@ internal class ImageAssets(private val store: DocumentStore) {
     } catch (e: IOException) {
         Log.e(TAG, "Could not import a picture", e)
         null
+    }
+
+    /** Copies a video into the document, and saves its first frame to show until it plays. */
+    fun importVideo(resolver: ContentResolver, uri: Uri): ImportedVideo? {
+        val assetId = UUID.randomUUID().toString()
+        val file = store.assetFile(assetId)
+        val retriever = MediaMetadataRetriever()
+        return try {
+            val opened = resolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
+            opened.use { input -> file.outputStream().use { input.copyTo(it) } }
+            retriever.setDataSource(file.path)
+            val poster = retriever.frameAtTime ?: throw IOException("No frames in $uri")
+            val posterId = UUID.randomUUID().toString()
+            store.assetFile(posterId).outputStream().use { poster.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, it) }
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            ImportedVideo(assetId, posterId, poster.width, poster.height, durationMs)
+        } catch (e: IOException) {
+            Log.e(TAG, "Could not import a video", e)
+            file.delete()
+            null
+        } catch (e: RuntimeException) {
+            // MediaMetadataRetriever reports a file it cannot read this way.
+            Log.e(TAG, "Could not import a video", e)
+            file.delete()
+            null
+        } finally {
+            retriever.release()
+        }
     }
 
     private fun makeUpright(file: File) {

@@ -18,6 +18,7 @@ import app.betternotes.core.tools.ResizeHandle
 import app.betternotes.core.tools.Selection
 import app.betternotes.core.tools.resizeTransform
 import app.betternotes.core.tools.selectWithLasso
+import app.betternotes.core.tools.snapToAlign
 import kotlin.math.abs
 
 /**
@@ -64,6 +65,16 @@ internal class LassoController(
         strokeWidth = MARQUEE_WIDTH_DP * density
         pathEffect = DashPathEffect(floatArrayOf(DASH_DP * density, DASH_DP * density), 0f)
     }
+    private val selectionEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = MARQUEE_COLOR
+        strokeWidth = SELECTION_WIDTH_DP * density
+    }
+    private val guide = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = GUIDE_COLOR
+        strokeWidth = SELECTION_WIDTH_DP * density
+    }
     private val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = HANDLE_FILL }
     private val handleEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -72,6 +83,13 @@ internal class LassoController(
     }
 
     val hasSelection get() = selection != null
+
+    /** Whether something moved lines up with what is around it. */
+    var snapEnabled = true
+
+    private var snapTargets: List<Bounds> = emptyList()
+    private var guideX: Float? = null
+    private var guideY: Float? = null
 
     fun open(editor: NoteEditor?) {
         clear()
@@ -127,13 +145,28 @@ internal class LassoController(
                 polygon += x
                 polygon += y
             }
-            Drag.MOVE -> transform = Affine.translate(x - startX, y - startY)
+            Drag.MOVE -> transform = moveTransform(x - startX, y - startY)
             Drag.RESIZE -> transform = selection?.bounds?.let { resizeTransform(it, handle, x, y, keepAspect = handle.isCorner) } ?: transform
         }
         redraw()
     }
 
+    private fun moveTransform(dx: Float, dy: Float): Affine {
+        guideX = null
+        guideY = null
+        val box = selection?.bounds
+        if (!snapEnabled || box == null) return Affine.translate(dx, dy)
+        val moved = Bounds(box.left + dx, box.top + dy, box.right + dx, box.bottom + dy)
+        val size = editor?.document?.pages?.getOrNull(pageIndex)?.size
+        val snapped = snapToAlign(moved, snapTargets, size?.widthPt, size?.heightPt, SNAP_REACH_DP * density / viewport.pxPerPt)
+        guideX = snapped.verticalLine
+        guideY = snapped.horizontalLine
+        return Affine.translate(dx + snapped.dx, dy + snapped.dy)
+    }
+
     fun end() {
+        guideX = null
+        guideY = null
         when (drag) {
             Drag.NONE -> Unit
             Drag.RECTANGLE, Drag.FREEFORM -> finishMarquee()
@@ -172,6 +205,7 @@ internal class LassoController(
             Drag.MOVE, Drag.RESIZE -> {
                 drawDraggedItems(canvas)
                 selection?.bounds?.let { drawBox(canvas, it.mapped(transform)) }
+                drawGuides(canvas)
             }
             Drag.NONE -> selection?.bounds?.let { box ->
                 drawBox(canvas, box)
@@ -183,6 +217,7 @@ internal class LassoController(
     private fun beginTransform(current: Selection, gesture: Drag) {
         val page = pageContent() ?: return
         page.splice(current.indices, IntArray(0), emptyList())
+        snapTargets = if (gesture == Drag.MOVE && snapEnabled) page.toList().map { it.bounds } else emptyList()
         transform = Affine()
         drag = gesture
         redraw()
@@ -267,16 +302,35 @@ internal class LassoController(
         outline.reset()
         outline.addRect(box.left, box.top, box.right, box.bottom, Path.Direction.CW)
         outline.transform(pageToScreen)
-        canvas.drawPath(outline, marquee)
+        canvas.drawPath(outline, selectionEdge)
+    }
+
+    /** The lines that a moved selection has lined up with, across the whole view. */
+    private fun drawGuides(canvas: Canvas) {
+        val point = FloatArray(2)
+        guideX?.let { x ->
+            point[0] = x
+            pageToScreen.mapPoints(point)
+            canvas.drawLine(point[0], 0f, point[0], canvas.height.toFloat(), guide)
+        }
+        guideY?.let { y ->
+            point[0] = 0f
+            point[1] = y
+            pageToScreen.mapPoints(point)
+            canvas.drawLine(0f, point[1], canvas.width.toFloat(), point[1], guide)
+        }
     }
 
     private fun drawHandles(canvas: Canvas, box: Bounds) {
-        val radius = HANDLE_RADIUS_DP * density
+        // Small squares on the corners and sides, as a word processor has.
+        val half = HANDLE_HALF_DP * density
+        val point = FloatArray(2)
         for (each in ResizeHandle.entries) {
-            val point = floatArrayOf(box.handleX(each), box.handleY(each))
+            point[0] = box.handleX(each)
+            point[1] = box.handleY(each)
             pageToScreen.mapPoints(point)
-            canvas.drawCircle(point[0], point[1], radius, handleFill)
-            canvas.drawCircle(point[0], point[1], radius, handleEdge)
+            canvas.drawRect(point[0] - half, point[1] - half, point[0] + half, point[1] + half, handleFill)
+            canvas.drawRect(point[0] - half, point[1] - half, point[0] + half, point[1] + half, handleEdge)
         }
     }
 
@@ -302,8 +356,11 @@ internal class LassoController(
         const val HANDLE_FILL = 0xFFFFFFFF.toInt()
         const val MARQUEE_WIDTH_DP = 1.2f
         const val DASH_DP = 3f
-        const val HANDLE_RADIUS_DP = 5f
-        const val HANDLE_EDGE_DP = 1.5f
+        const val SELECTION_WIDTH_DP = 1f
+        const val GUIDE_COLOR = 0xFFE5408F.toInt()
+        const val SNAP_REACH_DP = 6f
+        const val HANDLE_HALF_DP = 4f
+        const val HANDLE_EDGE_DP = 1f
         const val HANDLE_REACH_DP = 18f
 
         /** Less than this is a tap on the selection, not a drag of it. */

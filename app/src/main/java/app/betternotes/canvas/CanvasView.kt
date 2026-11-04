@@ -54,6 +54,7 @@ import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
+import app.betternotes.core.model.VideoItem
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.DEFAULT_ERASABLE
 import app.betternotes.core.tools.EraseSession
@@ -64,6 +65,7 @@ import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.tools.cellAt
 import app.betternotes.core.tools.typedText
 import app.betternotes.core.tools.withCell
@@ -87,6 +89,12 @@ sealed interface CanvasTool {
 
     /** Drags out a new shape. */
     data class Shape(val options: ShapeOptions) : CanvasTool
+
+    /** Lays a strip of tape between where the pen lands and lifts. */
+    data class Tape(val options: TapeOptions) : CanvasTool
+
+    /** Puts an emoji where the pen lands, at a size in points. */
+    data class Emoji(val text: String, val sizePt: Int) : CanvasTool
 
     /** Places a sticky note, or opens, closes or types in the one under the pen. */
     data class Sticky(val options: NoteOptions) : CanvasTool
@@ -118,6 +126,9 @@ class TextEditRequest(
     fun finish(text: String) = commit(text)
 }
 
+/** A request to play a video where it sits, in view pixels. */
+class VideoPlayRequest(val file: File, val left: Float, val top: Float, val width: Float, val height: Float)
+
 /** Reports what happens in the view, for the performance probe. */
 internal interface CanvasObserver {
     fun onTouch(event: MotionEvent)
@@ -135,6 +146,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Called whenever the zoom changes. */
     var onZoomChanged: (zoom: Float) -> Unit = {}
+
+    /** Asks for a video to be played. */
+    var onPlayVideo: (VideoPlayRequest) -> Unit = {}
+
+    /** Whether something moved with the lasso lines up with what is around it. */
+    var snapToAlign: Boolean
+        get() = lasso.snapEnabled
+        set(value) {
+            lasso.snapEnabled = value
+        }
 
     /** Asks for a text box. Null takes it away. */
     var onTextEdit: (TextEditRequest?) -> Unit = {}
@@ -712,7 +733,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             syncChanges()
         } else if (tool is CanvasTool.Shape) {
             shapePointer = pointerId
-            shapes.start(index, pageX(x, index), pageY(y, index), tool.options)
+            shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
+        } else if (tool is CanvasTool.Tape) {
+            shapePointer = pointerId
+            shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
         } else if (tool is CanvasTool.Ink) {
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
@@ -836,6 +860,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val editor = editor ?: return false
         val page = editor.document.pages[index]
         val content = editor.content(page.id)
+        if (playVideoAt(index, page.id, x, y)) return true
         val sticky = topItemOfType<StickyNoteItem>(page.id, x, y)
         if (sticky != null && (tool is CanvasTool.Sticky || tool is CanvasTool.Ink)) {
             val (at, note) = sticky
@@ -851,6 +876,19 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return true
         }
         when (val current = tool) {
+            is CanvasTool.Emoji -> {
+                val size = current.sizePt.toFloat()
+                val box = size * EMOJI_BOX_OF_SIZE
+                val item = TextItem(
+                    IdSource.Random.next(),
+                    Frame(x - box / 2f, y - box / 2f, box, box),
+                    current.text,
+                    size,
+                    NoteOptions.TEXT_COLOR,
+                )
+                editor.perform(ItemsEdit.addOnTop(page.id, content, item))
+                syncChanges()
+            }
             is CanvasTool.Sticky -> {
                 val note = current.options.newSticky(x, y)
                 editor.perform(ItemsEdit.addOnTop(page.id, content, note))
@@ -880,6 +918,26 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             else -> return false
         }
+        return true
+    }
+
+    /** The pen on a video's play button starts it. Anywhere else on the video, the pen does as it would. */
+    private fun playVideoAt(index: Int, pageId: Long, x: Float, y: Float): Boolean {
+        val open = editor ?: return false
+        val layout = layout ?: return false
+        val video = topItemOfType<VideoItem>(pageId, x, y)?.second ?: return false
+        val reach = VIDEO_BUTTON_REACH_PT
+        if (abs(x - video.frame.centerX) > reach || abs(y - video.frame.centerY) > reach) return false
+        val scale = viewport.pxPerPt
+        onPlayVideo(
+            VideoPlayRequest(
+                open.assetFile(video.assetId),
+                viewport.toScreenX(layout.originX(index) + video.frame.left),
+                viewport.toScreenY(layout.originY(index) + video.frame.top),
+                video.frame.width * scale,
+                video.frame.height * scale,
+            ),
+        )
         return true
     }
 
@@ -1116,6 +1174,30 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 placeInView { pageId, x, y, maxWidth, maxHeight ->
                     options.newImage(imported.assetId, imported.width, imported.height, x, y, maxWidth, maxHeight)
                         .also { open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), it)) }
+                }
+            }
+        }
+    }
+
+    /** Copies a video into the document and puts it in the middle of the view. */
+    fun importVideo(uri: Uri, failed: () -> Unit) {
+        val open = editor ?: return
+        open.importVideo(context.contentResolver, uri) { imported ->
+            if (imported == null) {
+                failed()
+            } else if (editor === open) {
+                placeInView { pageId, x, y, maxWidth, maxHeight ->
+                    val fit = minOf(maxWidth / imported.width, maxHeight / imported.height)
+                    val width = imported.width * fit
+                    val height = imported.height * fit
+                    val item = VideoItem(
+                        IdSource.Random.next(),
+                        Frame(x - width / 2f, y - height / 2f, width, height),
+                        imported.assetId,
+                        imported.posterAssetId,
+                        imported.durationMs,
+                    )
+                    open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), item))
                 }
             }
         }
@@ -1527,6 +1609,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val HOLD_SLOP_DP = 3f
         const val MIN_HOLD_CHECK_MS = 8L
         const val PLACED_SHARE_OF_VIEW = 0.6f
+        const val EMOJI_BOX_OF_SIZE = 1.5f
+        const val VIDEO_BUTTON_REACH_PT = 24f
         const val LOUPE_BOX_SHARE = 0.45f
         const val LOUPE_STEP_SHARE = 0.8f
         const val LOUPE_BOX_COLOR = 0xFF4A9BF5.toInt()

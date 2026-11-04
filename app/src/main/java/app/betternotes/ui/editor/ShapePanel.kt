@@ -3,19 +3,24 @@ package app.betternotes.ui.editor
 import android.graphics.Path
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,8 +35,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.canvas.ShapePaths
 import app.betternotes.core.model.LineKind
@@ -39,15 +46,34 @@ import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** In the order of the screenshot's grid, six to a row. */
-private val SHAPE_GRID = listOf(
+/** The two pages of the screenshots' grid, six to a row. */
+private val SHAPE_PAGES = listOf(
+    listOf(
     ShapeKind.ELLIPSE, ShapeKind.TRIANGLE, ShapeKind.RECTANGLE, ShapeKind.DIAMOND, ShapeKind.PARALLELOGRAM, ShapeKind.TRAPEZOID,
     ShapeKind.LINE, ShapeKind.ARROW, ShapeKind.BLOCK_ARROW, ShapeKind.CURVE, ShapeKind.PENTAGON, ShapeKind.HEXAGON,
     ShapeKind.PIE, ShapeKind.ARC, ShapeKind.STAR, ShapeKind.SPHERE, ShapeKind.PYRAMID, ShapeKind.CYLINDER,
+    ),
+    listOf(
+        ShapeKind.CUBE, ShapeKind.TETRAHEDRON, ShapeKind.PRISM, ShapeKind.DISCS, ShapeKind.SINE, ShapeKind.COSINE,
+        ShapeKind.AXES, ShapeKind.PARABOLA, ShapeKind.CUBIC, ShapeKind.BRACE, ShapeKind.HEART, ShapeKind.SPEECH_BOX,
+        ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT,
+    ),
+)
+
+/** The curves the screenshot's grid shows as their names rather than as pictures of themselves. */
+private val SHAPE_LABELS = mapOf(
+    ShapeKind.SINE to "sin",
+    ShapeKind.COSINE to "cos",
+    ShapeKind.PARABOLA to "x²",
+    ShapeKind.CUBIC to "x³",
 )
 private const val SHAPES_PER_ROW = 6
+private val SHAPE_CELL = 46.dp
+private val SHAPE_GAP = 8.dp
+private val SHAPE_GRID_HEIGHT = 156.dp
 
 /** The shapes' row: recent shapes, three widths, three border colors, the fill, and the way into the panel. */
 @Composable
@@ -112,24 +138,52 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
                 )
             }
         }
-        for (row in SHAPE_GRID.chunked(SHAPES_PER_ROW)) {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 8.dp, vertical = 2.dp),
-            ) {
-                for (kind in row) {
-                    val selected = kind == options.kind
-                    Box(
-                        contentAlignment = Alignment.Center,
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(if (selected) colors.accentContainer else Color.Transparent)
-                            .clickable(role = Role.RadioButton) { state.updateShape { it.withKind(kind) } },
+        val pager = rememberPagerState { SHAPE_PAGES.size }
+        val scope = rememberCoroutineScope()
+        HorizontalPager(pager, modifier = Modifier.fillMaxWidth().height(SHAPE_GRID_HEIGHT), verticalAlignment = Alignment.Top) { page ->
+            Column {
+                for (row in SHAPE_PAGES[page].chunked(SHAPES_PER_ROW)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(SHAPE_GAP),
+                        modifier = Modifier.padding(horizontal = PanelPadding + 8.dp, vertical = 2.dp),
                     ) {
-                        ShapeGlyph(kind, if (selected) colors.accent else colors.icon)
+                        for (kind in row) {
+                            val selected = kind == options.kind
+                            val tint = if (selected) colors.accent else colors.icon
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(SHAPE_CELL)
+                                    .clip(CircleShape)
+                                    .background(if (selected) colors.accentContainer else Color.Transparent)
+                                    .clickable(role = Role.RadioButton) { state.updateShape { it.withKind(kind) } },
+                            ) {
+                                val label = SHAPE_LABELS[kind]
+                                if (label != null) {
+                                    Text(label, color = tint, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                } else {
+                                    ShapeGlyph(kind, tint)
+                                }
+                            }
+                        }
                     }
                 }
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        ) {
+            for (page in SHAPE_PAGES.indices) {
+                val current = page == pager.currentPage
+                Box(
+                    Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(if (current) colors.accent else Color.Transparent)
+                        .then(if (current) Modifier else Modifier.border(2.dp, colors.label, CircleShape))
+                        .clickable(role = Role.Button) { scope.launch { pager.animateScrollToPage(page) } },
+                )
             }
         }
         LabeledRow(R.string.panel_border_width) { ValuePill { ValueText(options.width.toString()) } }

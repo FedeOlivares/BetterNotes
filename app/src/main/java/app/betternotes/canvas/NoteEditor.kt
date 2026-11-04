@@ -33,6 +33,15 @@ class NoteEditor(
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
 
+    /** Copies a video into the document, off the main thread, and answers on the main thread. */
+    internal fun importVideo(resolver: ContentResolver, uri: Uri, done: (ImportedVideo?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val imported = images.importVideo(resolver, uri)
+            main.post { done(imported) }
+        }
+    }
+
     /** The file an asset lives in. */
     fun assetFile(assetId: String): File = store.assetFile(assetId)
 

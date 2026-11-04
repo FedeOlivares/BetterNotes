@@ -12,6 +12,7 @@ import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePoints
+import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
 import kotlin.math.PI
@@ -35,6 +36,7 @@ internal fun PageItem.touches(probe: Capsule): Boolean = when (this) {
     is StrokeItem -> points.touches(probe, style.width / 2f)
     is ShapeItem -> touches(probe)
     is ImageItem -> frame.touches(probe)
+    is VideoItem -> frame.touches(probe)
     is TextItem -> frame.touches(probe)
     is TableItem -> frame.touches(probe)
     is AudioItem -> frame.touches(probe)
@@ -70,7 +72,11 @@ private fun ShapeItem.touches(probe: Capsule): Boolean {
 private fun ShapeItem.outline(): FloatArray {
     val unit: FloatArray = when (kind) {
         ShapeKind.LINE, ShapeKind.ARROW, ShapeKind.CURVE -> floatArrayOf(0f, 0.5f, 1f, 0.5f)
-        ShapeKind.RECTANGLE, ShapeKind.BLOCK_ARROW, ShapeKind.PYRAMID, ShapeKind.CYLINDER ->
+        ShapeKind.RECTANGLE, ShapeKind.BLOCK_ARROW, ShapeKind.PYRAMID, ShapeKind.CYLINDER, ShapeKind.CUBE,
+        ShapeKind.TETRAHEDRON, ShapeKind.PRISM, ShapeKind.DISCS, ShapeKind.SINE, ShapeKind.COSINE, ShapeKind.AXES,
+        ShapeKind.PARABOLA, ShapeKind.CUBIC, ShapeKind.BRACE, ShapeKind.HEART, ShapeKind.SPEECH_BOX,
+        ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT, ShapeKind.TAPE,
+        ->
             floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
         ShapeKind.TRIANGLE -> floatArrayOf(0.5f, 0f, 1f, 1f, 0f, 1f)
         ShapeKind.DIAMOND -> floatArrayOf(0.5f, 0f, 1f, 0.5f, 0.5f, 1f, 0f, 0.5f)

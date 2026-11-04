@@ -6,7 +6,6 @@ import androidx.core.graphics.withTranslation
 import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.ShapeItem
-import app.betternotes.core.tools.ShapeOptions
 import kotlin.math.abs
 
 /** Dragging out a new shape. Until the pen lifts it floats over the page, drawn by the same painter. */
@@ -18,14 +17,15 @@ internal class ShapeController(
     private val add: (pageIndex: Int, item: ShapeItem) -> Unit,
 ) {
     private val painter = ItemPainter()
-    private var options: ShapeOptions? = null
+    private var make: ((x0: Float, y0: Float, x1: Float, y1: Float) -> ShapeItem)? = null
     private var pageIndex = -1
     private var startX = 0f
     private var startY = 0f
     private var preview: ShapeItem? = null
 
-    fun start(pageIndex: Int, x: Float, y: Float, options: ShapeOptions) {
-        this.options = options
+    /** Starts a drag, which [make] turns into an item at each move. */
+    fun start(pageIndex: Int, x: Float, y: Float, make: (x0: Float, y0: Float, x1: Float, y1: Float) -> ShapeItem) {
+        this.make = make
         this.pageIndex = pageIndex
         startX = x
         startY = y
@@ -33,8 +33,8 @@ internal class ShapeController(
     }
 
     fun move(x: Float, y: Float) {
-        val current = options ?: return
-        preview = current.item(PREVIEW_ID, startX, startY, x, y)
+        val current = make ?: return
+        preview = current(startX, startY, x, y)
         redraw()
     }
 
@@ -47,7 +47,7 @@ internal class ShapeController(
     }
 
     fun cancel() {
-        options = null
+        make = null
         preview = null
         redraw()
     }
@@ -61,8 +61,6 @@ internal class ShapeController(
     }
 
     private companion object {
-        const val PREVIEW_ID = 0L
-
         /** Smaller than this is a slip of the pen. */
         const val MIN_SIZE_PT = 2f
     }

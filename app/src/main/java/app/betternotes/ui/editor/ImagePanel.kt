@@ -67,6 +67,7 @@ internal class ImageSources(
     val takePhoto: () -> Unit,
     val pickPhoto: () -> Unit,
     val pickFile: () -> Unit,
+    val pickVideo: () -> Unit,
 )
 
 @Composable
@@ -91,6 +92,9 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
     val files = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) state.importImage(uri)
     }
+    val videos = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) state.importVideo(uri)
+    }
     return remember {
         ImageSources(
             takePhoto = {
@@ -103,6 +107,7 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
             },
             pickPhoto = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
             pickFile = { files.launch("image/*") },
+            pickVideo = { videos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
         )
     }
 }

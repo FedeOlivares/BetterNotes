@@ -89,7 +89,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     val notices = rememberNotices()
     val preset = state.preset
 
-    LaunchedEffect(preset, state.eraser, state.lasso, state.shape, state.note, state.table, state.image) {
+    LaunchedEffect(preset, state.eraser, state.lasso, state.shape, state.note, state.table, state.image, state.tape) {
         delay(SAVE_DELAY_MS)
         state.saveTools()
     }
@@ -113,7 +113,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             content = {
                 LeftPill(state, actions, notices, Modifier.layoutId(LEFT).masksInk(state, LEFT))
                 if (!state.viewOnly) {
-                    CenterPill(state, recorder, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
+                    CenterPill(state, recorder, sources, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
                 }
                 RightPill(state, recorder, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
                 if (!state.viewOnly && recorder.recording) {
@@ -133,6 +133,10 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                         NoteRow(state, state.note, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW), state.activeTool == ActiveTool.STICKY)
                     } else if (state.activeTool == ActiveTool.TABLE) {
                         TableRow(state, state.table, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.TAPE) {
+                        TapeRow(state, state.tape, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.EMOJI) {
+                        EmojiRow(state, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.IMAGE) {
                         ImageRow(state, state.image, sources, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     }
@@ -188,6 +192,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                     .masksInk(state, "recorder"),
             )
         }
+        state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
         if (state.sidebarMenuOpen) SidebarMenu(state, notices)
         if (state.pagesOpen) AllPagesPanel(state, notices)
 
@@ -208,6 +213,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 state.activeTool == ActiveTool.TEXT -> NotePanel(state, state.note, sheet, sticky = false)
                 state.activeTool == ActiveTool.TABLE -> TablePanel(state, state.table, sheet)
                 state.activeTool == ActiveTool.IMAGE -> ImagePanel(state, sources, notices, sheet)
+                state.activeTool == ActiveTool.EMOJI -> EmojiPanel(state, sheet)
             }
         }
     }
@@ -235,12 +241,12 @@ private val StripItems by lazy {
         StripItem(EditorIcons.Pencil, R.string.tool_pencil, ActiveTool.PENCIL),
         StripItem(EditorIcons.Highlighter, R.string.tool_highlighter, ActiveTool.HIGHLIGHTER),
         StripItem(EditorIcons.Eraser, R.string.tool_eraser, ActiveTool.ERASER),
-        StripItem(EditorIcons.Tape, R.string.tool_tape),
+        StripItem(EditorIcons.Tape, R.string.tool_tape, ActiveTool.TAPE),
         StripItem(EditorIcons.Shapes, R.string.tool_shapes, ActiveTool.SHAPE),
         StripItem(EditorIcons.Image, R.string.tool_image, ActiveTool.IMAGE),
         StripItem(EditorIcons.Text, R.string.tool_text, ActiveTool.TEXT),
         StripItem(EditorIcons.StickyNote, R.string.tool_sticky, ActiveTool.STICKY),
-        StripItem(EditorIcons.Sticker, R.string.tool_sticker),
+        StripItem(EditorIcons.Sticker, R.string.tool_sticker, ActiveTool.EMOJI),
         StripItem(EditorIcons.Table, R.string.tool_table, ActiveTool.TABLE),
         StripItem(EditorIcons.Tray, R.string.tool_clipboard),
         StripItem(EditorIcons.AddElement, R.string.tool_add_element),
@@ -253,7 +259,7 @@ private val StripItems by lazy {
 }
 
 @Composable
-private fun CenterPill(state: EditorState, recorder: RecorderState, notices: Notices, modifier: Modifier) {
+private fun CenterPill(state: EditorState, recorder: RecorderState, sources: ImageSources, notices: Notices, modifier: Modifier) {
     Pill(modifier) {
         ToolbarIcon(EditorIcons.Undo, stringResource(R.string.editor_undo), enabled = state.canUndo, onClick = state::undo)
         ToolbarIcon(EditorIcons.Redo, stringResource(R.string.editor_redo), enabled = state.canRedo, onClick = state::redo)
@@ -290,6 +296,7 @@ private fun CenterPill(state: EditorState, recorder: RecorderState, notices: Not
                             item.label == R.string.tool_ruler -> state.toggleRuler()
                             item.label == R.string.tool_clipboard -> state.paste()
                             item.label == R.string.tool_loupe -> state.toggleLoupe()
+                            item.label == R.string.tool_add_element -> sources.pickVideo()
                             item.label == R.string.tool_recorder -> recorder.menuOpen = !recorder.menuOpen
                             else -> notices.notBuilt()
                         }

@@ -19,6 +19,7 @@ import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.TapeOptions
 import app.betternotes.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONException
@@ -195,6 +196,25 @@ internal class ToolStore(context: Context) {
         prefs.edit { putString(KEY_IMAGE, json.toString()) }
     }
 
+    fun tape(): TapeOptions = read(KEY_TAPE, TapeOptions()) { json ->
+        TapeOptions(
+            widths = json.getJSONArray("widths").ints(),
+            selectedWidth = json.getInt("selectedWidth"),
+            colors = json.getJSONArray("colors").ints(),
+            selectedColor = json.getInt("selectedColor"),
+        )
+    }
+
+    fun save(options: TapeOptions) {
+        val json = JSONObject().apply {
+            put("widths", JSONArray(options.widths))
+            put("selectedWidth", options.selectedWidth)
+            put("colors", JSONArray(options.colors))
+            put("selectedColor", options.selectedColor)
+        }
+        prefs.edit { putString(KEY_TAPE, json.toString()) }
+    }
+
     /** Anything saved by an older build that no longer reads back gives way to [fallback]. */
     private inline fun <T> read(key: String, fallback: T, decode: (JSONObject) -> T): T {
         val saved = prefs.getString(key, null) ?: return fallback
@@ -259,6 +279,7 @@ internal class ToolStore(context: Context) {
         const val KEY_SHAPE = "shape"
         const val KEY_NOTE = "note"
         const val KEY_IMAGE = "image"
+        const val KEY_TAPE = "tape"
         const val KEY_TABLE = "table"
     }
 }

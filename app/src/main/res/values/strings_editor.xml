@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="editor_not_built">Not built yet: waiting on a reference screenshot</string>
+    <string name="editor_not_built">Not available yet</string>
     <string name="editor_back">Back</string>
     <string name="editor_sidebar">Sidebar</string>
     <string name="editor_page_grid">All pages</string>
@@ -31,8 +31,8 @@
     <string name="tool_lasso">Lasso</string>
     <string name="tool_tape">Tape</string>
     <string name="tool_text">Text</string>
-    <string name="tool_sticker">Sticker</string>
-    <string name="tool_add_element">Add element</string>
+    <string name="tool_sticker">Emoji</string>
+    <string name="tool_add_element">Video</string>
     <string name="tool_shapes">Shapes</string>
     <string name="tool_shape">Shape</string>
     <string name="tool_image">Image</string>
@@ -51,6 +51,7 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="notice_video_failed">That video could not be read</string>
     <string name="loupe_center">Bring the box to the middle</string>
     <string name="loupe_back">Move the box back</string>
     <string name="loupe_forward">Move the box forward</string>

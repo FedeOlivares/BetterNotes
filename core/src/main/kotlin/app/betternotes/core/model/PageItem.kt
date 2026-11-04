@@ -101,6 +101,21 @@ enum class ShapeKind {
     SPHERE,
     PYRAMID,
     CYLINDER,
+    CUBE,
+    TETRAHEDRON,
+    PRISM,
+    DISCS,
+    SINE,
+    COSINE,
+    AXES,
+    PARABOLA,
+    CUBIC,
+    BRACE,
+    HEART,
+    SPEECH_BOX,
+    SPEECH_ROUND,
+    THOUGHT,
+    TAPE,
 }
 
 /**
@@ -255,6 +270,19 @@ data class TableItem(
         val factor = t.meanScale
         return copy(frame = frame.transformed(t), textSize = textSize * factor, lineWidth = lineWidth * factor)
     }
+}
+
+/** A video stored in the document's assets under [assetId], showing the picture under [posterAssetId] until played. */
+data class VideoItem(
+    override val id: Long,
+    val frame: Frame,
+    val assetId: String,
+    val posterAssetId: String,
+    val durationMs: Long,
+) : PageItem {
+    override val bounds get() = frame.bounds
+
+    override fun transformed(t: Affine) = copy(frame = frame.transformed(t))
 }
 
 /** A voice recording placed on the page as a marker. The audio file is stored under [assetId]. */

@@ -13,6 +13,7 @@ import app.betternotes.core.model.PenType
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.TextStyle
+import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.StickyNoteItem
@@ -36,6 +37,7 @@ private const val TAG_AUDIO = 7
 // is written under its old tag, so plain items keep their bytes.
 private const val TAG_STYLED_TEXT = 8
 private const val TAG_STYLED_TABLE = 9
+private const val TAG_VIDEO = 10
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -65,6 +67,21 @@ internal val SHAPE_KINDS =
         ShapeKind.SPHERE,
         ShapeKind.PYRAMID,
         ShapeKind.CYLINDER,
+        ShapeKind.CUBE,
+        ShapeKind.TETRAHEDRON,
+        ShapeKind.PRISM,
+        ShapeKind.DISCS,
+        ShapeKind.SINE,
+        ShapeKind.COSINE,
+        ShapeKind.AXES,
+        ShapeKind.PARABOLA,
+        ShapeKind.CUBIC,
+        ShapeKind.BRACE,
+        ShapeKind.HEART,
+        ShapeKind.SPEECH_BOX,
+        ShapeKind.SPEECH_ROUND,
+        ShapeKind.THOUGHT,
+        ShapeKind.TAPE,
     )
 internal val IMAGE_SHAPES = WireEnum(ImageShape.RECTANGLE, ImageShape.ELLIPSE)
 internal val HORIZONTAL_ALIGNS = WireEnum(HorizontalAlign.START, HorizontalAlign.CENTER, HorizontalAlign.END)
@@ -169,6 +186,14 @@ private fun ByteWriter.item(item: PageItem) {
                 int(item.fillColor)
             }
         }
+        is VideoItem -> {
+            byte(TAG_VIDEO)
+            long(item.id)
+            frame(item.frame)
+            string(item.assetId)
+            string(item.posterAssetId)
+            long(item.durationMs)
+        }
         is AudioItem -> {
             byte(TAG_AUDIO)
             long(item.id)
@@ -261,6 +286,13 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     TAG_STYLED_TABLE -> table().let { plain ->
         plain.copy(headerRow = bool(), headerColumn = bool(), fillColor = int())
     }
+    TAG_VIDEO -> VideoItem(
+        id = long(),
+        frame = frame(),
+        assetId = string(),
+        posterAssetId = string(),
+        durationMs = long(),
+    )
     TAG_AUDIO -> AudioItem(
         id = long(),
         frame = frame(),

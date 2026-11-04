@@ -18,6 +18,7 @@ import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VerticalAlign
+import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
 import app.betternotes.core.model.LineKind
@@ -60,6 +61,7 @@ internal class ItemPainter(
             }
             is StickyNoteItem -> paintSticky(canvas, item)
             is ImageItem -> inFrame(canvas, item.frame) { paintImage(canvas, item) }
+            is VideoItem -> inFrame(canvas, item.frame) { paintVideo(canvas, item) }
             is AudioItem -> Unit
         }
     }
@@ -81,6 +83,7 @@ internal class ItemPainter(
             fill.alpha = fill.alpha * alpha / OPAQUE.toInt()
             canvas.drawPath(path, fill)
         }
+        if (item.strokeWidth <= 0f) return
         applyLine(item.strokeColor, item.strokeWidth, item.line)
         line.alpha = line.alpha * alpha / OPAQUE.toInt()
         canvas.drawPath(path, line)
@@ -206,6 +209,31 @@ internal class ItemPainter(
         }
     }
 
+    /** The poster, with a play button in the middle that starts it. */
+    private fun paintVideo(canvas: Canvas, item: VideoItem) {
+        val width = item.frame.width
+        val height = item.frame.height
+        box.set(0f, 0f, width, height)
+        val poster = image(item.posterAssetId)
+        if (poster != null) {
+            canvas.drawBitmap(poster, null, box, bitmapPaint)
+        } else {
+            fill.color = VIDEO_BACK
+            canvas.drawRect(box, fill)
+        }
+        val radius = min(min(width, height) / 2f, VIDEO_BUTTON_PT)
+        fill.color = VIDEO_BUTTON
+        canvas.drawCircle(width / 2f, height / 2f, radius, fill)
+        fill.color = VIDEO_TRIANGLE
+        path.reset()
+        val tip = radius * 0.5f
+        path.moveTo(width / 2f - tip * 0.7f, height / 2f - tip)
+        path.lineTo(width / 2f + tip, height / 2f)
+        path.lineTo(width / 2f - tip * 0.7f, height / 2f + tip)
+        path.close()
+        canvas.drawPath(path, fill)
+    }
+
     /** Shows a tint until the picture is decoded, which then repaints it. */
     private fun paintImage(canvas: Canvas, item: ImageItem) {
         val width = item.frame.width
@@ -241,6 +269,12 @@ internal class ItemPainter(
         const val FOLD_TIP = 0.2f
         const val FOLD_SHADE = 0x40FFFFFF
         const val ALPHA_SHIFT = 24
+        const val VIDEO_BACK = 0xFF25282D.toInt()
+        const val VIDEO_BUTTON = 0xB3000000.toInt()
+        const val VIDEO_TRIANGLE = 0xFFFFFFFF.toInt()
+
+        /** The largest the play button gets, and how far from the video's middle a tap starts it. */
+        const val VIDEO_BUTTON_PT = 22f
         const val TABLE_HEADER = 0x55808080
         const val CELL_TEXT = 0xFF1E1F24.toInt()
         val CELL_STYLE = TextStyle()
