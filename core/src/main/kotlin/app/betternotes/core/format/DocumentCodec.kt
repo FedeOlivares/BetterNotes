@@ -89,14 +89,14 @@ private fun ByteReader.page(): Page {
     return Page(id, size, background, source)
 }
 
-private fun ByteWriter.pageSize(size: PageSize) {
+internal fun ByteWriter.pageSize(size: PageSize) {
     float(size.widthPt)
     float(size.heightPt)
 }
 
-private fun ByteReader.pageSize() = PageSize(float(), float())
+internal fun ByteReader.pageSize() = PageSize(float(), float())
 
-private fun ByteWriter.template(template: PageTemplate) {
+internal fun ByteWriter.template(template: PageTemplate) {
     when (template) {
         PageTemplate.Blank -> byte(TEMPLATE_BLANK)
         is PageTemplate.Lined -> {
@@ -157,7 +157,7 @@ private fun ByteWriter.template(template: PageTemplate) {
     }
 }
 
-private fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
+internal fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_BLANK -> PageTemplate.Blank
     TEMPLATE_LINED -> PageTemplate.Lined(float(), float(), int())
     TEMPLATE_DOTTED -> PageTemplate.Dotted(float(), float(), int())
@@ -171,7 +171,7 @@ private fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     else -> throw CorruptFileException("Unknown template $tag")
 }
 
-private fun ByteWriter.customLayout(layout: CustomLayout) {
+internal fun ByteWriter.customLayout(layout: CustomLayout) {
     string(layout.name)
     pageSize(layout.size)
     LENGTH_UNITS.write(this, layout.displayUnit)
@@ -179,7 +179,7 @@ private fun ByteWriter.customLayout(layout: CustomLayout) {
     layout.elements.forEach { element(it) }
 }
 
-private fun ByteReader.customLayout(): CustomLayout {
+internal fun ByteReader.customLayout(): CustomLayout {
     val name = string()
     val size = pageSize()
     val unit = LENGTH_UNITS.read(this)

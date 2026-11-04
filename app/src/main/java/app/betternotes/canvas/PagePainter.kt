@@ -5,6 +5,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.core.graphics.withTranslation
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import androidx.ink.strokes.Stroke
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.model.Page
@@ -14,8 +15,21 @@ import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.TemplateSink
 import app.betternotes.core.template.draw
 
-/** Paints the part of a document that falls inside one tile. Main thread only. */
-internal class PagePainter(private val editor: NoteEditor) {
+/** What a [PagePainter] paints from. */
+internal interface PaintSource {
+    val pages: List<Page>
+
+    /** The page's items, or null if they are not available yet. */
+    fun contentOrLoad(pageId: Long): PageContent?
+
+    fun mesh(item: StrokeItem): Stroke
+}
+
+/**
+ * Paints pages: the part of a document inside one tile, or a page for an export. Use from one thread,
+ * which must be the one its [PaintSource] expects.
+ */
+internal class PagePainter(private val source: PaintSource) {
     private val renderer = CanvasStrokeRenderer.create()
     private val paper = Paint()
     private val template = CanvasTemplateSink()
@@ -27,7 +41,7 @@ internal class PagePainter(private val editor: NoteEditor) {
      * float could not hold a whole pixel.
      */
     fun paint(canvas: Canvas, layout: DocumentLayout, region: Bounds, leftPx: Double, topPx: Double, scale: Float) {
-        val pages = editor.document.pages
+        val pages = source.pages
         layout.forEachPageIn(region) { index ->
             val originX = layout.originX(index)
             val originY = layout.originY(index)
@@ -41,7 +55,8 @@ internal class PagePainter(private val editor: NoteEditor) {
         }
     }
 
-    private fun paintPage(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
+    /** Paints [page] into a canvas already scaled by [scale], with its origin at the page's origin. */
+    fun paintPage(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
         val size = page.size
         paper.color = page.background.color
         if (size != null) {
@@ -56,14 +71,14 @@ internal class PagePainter(private val editor: NoteEditor) {
             pattern.draw(size, region, template)
             template.flush()
         }
-        editor.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
+        source.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
     }
 
     /** Only ink for now. The other item types arrive with their tools. */
     private fun paintItems(canvas: Canvas, content: PageContent, region: Bounds, scale: Float) {
         strokeToTile.setScale(scale, scale)
         content.forEachIntersecting(region) { _, item ->
-            if (item is StrokeItem) renderer.draw(canvas, editor.strokes.get(item), strokeToTile)
+            if (item is StrokeItem) renderer.draw(canvas, source.mesh(item), strokeToTile)
         }
     }
 

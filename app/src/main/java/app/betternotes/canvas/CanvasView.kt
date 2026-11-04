@@ -17,6 +17,7 @@ import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.strokes.Stroke
 import androidx.input.motionprediction.MotionEventPredictor
+import app.betternotes.core.edit.Edit
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Viewport
@@ -30,6 +31,8 @@ import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.settings.AppSettings
+import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.EraseSession
 import kotlin.math.abs
@@ -61,17 +64,38 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     var tool: CanvasTool = CanvasTool.Ink(InkStyle())
 
+    /** Called whenever the input mode changes, so that the toolbars can follow a shortcut. */
+    var onInputModeChanged: (InputMode) -> Unit = {}
+
     var inputMode: InputMode
         get() = recognizer.mode
         set(value) {
+            if (recognizer.mode == value) return
+            if (value == InputMode.VIEW_ONLY) modeBeforeViewOnly = recognizer.mode
             recognizer.mode = value
             stopFling()
+            onInputModeChanged(value)
         }
 
+    /** Changing direction keeps the current page in view. */
     var scrollDirection = ScrollDirection.VERTICAL
         set(value) {
+            if (field == value) return
+            val page = currentPageIndex
             field = value
             rebuildLayout()
+            if (page >= 0) goToPage(page)
+        }
+
+    /** The page under the middle of the view, or the first page on screen if the middle is in a gap. */
+    val currentPageIndex: Int
+        get() {
+            val layout = layout ?: return -1
+            if (width == 0) return 0
+            val middle = layout.pageIndexAt(viewport.toWorldX(width / 2f), viewport.toWorldY(height / 2f))
+            if (middle >= 0) return middle
+            layout.forEachPageIn(viewport.visibleWorld(width, height)) { return it }
+            return 0
         }
 
     internal var observer: CanvasObserver? = null
@@ -87,6 +111,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var layout: DocumentLayout? = null
     private var layoutVersion = -1L
     private var hasPlacedPage = false
+    private var modeBeforeViewOnly = InputMode.STYLUS_DRAW
 
     private val tiles = TileLayerView(context, viewport, ::paintTile, backdropColor)
     private val wet = InProgressStrokesView(context)
@@ -146,7 +171,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun open(editor: NoteEditor) {
         close()
         this.editor = editor
-        painter = PagePainter(editor)
+        painter = PagePainter(editor.paintSource)
         editor.onPageLoaded = ::redrawPage
         hasPlacedPage = false
         rebuildLayout()
@@ -159,6 +184,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun close() {
         editor?.onPageLoaded = {}
         editor = null
+        // A frame can still be on its way, and it must not reach for a document that has closed.
+        painter = null
     }
 
     /** Sets the zoom about the center of the view. Zoom 1 is real size. */
@@ -167,6 +194,55 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         settlePan()
         onZoomChanged(viewport.zoom)
+    }
+
+    /** Applies the settings this view follows. Safe to call whenever they change. */
+    fun applySettings(settings: AppSettings) {
+        recognizer.config = settings.gestures.applyTo(recognizer.config)
+        scrollDirection = settings.scrollDirection
+    }
+
+    /** Shows the start of page [index]. */
+    fun goToPage(index: Int) {
+        val layout = layout ?: return
+        if (width == 0 || index !in 0 until layout.pageCount) return
+        stopFling()
+        layout.moveToPage(viewport, index, width, height, pageMarginPx)
+        settlePan()
+    }
+
+    /** Applies an undoable change to the document, such as a new background, and redraws what it touched. */
+    fun perform(edit: Edit) {
+        editor?.perform(edit) ?: return
+        syncChanges()
+    }
+
+    /**
+     * Does [action] if it belongs to the canvas, as a keyboard shortcut asks. Returns false if it is
+     * for someone else, such as the toolbars. Nothing that edits runs in view-only mode.
+     */
+    fun perform(action: EditorAction): Boolean {
+        val pageCount = layout?.pageCount ?: return false
+        val viewOnly = inputMode == InputMode.VIEW_ONLY
+        when (action) {
+            EditorAction.UNDO -> if (!viewOnly) undo()
+            EditorAction.REDO -> if (!viewOnly) redo()
+            EditorAction.TOGGLE_VIEW_ONLY -> inputMode = if (viewOnly) modeBeforeViewOnly else InputMode.VIEW_ONLY
+            EditorAction.TOGGLE_FINGER_DRAW -> when (inputMode) {
+                InputMode.STYLUS_DRAW -> inputMode = InputMode.FINGER_DRAW
+                InputMode.FINGER_DRAW -> inputMode = InputMode.STYLUS_DRAW
+                InputMode.VIEW_ONLY -> Unit
+            }
+            EditorAction.NEXT_PAGE -> goToPage(minOf(currentPageIndex + 1, pageCount - 1))
+            EditorAction.PREVIOUS_PAGE -> goToPage(maxOf(currentPageIndex - 1, 0))
+            EditorAction.FIRST_PAGE -> goToPage(0)
+            EditorAction.LAST_PAGE -> goToPage(pageCount - 1)
+            EditorAction.ZOOM_IN -> zoomTo(viewport.zoom * ZOOM_STEP)
+            EditorAction.ZOOM_OUT -> zoomTo(viewport.zoom / ZOOM_STEP)
+            EditorAction.ZOOM_REAL_SIZE -> zoomTo(1f)
+            else -> return false
+        }
+        return true
     }
 
     fun undo() {
@@ -556,6 +632,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private companion object {
         const val PAGE_MARGIN_DP = 24f
+
+        /** What one press of a zoom shortcut multiplies the zoom by. */
+        const val ZOOM_STEP = 1.25f
 
         /** Pages kept in memory on each side of the view, so that turning back finds them ready. */
         const val NEARBY_PAGES = 2
