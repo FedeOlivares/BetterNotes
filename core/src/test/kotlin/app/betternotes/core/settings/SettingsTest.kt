@@ -33,6 +33,7 @@ class SettingsTest {
         keyBindings = KeyBindings.Default
             .rebind(EditorAction.PEN, KeyChord(KeyCodes.Q, KeyChord.ALT))
             .unbind(EditorAction.LOUPE),
+        calibration = ScreenCalibration(345f),
     )
 
     @Test
@@ -89,6 +90,15 @@ class SettingsTest {
     fun `timings outside the range are refused`() {
         assertThrows(IllegalArgumentException::class.java) { GestureSettings(multiTapWindowMs = 10) }
         assertThrows(IllegalArgumentException::class.java) { GestureSettings(tapMaxDurationMs = 5000) }
+    }
+
+    @Test
+    fun `calibration corrects the density from a measured line`() {
+        // A line meant to be 10 cm came out 9.75 cm, so the screen is denser than reported.
+        val calibration = ScreenCalibration.fromMeasurement(336.45f, 10f, 9.75f)
+        assertEquals(345.08f, calibration.dpi, 0.01f)
+        assertThrows(IllegalArgumentException::class.java) { ScreenCalibration.fromMeasurement(336f, 10f, 0f) }
+        assertThrows(IllegalArgumentException::class.java) { ScreenCalibration(1f) }
     }
 
     @Test

@@ -21,6 +21,7 @@ import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.settings.KeyBindings
 import app.betternotes.core.settings.KeyChord
 import app.betternotes.core.settings.KeyCodes
+import app.betternotes.core.settings.ScreenCalibration
 import app.betternotes.core.settings.SettingsStore
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.template.PageTemplate
@@ -97,6 +98,19 @@ class SettingsWiringTest {
         assertNull(keys.actionFor(up))
         assertNull("a tool must not retrigger while held", keys.actionFor(down(KeyEvent.KEYCODE_P, repeat = 1)))
         assertEquals(EditorAction.NEXT_PAGE, keys.actionFor(down(KeyEvent.KEYCODE_PAGE_DOWN, repeat = 3)))
+    }
+
+    @Test
+    fun aKeyNoViewTookReachesTheCanvas() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val canvas = activity.findViewById<android.view.ViewGroup>(android.R.id.content)
+                    .getChildAt(0).let { (it as android.view.ViewGroup).getChildAt(0) as CanvasView }
+                val before = canvas.viewport.zoom
+                activity.onKeyDown(KeyEvent.KEYCODE_EQUALS, down(KeyEvent.KEYCODE_EQUALS, KeyEvent.META_CTRL_ON))
+                assertEquals(before * 1.25f, canvas.viewport.zoom, 0.001f)
+            }
+        }
     }
 
     @Test
@@ -198,6 +212,15 @@ class SettingsWiringTest {
         canvas.perform(EditorAction.UNDO)
         assertEquals(1, document.pages.size)
         assertEquals(listOf(InputMode.FINGER_DRAW, InputMode.VIEW_ONLY, InputMode.FINGER_DRAW), modes)
+    }
+
+    @Test
+    fun calibrationChangesRealSizeAndClearingItGoesBack() = withCanvas { canvas, _, _ ->
+        val reported = canvas.viewport.screenDpi
+        canvas.applySettings(AppSettings(calibration = ScreenCalibration(reported * 1.1f)))
+        assertEquals(reported * 1.1f / 72f, canvas.viewport.pxPerPt, 0.01f)
+        canvas.applySettings(AppSettings())
+        assertEquals(reported, canvas.viewport.screenDpi)
     }
 
     @Test

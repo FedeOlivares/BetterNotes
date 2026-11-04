@@ -57,7 +57,9 @@ internal interface CanvasObserver {
  * next frame. Touches go straight to a [GestureRecognizer], which decides what they mean.
  */
 class CanvasView(context: Context) : FrameLayout(context), GestureListener, InProgressStrokesFinishedListener {
-    val viewport = Viewport(physicalDpi(context))
+    private val reportedDpi = physicalDpi(context)
+
+    val viewport = Viewport(reportedDpi)
 
     /** Called whenever the zoom changes. */
     var onZoomChanged: (zoom: Float) -> Unit = {}
@@ -200,6 +202,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun applySettings(settings: AppSettings) {
         recognizer.config = settings.gestures.applyTo(recognizer.config)
         scrollDirection = settings.scrollDirection
+        val dpi = settings.calibration?.dpi ?: reportedDpi
+        if (dpi != viewport.screenDpi) {
+            viewport.changeDpi(dpi, width / 2f, height / 2f)
+            clampPan()
+            settlePan()
+        }
     }
 
     /** Shows the start of page [index]. */
@@ -644,8 +652,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
         /**
          * The screen's real density, which zoom 1 relies on to show true size. It reads the panel's
-         * values rather than densityDpi, which is a rounded size for the UI. A calibration setting
-         * can replace it through [Viewport.screenDpi], since some devices report these wrongly.
+         * values rather than densityDpi, which is a rounded size for the UI. Some devices report these
+         * wrongly, so [AppSettings.calibration] can replace it.
          */
         fun physicalDpi(context: Context): Float {
             val metrics = context.resources.displayMetrics

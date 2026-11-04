@@ -18,6 +18,7 @@ private const val SECTION_SCROLL = 2
 private const val SECTION_NEW_PAGES = 3
 private const val SECTION_LAYOUTS = 4
 private const val SECTION_KEYS = 5
+private const val SECTION_CALIBRATION = 6
 
 private val SCROLL_DIRECTIONS =
     WireEnum(ScrollDirection.VERTICAL, ScrollDirection.LEFT_TO_RIGHT, ScrollDirection.RIGHT_TO_LEFT)
@@ -57,6 +58,7 @@ object SettingsCodec {
                 }
             }
         }
+        settings.calibration?.let { calibration -> section(SECTION_CALIBRATION) { float(calibration.dpi) } }
     }
 
     fun decode(bytes: ByteArray): AppSettings = decodeFile(bytes, SETTINGS_MAGIC) {
@@ -73,6 +75,7 @@ object SettingsCodec {
                 )
                 SECTION_LAYOUTS -> settings.copy(customLayouts = List(count(1)) { customLayout() })
                 SECTION_KEYS -> settings.copy(keyBindings = readKeys())
+                SECTION_CALIBRATION -> settings.copy(calibration = ScreenCalibration(float()))
                 else -> settings
             }
             // Whatever a newer version added to the end of a section, or a section unknown here.

@@ -32,6 +32,29 @@ data class GestureSettings(
     }
 }
 
+/**
+ * A measured screen density, for when the device misreports its own. Real size depends on this: the
+ * Pad 7 reports about 336 dpi against 345 on its spec sheet, which would draw 1 cm about 2.5% short.
+ */
+data class ScreenCalibration(val dpi: Float) {
+    init {
+        require(dpi in DPI_RANGE) { "Density out of range: $dpi" }
+    }
+
+    companion object {
+        val DPI_RANGE = 50f..2000f
+
+        /**
+         * The density that makes a line right, from a line meant to be [shownLength] long, drawn at zoom
+         * 1 with [currentDpi], which a real ruler says is [measuredLength]. Both lengths in one unit.
+         */
+        fun fromMeasurement(currentDpi: Float, shownLength: Float, measuredLength: Float): ScreenCalibration {
+            require(shownLength > 0f && measuredLength > 0f) { "Lengths must be positive" }
+            return ScreenCalibration(currentDpi * shownLength / measuredLength)
+        }
+    }
+}
+
 /** What a new note starts with. */
 data class NewPageDefaults(
     val size: PageSize = PageSize.A4,
@@ -49,6 +72,8 @@ data class AppSettings(
     /** Layouts the owner built, each with a name of its own. */
     val customLayouts: List<CustomLayout> = emptyList(),
     val keyBindings: KeyBindings = KeyBindings.Default,
+    /** Null trusts the density the device reports. */
+    val calibration: ScreenCalibration? = null,
 ) {
     /** Saves [layout], replacing any layout with the same name. */
     fun withCustomLayout(layout: CustomLayout): AppSettings {

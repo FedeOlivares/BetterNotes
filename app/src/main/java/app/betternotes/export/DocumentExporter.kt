@@ -3,6 +3,7 @@ package app.betternotes.export
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.pdf.PdfDocument
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withSave
 import androidx.ink.strokes.Stroke
 import app.betternotes.canvas.NoteEditor
@@ -79,7 +80,7 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
             if (cancelled()) break
             val area = loadPage(index) ?: continue
             val frame = ExportFrame.forImage(area, options.dpi)
-            val bitmap = Bitmap.createBitmap(frame.outputWidth, frame.outputHeight, Bitmap.Config.ARGB_8888)
+            val bitmap = createBitmap(frame.outputWidth, frame.outputHeight)
             try {
                 paint(Canvas(bitmap), pages[index], frame)
                 val name = exportFileName(title, options.format.extension, index + 1, pages.size)

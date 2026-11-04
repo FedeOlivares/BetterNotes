@@ -84,11 +84,10 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEV_CHECKS) HandwritingCheck.runIfAsked(intent)
     }
 
-    /** After the views, so that typing in a text field never fires a single-letter shortcut. */
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (super.dispatchKeyEvent(event)) return true
-        val action = settings.settings.value.keyBindings.actionFor(event) ?: return false
-        return canvas.perform(action)
+    /** Keys get here only if no view took them, so typing in a text field never fires a shortcut. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val action = settings.settings.value.keyBindings.actionFor(event)
+        return (action != null && canvas.perform(action)) || super.onKeyDown(keyCode, event)
     }
 
     override fun onStop() {
