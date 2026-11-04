@@ -29,6 +29,7 @@ import app.betternotes.canvas.CanvasView
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.tools.EraseMode
+import app.betternotes.ui.settings.SettingsOverlay
 import kotlin.math.roundToInt
 
 private val PillColor = Color(0xE01C1E22)
@@ -39,7 +40,12 @@ private const val ERASER_RADIUS_PT = 6f
  * match on purpose: the editor UI workstream replaces it.
  */
 @Composable
-internal fun DevChrome(canvas: CanvasView, readout: State<String>, openScratch: (canvasKind: Boolean) -> Unit) {
+internal fun DevChrome(
+    canvas: CanvasView,
+    readout: State<String>,
+    openScratch: (canvasKind: Boolean) -> Unit,
+    openSettings: (SettingsOverlay) -> Unit,
+) {
     var mode by remember { mutableStateOf(canvas.inputMode) }
     var erasing by remember { mutableStateOf(false) }
     var showingCanvas by remember { mutableStateOf(false) }
@@ -79,6 +85,9 @@ internal fun DevChrome(canvas: CanvasView, readout: State<String>, openScratch: 
                 showingCanvas = !showingCanvas
                 openScratch(showingCanvas)
             }
+            ChromeButton("Settings") { openSettings(SettingsOverlay.SCREEN) }
+            ChromeButton("Stylus") { openSettings(SettingsOverlay.STYLUS_FINGER) }
+            ChromeButton("Template") { openSettings(SettingsOverlay.TEMPLATE) }
             if (BuildConfig.PERF_TOOLS) {
                 ChromeButton(if (showReadout) "Perf on" else "Perf off") { showReadout = !showReadout }
             }

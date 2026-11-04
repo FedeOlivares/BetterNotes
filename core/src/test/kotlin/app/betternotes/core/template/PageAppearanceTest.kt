@@ -76,6 +76,33 @@ class PageAppearanceTest {
     }
 
     @Test
+    fun `applying the picker changes paper template and size as one undo`() {
+        val document = note()
+        val target = FakeTarget(document)
+        val before = document.pages[0]
+        val background = PageBackground(0xFF000000.toInt(), PageTemplate.Grid())
+        val edit = document.changeAppearance(listOf(before.id), background, PageSize.Letter)!!
+        edit.apply(target)
+        assertEquals(background, document.pages[0].background)
+        assertEquals(PageSize.Letter, document.pages[0].size)
+        edit.revert(target)
+        assertEquals(before, document.pages[0])
+    }
+
+    @Test
+    fun `applying the picker skips pages that cannot take it`() {
+        val background = PageBackground(template = PageTemplate.Custom(layout()))
+        val canvasDoc = canvas()
+        assertNull(canvasDoc.changeAppearance(listOf(canvasDoc.pages[0].id), background))
+        assertNull(canvasDoc.changeAppearance(listOf(canvasDoc.pages[0].id), PageBackground(template = PageTemplate.Legal())))
+        val pdfDoc = pdf()
+        assertNull(pdfDoc.changeAppearance(listOf(pdfDoc.pages[0].id), PageBackground(template = PageTemplate.Grid())))
+        val noteDoc = note()
+        noteDoc.changeAppearance(listOf(noteDoc.pages[0].id), background)!!.apply(FakeTarget(noteDoc))
+        assertEquals(layout().size, noteDoc.pages[0].size)
+    }
+
+    @Test
     fun `changing the background can be undone`() {
         val document = note()
         val target = FakeTarget(document)

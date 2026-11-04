@@ -6,6 +6,9 @@ import app.betternotes.core.geometry.PageSize
 private const val DEFAULT_LINE_COLOR = 0xFFB9BDC4.toInt()
 private const val DEFAULT_MARGIN_COLOR = 0xFFD9534F.toInt()
 
+/** Staves read as printed music, so they are darker than the ruling on a page. Measured by eye from the reference. */
+private const val DEFAULT_STAFF_COLOR = 0xFF6B6E75.toInt()
+
 /** Paper color plus the pattern printed on it. Colors are ARGB throughout the model. */
 data class PageBackground(
     val color: Int = DEFAULT_PAPER_COLOR,
@@ -116,7 +119,7 @@ sealed interface PageTemplate {
         val lineGap: Float = 7f,
         val staffGap: Float = 42f,
         val lineWidth: Float = 0.5f,
-        val color: Int = DEFAULT_LINE_COLOR,
+        val color: Int = DEFAULT_STAFF_COLOR,
     ) : PageTemplate {
         init { requireLength(lineGap, staffGap, lineWidth) }
     }
@@ -126,7 +129,7 @@ sealed interface PageTemplate {
         val lineGap: Float = 7f,
         val staffGap: Float = 42f,
         val lineWidth: Float = 0.5f,
-        val color: Int = DEFAULT_LINE_COLOR,
+        val color: Int = DEFAULT_STAFF_COLOR,
     ) : PageTemplate {
         init { requireLength(lineGap, staffGap, lineWidth) }
     }
@@ -136,7 +139,7 @@ sealed interface PageTemplate {
         val lineGap: Float = 7f,
         val staffGap: Float = 42f,
         val lineWidth: Float = 0.5f,
-        val color: Int = DEFAULT_LINE_COLOR,
+        val color: Int = DEFAULT_STAFF_COLOR,
     ) : PageTemplate {
         init { requireLength(lineGap, staffGap, lineWidth) }
     }

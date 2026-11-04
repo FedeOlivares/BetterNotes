@@ -28,6 +28,7 @@ private const val STAFF_TOP_MARGIN_PT = 36f
 private const val MUSIC_STAFF_LINES = 5
 private const val GUITAR_STAFF_LINES = 6
 private const val ENGINEERING_MARGIN_PT = 18f
+private const val STRUCTURE_SHADE = 55
 
 /**
  * Emits the part of this template inside [region].
@@ -136,15 +137,24 @@ private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ru
     val titleBottom = page.heightPt * CORNELL_TITLE_FRACTION
     val summaryTop = page.heightPt * (1f - CORNELL_SUMMARY_FRACTION)
     val cueRight = page.widthPt * CORNELL_CUE_FRACTION
-    sink.line(0f, titleBottom, page.widthPt, titleBottom, width * 2f, color)
-    sink.line(0f, summaryTop, page.widthPt, summaryTop, width * 2f, color)
-    sink.line(cueRight, titleBottom, cueRight, summaryTop, width * 2f, color)
+    val frame = darker(color)
+    sink.line(0f, titleBottom, page.widthPt, titleBottom, width * 2f, frame)
+    sink.line(0f, summaryTop, page.widthPt, summaryTop, width * 2f, frame)
+    sink.line(cueRight, titleBottom, cueRight, summaryTop, width * 2f, frame)
     val ruleStart = if (ruledCue) 0f else cueRight
     var y = titleBottom + spacing
     while (y < summaryTop) {
         sink.line(ruleStart, y, page.widthPt, y, width, color)
         y += spacing
     }
+}
+
+/** The color for the lines that structure a layout, against the ruling inside it. */
+private fun darker(color: Int): Int {
+    val r = (color shr 16 and 0xFF) * STRUCTURE_SHADE / 100
+    val g = (color shr 8 and 0xFF) * STRUCTURE_SHADE / 100
+    val b = (color and 0xFF) * STRUCTURE_SHADE / 100
+    return (color and 0xFF000000.toInt()) or (r shl 16) or (g shl 8) or b
 }
 
 private fun engineering(page: PageSize, t: PageTemplate.Engineering, sink: TemplateSink) {
@@ -157,12 +167,12 @@ private fun engineering(page: PageSize, t: PageTemplate.Engineering, sink: Templ
     for (column in 0..columns) {
         val major = column % PageTemplate.Engineering.MAJOR_EVERY == 0 || column == columns
         val x = left + column * t.spacing
-        sink.line(x, top, x, bottom, if (major) t.lineWidth * 2f else t.lineWidth, t.color)
+        sink.line(x, top, x, bottom, t.lineWidth, if (major) darker(t.color) else t.color)
     }
     for (row in 0..rows) {
         val major = row % PageTemplate.Engineering.MAJOR_EVERY == 0 || row == rows
         val y = top + row * t.spacing
-        sink.line(left, y, right, y, if (major) t.lineWidth * 2f else t.lineWidth, t.color)
+        sink.line(left, y, right, y, t.lineWidth, if (major) darker(t.color) else t.color)
     }
 }
 

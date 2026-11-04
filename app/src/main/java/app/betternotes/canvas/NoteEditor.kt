@@ -84,6 +84,21 @@ class NoteEditor(
         strokes.sweep(session)
     }
 
+    /** The page to continue from, if one was saved and is still in the document. */
+    fun lastPageIndex(): Int = store.readLastPage()?.let(document::indexOfPage) ?: -1
+
+    /** Remembers the page to continue from. It doesn't matter if this write is lost. */
+    fun rememberLastPage(pageId: Long) {
+        if (closed) return
+        background.execute {
+            try {
+                store.writeLastPage(pageId)
+            } catch (e: IOException) {
+                Log.w(TAG, "Could not remember the page", e)
+            }
+        }
+    }
+
     /** Writes everything and waits, for when the app is leaving and may be killed. */
     fun saveNow() {
         main.removeCallbacks(autosave)

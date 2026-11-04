@@ -201,6 +201,20 @@ fun Document.changePaperColor(pageIds: Collection<Long>, color: Int): Edit? = pa
 }
 
 /**
+ * The template picker's apply, as one undoable change per page: a background, and a new size if
+ * [size] is given. A custom layout brings its own size. Pages that can't take part are skipped.
+ */
+fun Document.changeAppearance(pageIds: Collection<Long>, background: PageBackground, size: PageSize? = null): Edit? =
+    pageEdit(pageIds) { page ->
+        val layout = (background.template as? PageTemplate.Custom)?.layout
+        val accepts = page.source == PageSource.Blank &&
+            if (layout != null) page.isResizable else page.size != null || background.template.tiles
+        if (!accepts) return@pageEdit null
+        val newSize = layout?.size ?: size?.takeIf { page.isResizable } ?: page.size
+        page.copy(size = newSize, background = background)
+    }
+
+/**
  * Puts a custom layout on the given pages. It brings its own size, since that is what its lines were
  * placed for, so it goes only on pages that can be resized. A page keeps its own copy, so changing or
  * deleting the layout later leaves the page as it is.
