@@ -46,6 +46,13 @@ internal class ShapeController(
         cancel()
     }
 
+    /** Ends the drag without adding anything, and returns what was dragged out, if the pen moved. */
+    fun takePreview(): ShapeItem? {
+        val item = preview
+        cancel()
+        return item
+    }
+
     fun cancel() {
         make = null
         preview = null

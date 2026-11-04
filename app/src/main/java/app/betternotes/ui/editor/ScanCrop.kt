@@ -23,6 +23,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.hypot
@@ -70,6 +72,11 @@ internal fun ScanCrop(state: EditorState, photo: Uri) {
             Text(stringResource(R.string.scan_loading), color = Color.White, modifier = Modifier.align(Alignment.Center))
         } else {
             var corners by remember(source) { mutableStateOf(initialCorners(source)) }
+            var working by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+            if (working) {
+                Text(stringResource(R.string.scan_loading), color = Color.White, modifier = Modifier.align(Alignment.Center))
+            }
             Corners(source, corners, { corners = it }, Modifier.fillMaxSize().padding(bottom = 72.dp))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -77,13 +84,22 @@ internal fun ScanCrop(state: EditorState, photo: Uri) {
             ) {
                 ScanButton(R.string.scan_cancel) { state.scanPhoto = null }
                 ScanButton(R.string.scan_done) {
-                    val flat = flatten(source, corners)
-                    state.scanPhoto = null
-                    val folder = File(context.cacheDir, "scan").apply { mkdirs() }
-                    val file = File(folder, "scan-${System.currentTimeMillis()}.jpg")
-                    file.outputStream().use { flat.compress(Bitmap.CompressFormat.JPEG, 92, it) }
-                    flat.recycle()
-                    state.importImage(Uri.fromFile(file))
+                    if (working) return@ScanButton
+                    working = true
+                    val chosen = corners
+                    // Flattening and saving a full-size photo takes long enough to freeze the screen on the main thread.
+                    scope.launch {
+                        val file = withContext(Dispatchers.Default) {
+                            val flat = flatten(source, chosen)
+                            val folder = File(context.cacheDir, "scan").apply { mkdirs() }
+                            File(folder, "scan-${System.currentTimeMillis()}.jpg").also { out ->
+                                out.outputStream().use { flat.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+                                flat.recycle()
+                            }
+                        }
+                        state.scanPhoto = null
+                        state.importImage(Uri.fromFile(file))
+                    }
                 }
             }
         }

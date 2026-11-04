@@ -25,6 +25,8 @@ import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.LineStyle
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
@@ -50,6 +52,7 @@ internal class ItemPainter(
     }
     private val text = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
+    private val stripes = Path()
 
     fun paint(canvas: Canvas, item: PageItem) {
         when (item) {
@@ -78,6 +81,10 @@ internal class ItemPainter(
         val height = item.frame.height
         ShapePaths.build(path, item.kind, width, height, item.cornerRadius)
         val alpha = (item.opacity * OPAQUE).roundToInt()
+        if (item.kind == ShapeKind.TAPE && item.fillColor == TapeOptions.WARNING_FILL) {
+            paintWarningTape(canvas, width, height)
+            return
+        }
         if (item.isFilled) {
             fill.color = item.fillColor
             fill.alpha = fill.alpha * alpha / OPAQUE.toInt()
@@ -88,6 +95,27 @@ internal class ItemPainter(
         line.alpha = line.alpha * alpha / OPAQUE.toInt()
         canvas.drawPath(path, line)
         line.pathEffect = null
+    }
+
+    /** Yellow with red stripes slanted across it, like police tape, clipped to the torn strip. */
+    private fun paintWarningTape(canvas: Canvas, width: Float, height: Float) {
+        canvas.withClip(path) {
+            fill.color = TapeOptions.WARNING_FILL
+            drawRect(0f, 0f, width, height, fill)
+            fill.color = TapeOptions.WARNING_RED
+            val stripe = height * WARNING_STRIPE_RATIO
+            var x = -height
+            while (x < width) {
+                stripes.rewind()
+                stripes.moveTo(x, height)
+                stripes.lineTo(x + stripe, height)
+                stripes.lineTo(x + stripe + height, 0f)
+                stripes.lineTo(x + height, 0f)
+                stripes.close()
+                drawPath(stripes, fill)
+                x += stripe * 2f
+            }
+        }
     }
 
     private fun applyLine(color: Int, width: Float, style: LineStyle) {
@@ -262,10 +290,11 @@ internal class ItemPainter(
 
     private companion object {
         const val OPAQUE = 255f
+        const val WARNING_STRIPE_RATIO = 0.8f
         const val DOT_LENGTH = 0.01f
         const val CELL_PADDING = 3f
         const val TEXT_LAYOUT_SCALE = 8f
-        const val FOLD_OF_NOTE = 0.05f
+        const val FOLD_OF_NOTE = 0.12f
         const val FOLD_TIP = 0.2f
         const val FOLD_SHADE = 0x40FFFFFF
         const val ALPHA_SHIFT = 24

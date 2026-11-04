@@ -49,6 +49,7 @@ import app.betternotes.perf.CanvasBenchmark
 import app.betternotes.perf.HandwritingCheck
 import app.betternotes.perf.PerfProbe
 import app.betternotes.library.LibraryPreferences
+import app.betternotes.ui.editor.DocumentInfo
 import app.betternotes.ui.editor.EditorActions
 import app.betternotes.ui.editor.EditorChrome
 import app.betternotes.ui.editor.EditorState
@@ -120,6 +121,20 @@ class MainActivity : ComponentActivity() {
                         },
                         onOpenSettings = { shownOverlay.value = SettingsOverlay.SCREEN },
                         documentId = { editor?.document?.id },
+                        documentInfo = {
+                            editor?.document?.let { DocumentInfo(it.title, it.pages.size, it.modifiedAtMs, it.createdAtMs) }
+                        },
+                        onOpenOverlay = { shownOverlay.value = it },
+                        onRename = { name ->
+                            val repository = LibraryRepository.get(this@MainActivity)
+                            val entry = repository.library.value?.entries?.firstOrNull { it.id == editor?.document?.id }
+                            if (entry != null) {
+                                repository.rename(entry, name)
+                            } else {
+                                editor?.document?.title = name
+                                editor?.saveNow()
+                            }
+                        },
                         onOpenDocument = { id ->
                             canvas.rememberPage()
                             editor?.saveNow()

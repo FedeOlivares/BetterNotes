@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -52,6 +53,10 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
                 ColorDot(color or OPAQUE, diameter = 24.dp)
                 if (slot == options.selectedColor) SelectedDot()
             }
+        }
+        ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = options.colors.size) } }) {
+            WarningSwatch()
+            if (options.selectedColor >= options.colors.size) SelectedDot()
         }
     }
 }
@@ -166,3 +171,24 @@ internal val EMOJI: List<String> = listOf(
 
 private const val EMOJI_PER_ROW = 8
 private const val OPAQUE = 0xFF000000.toInt()
+
+/** A round swatch striped yellow and red, for the warning tape. */
+@Composable
+private fun WarningSwatch() {
+    androidx.compose.foundation.Canvas(Modifier.size(24.dp).clip(CircleShape)) {
+        drawRect(Color(TapeOptions.WARNING_FILL))
+        val stripe = size.width / 4f
+        var x = -size.height
+        while (x < size.width) {
+            val slant = Path().apply {
+                moveTo(x, size.height)
+                lineTo(x + stripe, size.height)
+                lineTo(x + stripe + size.height, 0f)
+                lineTo(x + size.height, 0f)
+                close()
+            }
+            drawPath(slant, Color(TapeOptions.WARNING_RED))
+            x += stripe * 2f
+        }
+    }
+}

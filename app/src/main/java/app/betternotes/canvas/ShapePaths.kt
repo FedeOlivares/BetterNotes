@@ -11,6 +11,7 @@ import kotlin.math.sin
 /** The outline of each shape, in a box of the given size with its corner at the origin. */
 internal object ShapePaths {
     private val box = RectF()
+    private val cloud = Path()
 
     fun build(path: Path, kind: ShapeKind, w: Float, h: Float, cornerRadius: Float) {
         path.reset()
@@ -161,9 +162,11 @@ internal object ShapePaths {
                 polyline(path, w * 0.28f, h * 0.68f, w * 0.38f, h, w * 0.5f, h * 0.75f)
             }
             ShapeKind.THOUGHT -> {
-                for (bump in CLOUD_BUMPS) {
-                    val radius = bump[2] * min(w, h)
-                    path.addCircle(bump[0] * w, bump[1] * h, radius, Path.Direction.CW)
+                // Circles that touch merge into one outline, so the cloud has no lines inside it.
+                for ((i, bump) in CLOUD_BUMPS.withIndex()) {
+                    cloud.rewind()
+                    cloud.addCircle(bump[0] * w, bump[1] * h, bump[2] * min(w, h), Path.Direction.CW)
+                    if (i == 0) path.set(cloud) else path.op(cloud, Path.Op.UNION)
                 }
             }
             ShapeKind.TAPE -> tape(path, w, h)

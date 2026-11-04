@@ -30,3 +30,13 @@ Toolbars and tool rows from the screenshots, dark and light. Pen, pencil, highli
 
 ## Toolbar restyle (2026-11-04)
 ws6-editor is merged into `main` (twice; the second merge adds Scan). `check.ps1` passes. Installed on the Pad 7 and compared with `toolbar.jpg`, `full note screen.jpg` and `pen and pencil optins.jpg`: pill sizes, icon order, selected circle and dots already matched. Changed: a subtler pill border (dark and light) and thicker width glyphs (min 2 dp). Not done: the light theme and the panels were not looked at on screen after the change, and the highlighter's extra row icons (eyedropper, pattern) were not compared. The scratch note shows a dark strip left of and above the page; that is the page's pan, not the toolbar.
+
+## Owner feedback round (2026-11-04), built, `check.ps1` passes, not yet seen on the Pad 7
+- Scribble to erase, circle to lasso and stabilization now work in `CanvasView` (`StrokeGestures`, `Stabilizer` in `:core tools/`, unit tested). Circle to lasso: draw a circle, then touch its line; the contents and the circle are selected and the lasso takes over. Stabilization is a slider (1 to 5): the line follows the pen at 1/level.
+- Panels close on a touch outside (a scrim under the toolbars). Lasso: red delete and blue copy buttons under the selection's bottom right (copy puts the duplicate 18 pt down and right).
+- Highlighter: round ends in a half circle (stock highlighter tip with corner rounding 1), square is the stock highlighter's tip. Saved round highlighter strokes re-mesh with the new tip.
+- Warning tape: a striped swatch after the tape colors (`TapeOptions.WARNING_FILL` marks it; no format change). Thought bubble: circles are unioned into one outline.
+- New pictures (and scans) are selected after insert. Scan Done now flattens and saves off the main thread.
+- Text and sticky note: tap places one at the default size, drag sizes it; the text box now shows its area. A touch outside an open sticky closes it; fold corner is bigger.
+- The "..." menu is rebuilt from `left menu.png` (`EditorMenu.kt`): card, Export / Rename / Go to page, Change template, Scroll and layout, Stylus and finger, Settings. No Share (offline). Scroll and layout and Settings both open the settings screen for now.
+- Not done: shape handles for tip length, tip width and stroke width (needs new fields on `ShapeItem`, so a `FORMAT_VERSION` bump and migration); the swatch list button next to the colors; the sources column (`left side column sources and add.png`). Auto deselect in the eraser stays inert: switching tools already clears the selection.

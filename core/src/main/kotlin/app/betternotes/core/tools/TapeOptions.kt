@@ -15,7 +15,8 @@ data class TapeOptions(
 ) {
     val width get() = widths[selectedWidth]
 
-    val color get() = colors[selectedColor]
+    /** The slot after the last color is the warning tape: yellow and red stripes, drawn by the painter. */
+    val color get() = colors.getOrElse(selectedColor) { WARNING_FILL }
 
     /** A strip torn off between two points on the page. */
     fun item(id: Long, x0: Float, y0: Float, x1: Float, y1: Float): ShapeItem {
@@ -26,6 +27,10 @@ data class TapeOptions(
     }
 
     companion object {
+        /** Marks a strip of tape that is painted as warning tape, whatever its other colors. */
+        const val WARNING_FILL = 0xFFFFC400.toInt()
+        const val WARNING_RED = 0xFFD32F2F.toInt()
+
         /** See-through, as washi tape is. */
         val PALETTE: List<Int> = listOf(
             0xB3FBDD8C.toInt(),

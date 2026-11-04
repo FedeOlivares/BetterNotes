@@ -51,6 +51,8 @@ import app.betternotes.core.model.InkStyle
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
@@ -68,7 +70,12 @@ import app.betternotes.core.settings.StylusEraserEnd
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.DEFAULT_ERASABLE
 import app.betternotes.core.tools.EraseSession
+import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.ItemKind
+import app.betternotes.core.tools.Selection
+import app.betternotes.core.tools.Stabilizer
+import app.betternotes.core.tools.StrokeGestures
+import app.betternotes.core.tools.selectWithLasso
 import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
 import app.betternotes.core.tools.ImageOptions
@@ -88,7 +95,16 @@ import kotlin.math.roundToInt
 /** What the stylus does: lay down ink, erase, or point. */
 sealed interface CanvasTool {
     /** Holding the pen still for [holdToLineMs] turns the stroke into a straight line. 0 turns that off. */
-    data class Ink(val style: InkStyle, val holdToLineMs: Int = 0) : CanvasTool
+    data class Ink(
+        val style: InkStyle,
+        val holdToLineMs: Int = 0,
+        /** A zigzag erases what it crosses instead of staying as ink. */
+        val scribbleToErase: Boolean = false,
+        /** After a circle-ish stroke, touching its line selects what it surrounds. */
+        val circleToLasso: Boolean = false,
+        /** 1 is the pen itself; each level above follows it more slowly. */
+        val stabilization: Int = 1,
+    ) : CanvasTool
     data class Eraser(val mode: EraseMode, val radiusPt: Float, val kinds: Set<ItemKind> = DEFAULT_ERASABLE) : CanvasTool
 
     /** Shows where the pen is, with a fading tail, and leaves nothing on the page. */
@@ -323,6 +339,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Called for a stylus button or shortcut's action that isn't the canvas's, as for choosing a tool. */
     var onToolAction: (EditorAction) -> Boolean = { false }
 
+    /** Called when a circle drawn with the pen has been touched and the lasso should take over. */
+    var onLassoRequested: () -> Unit = {}
+
     /** Called whenever the input mode changes, so that the toolbars can follow a shortcut. */
     var onInputModeChanged: (InputMode) -> Unit = {}
 
@@ -469,6 +488,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private val hold = HoldDetector(HOLD_SLOP_DP * resources.displayMetrics.density)
     private var holdDelayMs = 0L
     private var straightening = false
+    private var drawScribble = false
+    private var drawCircle = false
+    private var lastLoop: LoopMark? = null
+    private var stabilizer: Stabilizer? = null
+    private val stabilized = FloatArray(2)
     private var strokeStartMs = 0L
     private var strokeStartX = 0f
     private var strokeStartY = 0f
@@ -524,7 +548,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         )
     }
 
-    private class PendingStroke(val editor: NoteEditor, val pageId: Long, val style: InkStyle, val stickyId: Long?)
+    private class PendingStroke(
+        val editor: NoteEditor,
+        val pageId: Long,
+        val style: InkStyle,
+        val stickyId: Long?,
+        val scribbleToErase: Boolean = false,
+        val circleToLasso: Boolean = false,
+    )
+
+    /** The last circle-ish stroke, which a touch on its line turns into a selection. */
+    private class LoopMark(val pageId: Long, val item: StrokeItem)
 
     /** The open note that the stroke in progress belongs to, if it started in one. */
     private var strokeStickyId: Long? = null
@@ -959,6 +993,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         } else if (tool is CanvasTool.Lasso) {
             lassoPointer = pointerId
             editor.content(page.id)
+            if (lasso.pressButton(index, pageX(x, index), pageY(y, index))) {
+                syncChanges()
+                return
+            }
             lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly)
             syncChanges()
         } else if (tool is CanvasTool.Shape) {
@@ -968,8 +1006,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             shapePointer = pointerId
             shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
         } else if (tool is CanvasTool.Ink) {
+            if (tool.circleToLasso && selectLoopAt(index, page.id, pageX(x, index), pageY(y, index))) return
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
+            drawScribble = tool.scribbleToErase
+            drawCircle = tool.circleToLasso
+            stabilizer = if (tool.stabilization > 1) Stabilizer(tool.stabilization) else null
             val reach = RULER_EDGE_REACH_DP * resources.displayMetrics.density
             strokeEdge = if (drawingInLoupe) Ruler.NO_EDGE else overlay.ruler?.edgeNear(x, y, reach) ?: Ruler.NO_EDGE
             // A stroke that starts when a tap times out has no event yet, and ink needs one.
@@ -1023,7 +1065,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (pointerId == shapePointer) {
             shapePointer = -1
-            shapes.end()
+            if (areaKind != AreaKind.NONE) finishAreaDrag() else shapes.end()
             return
         }
         strokeWaitingForEvent = false
@@ -1038,9 +1080,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         removeCallbacks(holdCheck)
         if (straightening) {
             finishStraightStroke(event, id)
+        } else if (stabilizer != null) {
+            wet.finishStroke(rawInput(event, event.findPointerIndex(pointerId).coerceAtLeast(0), event.eventTime), id)
         } else {
             wet.finishStroke(event, pointerId, id)
         }
+        stabilizer = null
         strokeId = null
     }
 
@@ -1062,6 +1107,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (pointerId == shapePointer) {
             shapePointer = -1
+            areaKind = AreaKind.NONE
             shapes.cancel()
             return
         }
@@ -1079,6 +1125,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         strokeEdge = Ruler.NO_EDGE
         wet.cancelStroke(id, currentEvent)
         pendingStrokes.remove(id)
+        stabilizer = null
         strokeId = null
     }
 
@@ -1094,6 +1141,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val content = editor.content(page.id)
         if (playVideoAt(index, page.id, x, y)) return true
         val sticky = topItemOfType<StickyNoteItem>(page.id, x, y)
+        // A touch outside an open note closes it. Ink goes on to draw there, and the note tool is done with the touch.
+        if (sticky == null && (tool is CanvasTool.Sticky || tool is CanvasTool.Ink) && closeOpenStickies(page.id)) {
+            if (tool is CanvasTool.Sticky) return true
+        }
         if (sticky != null && (tool is CanvasTool.Sticky || tool is CanvasTool.Ink)) {
             val (at, note) = sticky
             when {
@@ -1121,23 +1172,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 editor.perform(ItemsEdit.addOnTop(page.id, content, item))
                 syncChanges()
             }
-            is CanvasTool.Sticky -> {
-                val note = current.options.newSticky(x, y)
-                editor.perform(ItemsEdit.addOnTop(page.id, content, note))
-                syncChanges()
-                editStickyText(index, page.id, note)
-            }
+            is CanvasTool.Sticky -> beginAreaDrag(AreaKind.STICKY, index, x, y, current.options)
             is CanvasTool.Text -> {
                 val found = topItemOfType<TextItem>(page.id, x, y)?.second
-                val item = found ?: TextItem(
-                    IdSource.Random.next(),
-                    Frame(x, y, NEW_TEXT_WIDTH_PT, NEW_TEXT_HEIGHT_PT),
-                    "",
-                    current.options.textSize.toFloat(),
-                    NoteOptions.TEXT_COLOR,
-                    current.options.style,
-                )
-                editText(index, page.id, item, isNew = found == null)
+                if (found != null) editText(index, page.id, found, isNew = false) else beginAreaDrag(AreaKind.TEXT, index, x, y, current.options)
             }
             is CanvasTool.Table -> {
                 val found = topItemOfType<TableItem>(page.id, x, y)?.second
@@ -1200,6 +1238,76 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val relative = stroke.transformed(Affine.translate(-note.frame.left, -note.frame.top))
         setSticky(pageId, at, note.copy(items = note.items + relative))
         return true
+    }
+
+    private enum class AreaKind { NONE, STICKY, TEXT }
+
+    private var areaKind = AreaKind.NONE
+    private var areaIndex = 0
+    private var areaX = 0f
+    private var areaY = 0f
+    private var areaOptions = NoteOptions()
+
+    /** A touch that places a note or text: a tap puts one at the default size, and a drag sizes it. */
+    private fun beginAreaDrag(kind: AreaKind, index: Int, x: Float, y: Float, options: NoteOptions) {
+        areaKind = kind
+        areaIndex = index
+        areaX = x
+        areaY = y
+        areaOptions = options
+        shapePointer = drawPointerId
+        shapes.start(index, x, y) { x0, y0, x1, y1 ->
+            ShapeItem(
+                0L,
+                Frame(minOf(x0, x1), minOf(y0, y1), abs(x1 - x0), abs(y1 - y0)),
+                ShapeKind.RECTANGLE,
+                strokeColor = AREA_EDGE_COLOR,
+                strokeWidth = 1.5f,
+                fillColor = AREA_FILL_COLOR,
+            )
+        }
+    }
+
+    private fun finishAreaDrag() {
+        val kind = areaKind
+        areaKind = AreaKind.NONE
+        val open = editor ?: return
+        val page = open.document.pages.getOrNull(areaIndex) ?: return
+        val dragged = shapes.takePreview()?.frame?.takeIf { it.width >= MIN_AREA_PT && it.height >= MIN_AREA_PT }
+        when (kind) {
+            AreaKind.STICKY -> {
+                val note = areaOptions.newSticky(areaX, areaY).let { if (dragged != null) it.copy(frame = dragged) else it }
+                open.perform(ItemsEdit.addOnTop(page.id, open.content(page.id), note))
+                syncChanges()
+                editStickyText(areaIndex, page.id, note)
+            }
+            AreaKind.TEXT -> {
+                val item = TextItem(
+                    IdSource.Random.next(),
+                    dragged ?: Frame(areaX, areaY, NEW_TEXT_WIDTH_PT, NEW_TEXT_HEIGHT_PT),
+                    "",
+                    areaOptions.textSize.toFloat(),
+                    NoteOptions.TEXT_COLOR,
+                    areaOptions.style,
+                )
+                editText(areaIndex, page.id, item, isNew = true)
+            }
+            AreaKind.NONE -> Unit
+        }
+    }
+
+    /** Folds every open sticky note on the page. Returns true if there was one. */
+    private fun closeOpenStickies(pageId: Long): Boolean {
+        val open = editor ?: return false
+        val content = open.content(pageId)
+        var closed = false
+        for (i in 0 until content.size) {
+            val note = content[i] as? StickyNoteItem ?: continue
+            if (!note.isOpen) continue
+            setSticky(pageId, i, note.copy(isOpen = false))
+            closed = true
+        }
+        return closed
     }
 
     private fun StickyNoteItem.isInFoldCorner(x: Float, y: Float): Boolean {
@@ -1407,10 +1515,24 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             } else if (editor === open) {
                 placeInView { pageId, x, y, maxWidth, maxHeight ->
                     options.newImage(imported.assetId, imported.width, imported.height, x, y, maxWidth, maxHeight)
-                        .also { open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), it)) }
+                        .also {
+                            open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), it))
+                            selectLast(pageId)
+                        }
                 }
             }
         }
+    }
+
+    /** Selects the item just put on top of a page, so that it can be moved or resized at once. */
+    private fun selectLast(pageId: Long) {
+        val open = editor ?: return
+        val index = open.document.pages.indexOfFirst { it.id == pageId }
+        val content = open.content(pageId)
+        if (index < 0 || content.size == 0) return
+        val at = content.size - 1
+        lasso.select(index, Selection(pageId, intArrayOf(at), listOf(content[at])))
+        onLassoRequested()
     }
 
     /** Copies a video into the document and puts it in the middle of the view. */
@@ -1519,8 +1641,20 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             startStrokeAlongRuler(event, editor, page.id)
             return
         }
-        val id = wet.startStroke(event, drawPointerId, InkBrushes.brush(drawStyle), screenToPage)
-        pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle, strokeStickyId)
+        val steady = stabilizer
+        val id = if (steady != null) {
+            strokeStartMs = event.eventTime
+            screenToPage.invert(pageToScreen)
+            val index = event.findPointerIndex(drawPointerId).coerceAtLeast(0)
+            wet.startStroke(
+                stabilizedInput(event.getX(index), event.getY(index), event.eventTime, event.getPressure(index)),
+                InkBrushes.brush(drawStyle),
+                pageToScreen,
+            )
+        } else {
+            wet.startStroke(event, drawPointerId, InkBrushes.brush(drawStyle), screenToPage)
+        }
+        pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle, strokeStickyId, drawScribble, drawCircle)
         strokeId = id
         strokeStartedInThisEvent = true
         if (holdDelayMs > 0L) watchForHold(event)
@@ -1539,9 +1673,52 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             moveStraightEnd(id, event.eventTime)
             return
         }
+        if (stabilizer != null) {
+            addStabilized(event, id)
+            return
+        }
         val predicted = if (predictInk) predictor.predict() else null
         wet.addToStroke(event, drawPointerId, id, predicted)
         predicted?.recycle()
+    }
+
+    // ---- Stabilization ----
+
+    /** The pen's position, run through the stabilizer and mapped onto the page. */
+    private fun stabilizedInput(x: Float, y: Float, timeMs: Long, pressure: Float): StrokeInput {
+        val at = floatArrayOf(x, y)
+        screenToPage.mapPoints(at)
+        stabilizer?.next(at[0], at[1], stabilized)
+        return StrokeInput().apply {
+            update(stabilized[0], stabilized[1], (timeMs - strokeStartMs).coerceAtLeast(0L), InputToolType.STYLUS, STROKE_UNIT_CM, pressure)
+        }
+    }
+
+    /** The pen where it really is, to end a stabilized stroke exactly where the pen lifted. */
+    private fun rawInput(event: MotionEvent, index: Int, timeMs: Long): StrokeInput {
+        val at = floatArrayOf(event.getX(index), event.getY(index))
+        screenToPage.mapPoints(at)
+        return StrokeInput().apply {
+            update(at[0], at[1], (timeMs - strokeStartMs).coerceAtLeast(1L), InputToolType.STYLUS, STROKE_UNIT_CM, event.getPressure(index))
+        }
+    }
+
+    private fun addStabilized(event: MotionEvent, id: InProgressStrokeId) {
+        val index = event.findPointerIndex(drawPointerId)
+        if (index < 0) return
+        val batch = MutableStrokeInputBatch()
+        for (h in 0 until event.historySize) {
+            batch.add(
+                stabilizedInput(
+                    event.getHistoricalX(index, h),
+                    event.getHistoricalY(index, h),
+                    event.getHistoricalEventTime(h),
+                    event.getHistoricalPressure(index, h),
+                ),
+            )
+        }
+        batch.add(stabilizedInput(event.getX(index), event.getY(index), event.eventTime, event.getPressure(index)))
+        wet.addToStroke(batch, id, ImmutableStrokeInputBatch.EMPTY)
     }
 
     // ---- Holding the pen still to draw a straight line ----
@@ -1561,7 +1738,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         strokeStartY = start[1]
         screenToPage.invert(pageToScreen)
         val id = wet.startStroke(strokeInput(strokeStartX, strokeStartY, 0L), InkBrushes.brush(drawStyle), pageToScreen)
-        pendingStrokes[id] = PendingStroke(editor, pageId, drawStyle, strokeStickyId)
+        pendingStrokes[id] = PendingStroke(editor, pageId, drawStyle, strokeStickyId, drawScribble, drawCircle)
         strokeId = id
         straightening = true
         strokeStartedInThisEvent = true
@@ -1597,6 +1774,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val old = strokeId ?: return
         val pending = pendingStrokes.remove(old) ?: return
         wet.cancelStroke(old)
+        stabilizer = null
         screenToPage.invert(pageToScreen)
         val first = strokeInput(strokeStartX, strokeStartY, 0L)
         val id = wet.startStroke(first, InkBrushes.brush(drawStyle), pageToScreen)
@@ -1679,11 +1857,58 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val item = StrokeItem(IdSource.Random.next(), pending.style, stroke.inputs.toStrokePoints())
             val stickyId = pending.stickyId
             if (stickyId != null && addToSticky(editor, pending.pageId, stickyId, item)) continue
+            lastLoop = null
+            if (pending.scribbleToErase && StrokeGestures.isScribble(item.points)) {
+                scribbleOut(editor, pending.pageId, item)
+                continue
+            }
             editor.strokes.put(item, stroke)
             editor.perform(ItemsEdit.addOnTop(pending.pageId, editor.content(pending.pageId), item))
+            if (pending.circleToLasso && StrokeGestures.isClosedLoop(item.points)) lastLoop = LoopMark(pending.pageId, item)
         }
         syncChanges()
         wet.removeFinishedStrokes(strokes.keys)
+    }
+
+    /** Erases whole strokes and shapes along a scribble. The scribble itself is not kept. */
+    private fun scribbleOut(editor: NoteEditor, pageId: Long, scribble: StrokeItem) {
+        val content = editor.content(pageId)
+        val points = scribble.points
+        val session = EraseSession(
+            pageId,
+            content,
+            EraseMode.WHOLE,
+            scribble.style.width / 2f + SCRIBBLE_REACH_PT,
+            kinds = DEFAULT_ERASABLE,
+        )
+        for (i in 0 until points.size) session.eraseTo(points.x(i), points.y(i))
+        session.finish()?.let { editor.record(it) }
+        redrawChanges(editor.document.pages.indexOfFirst { it.id == pageId })
+    }
+
+    /** Touching the last circle's line selects what it surrounds, and hands the canvas over to the lasso. */
+    private fun selectLoopAt(pageIndex: Int, pageId: Long, x: Float, y: Float): Boolean {
+        val loop = lastLoop ?: return false
+        val editor = editor ?: return false
+        if (loop.pageId != pageId) return false
+        val reach = LOOP_TAP_REACH_DP * resources.displayMetrics.density / viewport.pxPerPt
+        if (!StrokeGestures.isNearLine(loop.item.points, x, y, reach)) return false
+        lastLoop = null
+        val content = editor.content(pageId)
+        val inside = selectWithLasso(pageId, content, StrokeGestures.polygon(loop.item.points), ALL_ITEM_KINDS, false)
+        val indices = inside.indices.toMutableList()
+        val items = inside.items.toMutableList()
+        val own = (0 until content.size).firstOrNull { content[it].id == loop.item.id }
+        if (own != null && own !in indices) {
+            val at = indices.indexOfFirst { it > own }.let { if (it < 0) indices.size else it }
+            indices.add(at, own)
+            items.add(at, content[own])
+        }
+        if (indices.isEmpty()) return false
+        lasso.select(pageIndex, Selection(pageId, indices.toIntArray(), items))
+        onLassoRequested()
+        syncChanges()
+        return true
     }
 
     // ---- Navigation ----
@@ -1875,7 +2100,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val NEW_TEXT_WIDTH_PT = 200f
         const val NEW_TEXT_HEIGHT_PT = 60f
         const val CELL_INSET_PT = 3f
-        const val STICKY_CORNER_DP = 28f
+        const val STICKY_CORNER_DP = 40f
+        const val MIN_AREA_PT = 30f
+        const val AREA_EDGE_COLOR = 0xFF4A9BF5.toInt()
+        const val AREA_FILL_COLOR = 0x224A9BF5
 
         /** Long enough to cross the screen at any angle, wherever two fingers carry it. */
         const val RULER_LENGTH_OF_DIAGONAL = 3f
@@ -1885,6 +2113,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         /** How close to a ruler's edge a stroke must start to run along it. */
         const val RULER_EDGE_REACH_DP = 14f
         const val STRAIGHT_LINE_PRESSURE = 0.5f
+        const val SCRIBBLE_REACH_PT = 2f
+        const val LOOP_TAP_REACH_DP = 14f
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
 

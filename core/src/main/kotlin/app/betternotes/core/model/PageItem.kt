@@ -296,3 +296,15 @@ data class AudioItem(
 
     override fun transformed(t: Affine) = copy(frame = frame.transformed(t))
 }
+
+/** A copy under a new [id], for duplicating an item. */
+fun PageItem.withId(id: Long): PageItem = when (this) {
+    is StrokeItem -> copy(id = id)
+    is ShapeItem -> copy(id = id)
+    is ImageItem -> copy(id = id)
+    is TextItem -> copy(id = id)
+    is StickyNoteItem -> copy(id = id)
+    is TableItem -> copy(id = id)
+    is VideoItem -> copy(id = id)
+    is AudioItem -> copy(id = id)
+}

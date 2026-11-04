@@ -219,10 +219,16 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
             }
         }
         LabeledRow(R.string.panel_stabilization, info = { notices.say(R.string.info_stabilization) }) {
-            ValuePill(onClick = {
-                state.update { it.copy(stabilization = (it.stabilization + 1) % (InkPreset.MAX_STABILIZATION + 1)) }
-            }) { ValueText(preset.stabilization.toString()) }
+            ValuePill { ValueText(preset.stabilization.toString()) }
         }
+        PanelSlider(
+            fraction = (preset.stabilization - 1).toFloat() / (InkPreset.MAX_STABILIZATION - 1),
+            onChange = { f ->
+                val level = 1 + (f * (InkPreset.MAX_STABILIZATION - 1)).roundToInt()
+                state.update { it.copy(stabilization = level) }
+            },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+        )
         ColorSection(state, preset, notices)
     }
 }

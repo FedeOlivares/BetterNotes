@@ -393,6 +393,9 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
         modifier = Modifier
             .offset { IntOffset(request.left.roundToInt(), request.top.roundToInt()) }
             .size(with(density) { request.width.toDp() }, with(density) { request.height.toDp() })
+            // The area the text stays in, so that it is plain where typing will go.
+            .background(LocalEditorColors.current.accent.copy(alpha = 0.08f))
+            .border(1.dp, LocalEditorColors.current.accent.copy(alpha = 0.6f))
             .focusRequester(focus),
     )
 }

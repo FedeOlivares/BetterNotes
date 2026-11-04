@@ -11,6 +11,8 @@ import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Viewport
+import app.betternotes.core.model.IdSource
+import app.betternotes.core.model.withId
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.tools.ItemKind
@@ -75,6 +77,13 @@ internal class LassoController(
         color = GUIDE_COLOR
         strokeWidth = SELECTION_WIDTH_DP * density
     }
+    private val buttonFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = 0xFFFFFFFF.toInt()
+        strokeWidth = 1.6f * density
+        strokeCap = Paint.Cap.ROUND
+    }
     private val handleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = HANDLE_FILL }
     private val handleEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -102,6 +111,14 @@ internal class LassoController(
         selection = null
         drag = Drag.NONE
         polygon.clear()
+        redraw()
+    }
+
+    /** Shows [selected], found elsewhere, with its handles. */
+    fun select(pageIndex: Int, selected: Selection) {
+        this.pageIndex = pageIndex
+        selection = selected
+        drag = Drag.NONE
         redraw()
     }
 
@@ -184,6 +201,48 @@ internal class LassoController(
         }
         drag = Drag.NONE
         polygon.clear()
+        redraw()
+    }
+
+    /**
+     * A press on the selection's delete or copy button, in page coordinates. Returns true if it was one,
+     * and the button's action is done.
+     */
+    fun pressButton(pageIndex: Int, x: Float, y: Float): Boolean {
+        val box = selection?.bounds ?: return false
+        if (pageIndex != this.pageIndex) return false
+        val reach = BUTTON_RADIUS_DP * density / viewport.pxPerPt
+        val delete = buttonCenter(box, 0)
+        val copy = buttonCenter(box, 1)
+        when {
+            kotlin.math.hypot(x - delete[0], y - delete[1]) <= reach -> deleteSelection()
+            kotlin.math.hypot(x - copy[0], y - copy[1]) <= reach -> duplicateSelection()
+            else -> return false
+        }
+        return true
+    }
+
+    /** The button's center in page units: slot 0 is the one at the corner, slot 1 is next to it. */
+    private fun buttonCenter(box: Bounds, slot: Int): FloatArray {
+        val unit = density / viewport.pxPerPt
+        val gap = BUTTON_RADIUS_DP * unit
+        val x = box.right - gap - slot * (2 * BUTTON_RADIUS_DP + BUTTON_GAP_DP) * unit
+        val y = box.bottom + gap + BUTTON_GAP_DP * unit
+        return floatArrayOf(x, y)
+    }
+
+    /** Puts a copy of the selection a little down and right of it, and selects the copy. */
+    fun duplicateSelection() {
+        val selected = selection ?: return
+        val page = pageContent() ?: return
+        val shift = Affine.translate(DUPLICATE_OFFSET_PT, DUPLICATE_OFFSET_PT)
+        val copies = selected.items.map { it.transformed(shift).withId(IdSource.Random.next()) }
+        val at = IntArray(copies.size) { page.size + it }
+        val edit = ItemsEdit(selected.pageId, IntArray(0), emptyList(), at, copies)
+        // Performing it fires the history callback, which would otherwise take this for someone else's edit.
+        selection = null
+        editor?.perform(edit)
+        selection = Selection(selected.pageId, at, copies)
         redraw()
     }
 
@@ -321,7 +380,37 @@ internal class LassoController(
         }
     }
 
+    private fun drawButtons(canvas: Canvas, box: Bounds) {
+        val radius = BUTTON_RADIUS_DP * density
+        val point = FloatArray(2)
+        for (slot in 0..1) {
+            val center = buttonCenter(box, slot)
+            point[0] = center[0]
+            point[1] = center[1]
+            pageToScreen.mapPoints(point)
+            buttonFill.color = if (slot == 0) DELETE_COLOR else COPY_COLOR
+            canvas.drawCircle(point[0], point[1], radius, buttonFill)
+            if (slot == 0) drawTrash(canvas, point[0], point[1], radius) else drawCopy(canvas, point[0], point[1], radius)
+        }
+    }
+
+    private fun drawTrash(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
+        val u = radius / 10f
+        canvas.drawLine(cx - 5 * u, cy - 4 * u, cx + 5 * u, cy - 4 * u, glyph)
+        canvas.drawLine(cx - 1.5f * u, cy - 6 * u, cx + 1.5f * u, cy - 6 * u, glyph)
+        canvas.drawRect(cx - 4 * u, cy - 4 * u, cx + 4 * u, cy + 6 * u, glyph)
+        canvas.drawLine(cx - 1.5f * u, cy - 1.5f * u, cx - 1.5f * u, cy + 3.5f * u, glyph)
+        canvas.drawLine(cx + 1.5f * u, cy - 1.5f * u, cx + 1.5f * u, cy + 3.5f * u, glyph)
+    }
+
+    private fun drawCopy(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
+        val u = radius / 10f
+        canvas.drawRoundRect(cx - 2 * u, cy - 6 * u, cx + 6 * u, cy + 3 * u, u, u, glyph)
+        canvas.drawRoundRect(cx - 6 * u, cy - 2 * u, cx + 2 * u, cy + 7 * u, u, u, glyph)
+    }
+
     private fun drawHandles(canvas: Canvas, box: Bounds) {
+        drawButtons(canvas, box)
         // Small squares on the corners and sides, as a word processor has.
         val half = HANDLE_HALF_DP * density
         val point = FloatArray(2)
@@ -362,6 +451,11 @@ internal class LassoController(
         const val HANDLE_HALF_DP = 4f
         const val HANDLE_EDGE_DP = 1f
         const val HANDLE_REACH_DP = 18f
+        const val BUTTON_RADIUS_DP = 18f
+        const val BUTTON_GAP_DP = 8f
+        const val DELETE_COLOR = 0xFFE5483F.toInt()
+        const val COPY_COLOR = 0xFF3F7FE5.toInt()
+        const val DUPLICATE_OFFSET_PT = 18f
 
         /** Less than this is a tap on the selection, not a drag of it. */
         const val MIN_DRAG_PT = 0.5f

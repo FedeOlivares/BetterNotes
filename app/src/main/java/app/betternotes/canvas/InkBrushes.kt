@@ -37,6 +37,12 @@ internal object InkBrushes {
     private val pressurePen by lazy { StockBrushes.pressurePen(PressurePenVersion.V1) }
     private val marker by lazy { StockBrushes.marker(MarkerVersion.V1) }
     private val highlighter by lazy { StockBrushes.highlighter(version = HighlighterVersion.V1) }
+    /** The stock highlighter, but ending in a half circle. Its tip has square corners rounded off. */
+    private val roundHighlighter by lazy {
+        val stock = highlighter.coats.first()
+        val tip = stock.tip.toBuilder().setCornerRounding(1f).build()
+        BrushFamily.builder().setCoat(stock.copy(tip = tip)).build()
+    }
     private val dashed by lazy { StockBrushes.dashedLine(DashedLineVersion.V1) }
     private val squareNib by lazy { familyOf(BrushTip.builder().setCornerRounding(0f).build()) }
     private val calligraphyNib by lazy {
@@ -57,7 +63,7 @@ internal object InkBrushes {
 
     private fun family(style: InkStyle): BrushFamily = when {
         style.line.kind != LineKind.SOLID -> dashed
-        style.tool == InkTool.HIGHLIGHTER -> if (style.tip == TipShape.SQUARE) squareNib else highlighter
+        style.tool == InkTool.HIGHLIGHTER -> if (style.tip == TipShape.SQUARE) highlighter else roundHighlighter
         style.tip == TipShape.SQUARE -> squareNib
         style.tool == InkTool.PENCIL -> marker
         else -> when (style.penType) {

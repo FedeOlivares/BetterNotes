@@ -1,6 +1,8 @@
 package app.betternotes.ui.editor
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -36,6 +38,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.platform.LocalDensity
@@ -65,6 +68,10 @@ internal class EditorActions(
     /** Stand-ins until the library opens documents: not part of the design. */
     val onToggleScratchKind: () -> Unit,
     val onTogglePerfReadout: (() -> Unit)?,
+    /** The open document's title, page count and dates, for the menu's card. */
+    val documentInfo: () -> DocumentInfo?,
+    val onOpenOverlay: (app.betternotes.ui.settings.SettingsOverlay) -> Unit,
+    val onRename: (String) -> Unit,
 )
 
 private const val LEFT = "left"
@@ -113,6 +120,20 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
     DisposableEffect(recorder) { onDispose { recorder.release() } }
     state.say = notices::say
     Box(Modifier.fillMaxSize()) {
+        // A touch outside an open panel closes it. It sits under the toolbars, so they still work.
+        if (state.panelOpen || state.colorTarget != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown()
+                            state.panelOpen = false
+                            state.colorTarget = null
+                        }
+                    },
+            )
+        }
         Layout(
             content = {
                 LeftPill(state, actions, notices, Modifier.layoutId(LEFT).masksInk(state, LEFT))
@@ -197,6 +218,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             )
         }
         state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
+        if (state.moreMenuOpen) EditorMenu(state, actions) { state.moreMenuOpen = false }
         if (state.sidebarMenuOpen) SidebarMenu(state, notices)
         state.scanPhoto?.let { ScanCrop(state, it) }
         if (state.pagesOpen) AllPagesPanel(state, notices)
@@ -333,7 +355,6 @@ private fun CenterPill(
 @Composable
 private fun RightPill(state: EditorState, recorder: RecorderState, actions: EditorActions, modifier: Modifier) {
     val colors = LocalEditorColors.current
-    var menuOpen by remember { mutableStateOf(false) }
     Pill(modifier) {
         Box(
             contentAlignment = Alignment.Center,
@@ -351,39 +372,10 @@ private fun RightPill(state: EditorState, recorder: RecorderState, actions: Edit
             )
         }
         Box {
-            ToolbarIcon(EditorIcons.More, stringResource(R.string.editor_more), onClick = { menuOpen = true })
+            ToolbarIcon(EditorIcons.More, stringResource(R.string.editor_more), onClick = { state.moreMenuOpen = true })
             if (recorder.recording) RecordingDot(Modifier.align(Alignment.TopEnd))
-            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                MenuEntry(R.string.menu_delete_selection) {
-                    menuOpen = false
-                    state.deleteSelection()
-                }
-                MenuEntry(R.string.menu_real_size) {
-                    menuOpen = false
-                    actions.onZoomToRealSize()
-                }
-                MenuEntry(R.string.menu_theme) {
-                    menuOpen = false
-                    actions.onToggleTheme()
-                }
-                MenuEntry(R.string.menu_scratch_kind) {
-                    menuOpen = false
-                    actions.onToggleScratchKind()
-                }
-                actions.onTogglePerfReadout?.let { toggle ->
-                    MenuEntry(R.string.menu_perf) {
-                        menuOpen = false
-                        toggle()
-                    }
-                }
-            }
         }
     }
-}
-
-@Composable
-private fun MenuEntry(label: Int, onClick: () -> Unit) {
-    DropdownMenuItem(text = { Text(stringResource(label), fontSize = 14.sp) }, onClick = onClick)
 }
 
 /** The laser's row: its color, three sizes, and the way into its options. */

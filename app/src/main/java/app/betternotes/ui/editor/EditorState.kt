@@ -93,6 +93,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     /** A photo taken in scan mode, waiting for its corners to be set. */
     var scanPhoto by mutableStateOf<Uri?>(null)
+    var moreMenuOpen by mutableStateOf(false)
     var quickSwitchOpen by mutableStateOf(false)
 
     /** Bumped by every edit, so lists drawn from the document know to look again. */
@@ -148,6 +149,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
         canUndo = canvas.canUndo
         canRedo = canvas.canRedo
+        canvas.onLassoRequested = { if (activeTool != ActiveTool.IMAGE && activeTool != ActiveTool.LASSO) select(ActiveTool.LASSO) }
         canvas.onTextEdit = { textEdit = it }
         canvas.onPlayVideo = { playingVideo = it }
         canvas.onViewMoved = ::refreshPosition
@@ -403,7 +405,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     private fun applyTool() {
         val current = preset
         canvas.tool = when {
-            current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs)
+            current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs, current.scribbleToErase, current.circleToLasso, current.stabilization)
             activeTool == ActiveTool.LASER -> CanvasTool.Laser
             activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly)
             activeTool == ActiveTool.SHAPE -> CanvasTool.Shape(shape)
