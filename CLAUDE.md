@@ -202,7 +202,7 @@ Checked on 2026-11-03.
 - ML Kit digital-ink-recognition 19.0.0
 
 ## 6. Current project state
-Location: `D:\code\better-notes`, a local git repository with no remote. **Foundation builds on the PC; nothing has run on a device or emulator yet.**
+Location: `D:\code\better-notes`, a local git repository with no remote. **The foundation and `:core` build on the PC and `:core`'s unit tests pass; nothing has run on a device or emulator yet.**
 
 ### Build and test
 `java` is not on PATH, so set `JAVA_HOME` to `D:\Android\Android Studio\jbr` before calling `gradlew` directly. `scripts\check.ps1` does this for you.
@@ -218,14 +218,31 @@ Platform `android-37.0`, build-tools 36.0.0, platform-tools. There is no `cmdlin
 ### Files that exist
 - Gradle config and wrapper, `.gitignore`, `.gitattributes`, `scripts/check.ps1`
 - `app/`: manifest, `strings.xml`, and a placeholder `MainActivity` that requests the highest refresh rate and shows a text label
-- `core/.../geometry/`: `Geometry.kt`, `Units.kt`, `Viewport.kt`, with `ViewportTest` covering real-size mapping and the zoom limit
+- `core/` (`app.betternotes.core`), pure Kotlin with JVM tests. See "Core" below.
 - `reference/notewise/`: the owner's screenshots (git-ignored)
 
 ### Known gaps
 - `minSdk = 35` assumes the tablet runs Android 15 or newer. Unverified: if it runs older, the APK will not install. Check with `adb shell getprop ro.build.version.release`.
 - Lint reports 2 warnings: no app icon, and `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
-- Document model, ink engine and all real UI do not exist yet.
+- The ink engine and all real UI do not exist yet. `:core` has only run on the desktop JVM, not on Android.
+
+### Core
+- `geometry`: bounds, affine, rotated `Frame`, convex clipping (`Capsule`, `RectClipper`), units, viewport.
+- `model`: `Document` and `Page` (description), `PageContent` (items in paint order, with their bounds in one flat array), immutable `PageItem` types (stroke, shape, image, text, sticky note, table, audio). Stroke samples are packed floats: x, y, pressure, tilt, orientation, elapsed ms.
+- `edit`: `ItemsEdit` and the page edits, `UndoHistory`. Edits store positions, which stay valid because undo is strictly last-in, first-out. All page and item changes go through edits.
+- `tools`: `EraseSession` (partial or whole), `clearEdit`, `selectWithLasso`, `resizeTransform`, `topItemAt`.
+- `gesture`: `GestureRecognizer`. It has no clock, so the app schedules `onDeadline` at `nextDeadlineMs`, which is how undo waits out the triple-tap window.
+- `template`: templates emit lines and dots to a `TemplateSink`, so the canvas and PDF export can share them. The sink clips.
+- `format`: `PageCodec`, `DocumentCodec`, `DocumentStore` (atomic writes, CRC-32), `DocumentSession` (lazy page loading, eviction, undo). `CodecTest` pins the bytes of format version 1: to change the format, bump `FORMAT_VERSION` and add a migration instead of editing the expected bytes.
+
+Choices in `:core` that have no reference and may need the owner's input:
+- The eraser skips images, text, tables, sticky notes and recordings. Only the lasso and "clear page" remove them.
+- On an infinite canvas, "clear page" removes items inside the view, cuts strokes at its edge and keeps other items that cross it.
+- A stroke is lassoed if at least half of it is inside. Other items are lassoed by their center.
+- The guitar layout is 6-line tablature. Cornell and legal proportions, template colors and gesture timings are defaults chosen without a reference.
+- Stroke samples are stored uncompressed, favoring load speed over disk use (24 bytes per sample).
+- Library folders are not in `:core` yet; the library workstream adds them.
 
 Treat the source files as an unverified starting point. Replace them if a better structure emerges.
 
