@@ -9,8 +9,6 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-enum class ThemeMode { DARK, LIGHT }
-
 /**
  * The colors of the editor's floating controls. The dark set is measured from the owner's Notewise
  * screenshots. There are no light screenshots, so the light set is the same roles on a light ground.

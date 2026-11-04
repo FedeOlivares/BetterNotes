@@ -20,7 +20,6 @@ import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
 import app.betternotes.core.tools.TapeOptions
-import app.betternotes.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -227,12 +226,6 @@ internal class ToolStore(context: Context) {
         }
     }
 
-    var theme: ThemeMode
-        get() = if (prefs.getString(KEY_THEME, null) == ThemeMode.LIGHT.name) ThemeMode.LIGHT else ThemeMode.DARK
-        set(value) {
-            prefs.edit { putString(KEY_THEME, value.name) }
-        }
-
     private fun encode(preset: InkPreset) = JSONObject().apply {
         put("colors", JSONArray(preset.colors))
         put("widths", JSONArray(preset.widths))
@@ -273,7 +266,6 @@ internal class ToolStore(context: Context) {
     private fun JSONArray.kinds() = List(length()) { ItemKind.valueOf(getString(it)) }.toSet()
 
     private companion object {
-        const val KEY_THEME = "theme"
         const val KEY_ERASER = "eraser"
         const val KEY_LASSO = "lasso"
         const val KEY_SHAPE = "shape"

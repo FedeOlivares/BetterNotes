@@ -57,6 +57,7 @@ import kotlinx.coroutines.delay
 internal class EditorActions(
     val onBack: () -> Unit,
     val onZoomToRealSize: () -> Unit,
+    val onOpenSettings: () -> Unit,
     val onToggleTheme: () -> Unit,
     /** Stand-ins until the library opens documents: not part of the design. */
     val onToggleScratchKind: () -> Unit,
@@ -113,7 +114,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             content = {
                 LeftPill(state, actions, notices, Modifier.layoutId(LEFT).masksInk(state, LEFT))
                 if (!state.viewOnly) {
-                    CenterPill(state, recorder, sources, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
+                    CenterPill(state, recorder, sources, actions, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
                 }
                 RightPill(state, recorder, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
                 if (!state.viewOnly && recorder.recording) {
@@ -259,7 +260,14 @@ private val StripItems by lazy {
 }
 
 @Composable
-private fun CenterPill(state: EditorState, recorder: RecorderState, sources: ImageSources, notices: Notices, modifier: Modifier) {
+private fun CenterPill(
+    state: EditorState,
+    recorder: RecorderState,
+    sources: ImageSources,
+    actions: EditorActions,
+    notices: Notices,
+    modifier: Modifier,
+) {
     Pill(modifier) {
         ToolbarIcon(EditorIcons.Undo, stringResource(R.string.editor_undo), enabled = state.canUndo, onClick = state::undo)
         ToolbarIcon(EditorIcons.Redo, stringResource(R.string.editor_redo), enabled = state.canRedo, onClick = state::redo)
@@ -296,6 +304,7 @@ private fun CenterPill(state: EditorState, recorder: RecorderState, sources: Ima
                             item.label == R.string.tool_ruler -> state.toggleRuler()
                             item.label == R.string.tool_clipboard -> state.paste()
                             item.label == R.string.tool_loupe -> state.toggleLoupe()
+                            item.label == R.string.tool_settings -> actions.onOpenSettings()
                             item.label == R.string.tool_add_element -> sources.pickVideo()
                             item.label == R.string.tool_recorder -> recorder.menuOpen = !recorder.menuOpen
                             else -> notices.notBuilt()

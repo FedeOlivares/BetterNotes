@@ -26,6 +26,9 @@ private const val TEMPLATE_LEGAL = 6
 private const val TEMPLATE_MUSIC = 7
 private const val TEMPLATE_GUITAR = 8
 private const val TEMPLATE_CUSTOM = 9
+private const val TEMPLATE_CORNELL_RULED = 10
+private const val TEMPLATE_ENGINEERING = 11
+private const val TEMPLATE_GUITAR_SCORE = 12
 
 private const val ELEMENT_LINE = 0
 private const val ELEMENT_RECTANGLE = 1
@@ -35,7 +38,7 @@ private const val ELEMENT_RULED = 3
 private const val SOURCE_BLANK = 0
 private const val SOURCE_PDF = 1
 
-internal val DOCUMENT_KINDS = WireEnum(DocumentKind.NOTE, DocumentKind.CANVAS, DocumentKind.PDF)
+internal val DOCUMENT_KINDS = WireEnum(DocumentKind.NOTE, DocumentKind.CANVAS, DocumentKind.PDF, DocumentKind.TEXT)
 internal val LENGTH_UNITS = WireEnum(LengthUnit.PT, LengthUnit.INCH, LengthUnit.CM, LengthUnit.MM, LengthUnit.PX)
 
 /** The file describing a document and listing its pages in order. */
@@ -89,14 +92,14 @@ private fun ByteReader.page(): Page {
     return Page(id, size, background, source)
 }
 
-private fun ByteWriter.pageSize(size: PageSize) {
+internal fun ByteWriter.pageSize(size: PageSize) {
     float(size.widthPt)
     float(size.heightPt)
 }
 
-private fun ByteReader.pageSize() = PageSize(float(), float())
+internal fun ByteReader.pageSize() = PageSize(float(), float())
 
-private fun ByteWriter.template(template: PageTemplate) {
+internal fun ByteWriter.template(template: PageTemplate) {
     when (template) {
         PageTemplate.Blank -> byte(TEMPLATE_BLANK)
         is PageTemplate.Lined -> {
@@ -150,6 +153,25 @@ private fun ByteWriter.template(template: PageTemplate) {
             float(template.lineWidth)
             int(template.color)
         }
+        is PageTemplate.CornellRuled -> {
+            byte(TEMPLATE_CORNELL_RULED)
+            float(template.spacing)
+            float(template.lineWidth)
+            int(template.color)
+        }
+        is PageTemplate.Engineering -> {
+            byte(TEMPLATE_ENGINEERING)
+            float(template.spacing)
+            float(template.lineWidth)
+            int(template.color)
+        }
+        is PageTemplate.GuitarScore -> {
+            byte(TEMPLATE_GUITAR_SCORE)
+            float(template.lineGap)
+            float(template.staffGap)
+            float(template.lineWidth)
+            int(template.color)
+        }
         is PageTemplate.Custom -> {
             byte(TEMPLATE_CUSTOM)
             customLayout(template.layout)
@@ -157,7 +179,7 @@ private fun ByteWriter.template(template: PageTemplate) {
     }
 }
 
-private fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
+internal fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_BLANK -> PageTemplate.Blank
     TEMPLATE_LINED -> PageTemplate.Lined(float(), float(), int())
     TEMPLATE_DOTTED -> PageTemplate.Dotted(float(), float(), int())
@@ -168,10 +190,13 @@ private fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_MUSIC -> PageTemplate.MusicScore(float(), float(), float(), int())
     TEMPLATE_GUITAR -> PageTemplate.GuitarTab(float(), float(), float(), int())
     TEMPLATE_CUSTOM -> PageTemplate.Custom(customLayout())
+    TEMPLATE_CORNELL_RULED -> PageTemplate.CornellRuled(float(), float(), int())
+    TEMPLATE_ENGINEERING -> PageTemplate.Engineering(float(), float(), int())
+    TEMPLATE_GUITAR_SCORE -> PageTemplate.GuitarScore(float(), float(), float(), int())
     else -> throw CorruptFileException("Unknown template $tag")
 }
 
-private fun ByteWriter.customLayout(layout: CustomLayout) {
+internal fun ByteWriter.customLayout(layout: CustomLayout) {
     string(layout.name)
     pageSize(layout.size)
     LENGTH_UNITS.write(this, layout.displayUnit)
@@ -179,7 +204,7 @@ private fun ByteWriter.customLayout(layout: CustomLayout) {
     layout.elements.forEach { element(it) }
 }
 
-private fun ByteReader.customLayout(): CustomLayout {
+internal fun ByteReader.customLayout(): CustomLayout {
     val name = string()
     val size = pageSize()
     val unit = LENGTH_UNITS.read(this)

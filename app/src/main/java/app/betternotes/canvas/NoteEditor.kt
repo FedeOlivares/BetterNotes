@@ -3,6 +3,7 @@ package app.betternotes.canvas
 import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.net.Uri
+import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -12,10 +13,14 @@ import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.format.PendingSave
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
 import java.io.File
+import app.betternotes.core.search.TextMatch
+import app.betternotes.pdf.PdfPages
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -25,10 +30,33 @@ import java.util.concurrent.Executors
  * and meshing, which go to one background thread so that drawing never waits on them.
  */
 class NoteEditor(
-    private val store: DocumentStore,
+    internal val store: DocumentStore,
     private val session: DocumentSession,
 ) {
     internal val strokes = StrokeCache()
+
+    /** The PDF behind this document's pages, if it has any. */
+    internal val pdf: PdfPages? =
+        if (session.document.pages.any { it.source is PageSource.PdfPage }) PdfPages(store, session.document) else null
+    internal val paintSource = object : PaintSource {
+        override val pages get() = document.pages
+        override fun contentOrLoad(pageId: Long) = this@NoteEditor.contentOrLoad(pageId)
+        override fun mesh(item: StrokeItem) = strokes.get(item)
+        override fun image(assetId: String) = imageOrLoad(assetId)
+
+        override fun paintPdfTile(
+            canvas: Canvas,
+            page: Page,
+            pdf: PageSource.PdfPage,
+            originX: Float,
+            originY: Float,
+            x: Double,
+            y: Double,
+            scale: Float,
+        ) {
+            this@NoteEditor.pdf?.paint(canvas, page, pdf, originX, originY, x, y, scale)
+        }
+    }
 
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
@@ -73,6 +101,8 @@ class NoteEditor(
 
     val canUndo get() = session.history.canUndo
     val canRedo get() = session.history.canRedo
+    /** Called on the main thread after edits reach the disk, for whatever reads the saved files. */
+    var onSaved: () -> Unit = {}
 
     private val main = Handler(Looper.getMainLooper())
     private val background = Executors.newSingleThreadExecutor { task -> Thread(task, "note-io") }
@@ -85,7 +115,7 @@ class NoteEditor(
     /** The page's items if they are in memory. If they are not, starts loading them and returns null. */
     fun contentOrLoad(pageId: Long): PageContent? {
         val content = session.loadedContent(pageId)
-        if (content == null && loading.add(pageId)) loadInBackground(pageId)
+        if (content == null && !closed && loading.add(pageId)) loadInBackground(pageId)
         return content
     }
 
@@ -115,6 +145,19 @@ class NoteEditor(
     }
 
     fun undo(): Boolean = session.history.undo(session).also { if (it) historyStepped() }
+    /**
+     * Searches the text of the document's PDF pages, in page order, and replaces any search under way.
+     * [onMatches] gets each page's matches as they are found. A document with no PDF finishes at once.
+     */
+    fun searchPdfText(query: String, onMatches: (List<TextMatch>) -> Unit, onFinished: () -> Unit) {
+        val pdf = pdf
+        if (pdf == null) onFinished() else pdf.search(query, onMatches, onFinished)
+    }
+
+    fun cancelPdfSearch() {
+        pdf?.cancelSearch()
+    }
+
 
     fun redo(): Boolean = session.history.redo(session).also { if (it) historyStepped() }
 
@@ -123,12 +166,28 @@ class NoteEditor(
         strokes.sweep(session)
     }
 
+    /** The page to continue from, if one was saved and is still in the document. */
+    fun lastPageIndex(): Int = store.readLastPage()?.let(document::indexOfPage) ?: -1
+
+    /** Remembers the page to continue from. It doesn't matter if this write is lost. */
+    fun rememberLastPage(pageId: Long) {
+        if (closed) return
+        background.execute {
+            try {
+                store.writeLastPage(pageId)
+            } catch (e: IOException) {
+                Log.w(TAG, "Could not remember the page", e)
+            }
+        }
+    }
+
     /** Writes everything and waits, for when the app is leaving and may be killed. */
     fun saveNow() {
         main.removeCallbacks(autosave)
         val pending = session.prepareSave() ?: return
         background.submit { write(pending) }.get()
         session.finishSave(pending)
+        onSaved()
     }
 
     /** Saves and stops the background thread. Only a stroke that had already ended can still arrive. */
@@ -136,6 +195,7 @@ class NoteEditor(
         saveNow()
         closed = true
         background.shutdown()
+        pdf?.close()
     }
 
     private fun historyStepped() {
@@ -179,7 +239,12 @@ class NoteEditor(
     private fun saveInBackground() {
         val pending = session.prepareSave() ?: return
         background.execute {
-            if (write(pending)) main.post { session.finishSave(pending) }
+            if (write(pending)) {
+                main.post {
+                    session.finishSave(pending)
+                    onSaved()
+                }
+            }
         }
     }
 

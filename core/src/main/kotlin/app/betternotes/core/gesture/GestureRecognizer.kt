@@ -15,6 +15,12 @@ enum class InputMode {
     VIEW_ONLY,
 }
 
+/** What one finger does when it is not drawing. */
+enum class OneFingerAction { IGNORED, SCROLL }
+
+/** What two fingers do when they move. */
+enum class TwoFingerAction { IGNORED, ZOOM_AND_PAN, SCROLL }
+
 data class GestureConfig(
     /** Longest gap between one two-finger tap lifting and the next one landing. Undo waits this long. */
     val multiTapWindowMs: Long = 300,
@@ -26,6 +32,14 @@ data class GestureConfig(
     val touchSlopPx: Float = 24f,
     /** How long after the stylus lifts a new touch is still taken for the palm. */
     val palmGuardMs: Long = 150,
+    val oneFinger: OneFingerAction = OneFingerAction.SCROLL,
+    val twoFingers: TwoFingerAction = TwoFingerAction.ZOOM_AND_PAN,
+    /** Off, two taps do nothing. A third still redoes, if that is on. */
+    val undoTaps: Boolean = true,
+    /** Off, nothing can follow the second tap, so undo need not wait. */
+    val redoTaps: Boolean = true,
+    /** One finger tapping twice calls [GestureListener.onZoomTap], except where a finger draws. */
+    val zoomTaps: Boolean = false,
 )
 
 /**
@@ -51,6 +65,9 @@ interface GestureListener {
 
     fun onUndo()
     fun onRedo()
+
+    /** One finger tapped twice at about this point. */
+    fun onZoomTap(x: Float, y: Float) = Unit
 }
 
 /**
@@ -103,6 +120,11 @@ class GestureRecognizer(
     private var tapCount = 0
     private var lastTapUpMs = 0L
 
+    // The last one-finger tap, which a second could turn into a zoom.
+    private var singleTapUpMs = NO_SINGLE_TAP
+    private var singleTapX = 0f
+    private var singleTapY = 0f
+
     /** When [onDeadline] should next be called, or [NO_DEADLINE] if nothing is waiting on time. */
     val nextDeadlineMs: Long
         get() = when {
@@ -141,7 +163,7 @@ class GestureRecognizer(
         if (tapCandidate && movedPastSlop(slot)) failTapCandidate()
         if (drawPointer != NO_POINTER) return
         if (navigating) {
-            emitTransform()
+            if (fingersMayNavigate()) emitTransform() else rebase()
         } else if (movedPastSlop(slot)) {
             navigating = true
             rebase()
@@ -155,12 +177,23 @@ class GestureRecognizer(
             listener.onDrawEnd(pointerId)
             clearDraw()
         }
+        // Read before the finger leaves its slot.
+        val slot = slotOf(pointerId)
+        val liftX = if (slot >= 0) currentX[slot] else 0f
+        val liftY = if (slot >= 0) currentY[slot] else 0f
         if (!removeFinger(pointerId) || fingerCount > 0) return
         endNavigation()
         if (tapCandidate) {
             tapCandidate = false
-            val isTap = tapFingers == 2 && timeMs - tapDownMs < config.tapMaxDurationMs
-            if (isTap) tapCompleted(timeMs) else endTapSequence()
+            val inTime = timeMs - tapDownMs < config.tapMaxDurationMs
+            when {
+                tapFingers == 2 && inTime -> tapCompleted(timeMs)
+                tapFingers == 1 && inTime -> {
+                    endTapSequence()
+                    singleTapCompleted(liftX, liftY, timeMs)
+                }
+                else -> endTapSequence()
+            }
         }
     }
 
@@ -252,10 +285,33 @@ class GestureRecognizer(
     private fun tapCompleted(timeMs: Long) {
         tapCount++
         lastTapUpMs = timeMs
+        singleTapUpMs = NO_SINGLE_TAP
         if (tapCount == REDO_TAPS) {
             tapCount = 0
-            if (mode != InputMode.VIEW_ONLY) listener.onRedo()
+            if (config.redoTaps && mode != InputMode.VIEW_ONLY) listener.onRedo()
+        } else if (tapCount == UNDO_TAPS && !config.redoTaps) {
+            endTapSequence()
         }
+    }
+
+    private fun singleTapCompleted(x: Float, y: Float, timeMs: Long) {
+        if (!config.zoomTaps || mode == InputMode.FINGER_DRAW) return
+        val isSecond = singleTapUpMs != NO_SINGLE_TAP && timeMs - singleTapUpMs <= ZOOM_TAP_WINDOW_MS &&
+            hypot(x - singleTapX, y - singleTapY) <= config.touchSlopPx * ZOOM_TAP_REACH
+        if (isSecond) {
+            singleTapUpMs = NO_SINGLE_TAP
+            listener.onZoomTap(x, y)
+        } else {
+            singleTapUpMs = timeMs
+            singleTapX = x
+            singleTapY = y
+        }
+    }
+
+    /** Only view-only mode overrides "ignored", since moving the page is all it has left. */
+    private fun fingersMayNavigate() = when (fingerCount) {
+        1 -> config.oneFinger != OneFingerAction.IGNORED || mode == InputMode.VIEW_ONLY
+        else -> config.twoFingers != TwoFingerAction.IGNORED
     }
 
     /** The touch in progress is not a tap, which also closes any sequence it might have continued. */
@@ -270,7 +326,7 @@ class GestureRecognizer(
     private fun endTapSequence() {
         val isUndo = tapCount == UNDO_TAPS
         tapCount = 0
-        if (isUndo && mode != InputMode.VIEW_ONLY) listener.onUndo()
+        if (isUndo && config.undoTaps && mode != InputMode.VIEW_ONLY) listener.onUndo()
     }
 
     private fun endNavigation() {
@@ -325,7 +381,8 @@ class GestureRecognizer(
         val cx = centroidX()
         val cy = centroidY()
         val newSpread = spread()
-        val scale = if (fingerCount == 2 && lastSpread >= MIN_SPREAD_PX) newSpread / lastSpread else 1f
+        val zooms = fingerCount == 2 && lastSpread >= MIN_SPREAD_PX && config.twoFingers == TwoFingerAction.ZOOM_AND_PAN
+        val scale = if (zooms) newSpread / lastSpread else 1f
         listener.onTransform(cx - lastCentroidX, cy - lastCentroidY, scale, cx, cy)
         lastCentroidX = cx
         lastCentroidY = cy
@@ -346,5 +403,13 @@ class GestureRecognizer(
 
         /** Fingers this close are effectively one point, and dividing by the gap would explode the zoom. */
         private const val MIN_SPREAD_PX = 1f
+
+        private const val NO_SINGLE_TAP = -1L
+
+        /** Taken from Android's own double tap timeout. */
+        private const val ZOOM_TAP_WINDOW_MS = 300L
+
+        /** Two taps this many touch slops apart still count as one spot. */
+        private const val ZOOM_TAP_REACH = 4f
     }
 }

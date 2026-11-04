@@ -1,28 +1,69 @@
 package app.betternotes.canvas
 
+import android.graphics.Bitmap
+import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.core.graphics.withTranslation
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import androidx.ink.strokes.Stroke
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageContent
+import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.TemplateSink
 import app.betternotes.core.template.draw
 
-/** Paints the part of a document that falls inside one tile. Main thread only. */
-internal class PagePainter(private val editor: NoteEditor) {
+/** What a [PagePainter] paints from. */
+internal interface PaintSource {
+    val pages: List<Page>
+
+    /** The page's items, or null if they are not available yet. */
+    fun contentOrLoad(pageId: Long): PageContent?
+
+    fun mesh(item: StrokeItem): Stroke
+
+    /** A decoded picture, or null if it is not ready yet or this source has none. */
+    fun image(assetId: String): Bitmap? = null
+
+    /**
+     * Paints a PDF page's pixels into a tile, ahead of the ink. [x] and [y] are where the page's corner
+     * falls on the tile's canvas at [scale], and [originX] and [originY] are where it sits in the
+     * document. Only a source that paints tiles needs this: an export paints whole pages through
+     * [PagePainter.paintPage], and draws the PDF under them itself.
+     */
+    fun paintPdfTile(
+        canvas: Canvas,
+        page: Page,
+        pdf: PageSource.PdfPage,
+        originX: Float,
+        originY: Float,
+        x: Double,
+        y: Double,
+        scale: Float,
+    ) = Unit
+}
+
+/**
+ * Paints pages: the part of a document inside one tile, or a page for an export. Use from one thread,
+ * which must be the one its [PaintSource] expects.
+ */
+internal class PagePainter(private val source: PaintSource) {
     private val renderer = CanvasStrokeRenderer.create()
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
-    private val items = ItemPainter(editor::imageOrLoad) { canvas, stroke ->
-        renderer.draw(canvas, editor.strokes.get(stroke), strokeToTile)
+    private val items = ItemPainter(source::image) { canvas, stroke ->
+        renderer.draw(canvas, source.mesh(stroke), strokeToTile)
     }
+    private val highlightPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
+
+    /** What to mark on each page, by page id, such as search results. */
+    var highlights: Map<Long, List<PageHighlight>> = emptyMap()
 
     /**
      * Paints [region], given in document points. [leftPx] and [topPx] are where the canvas's origin
@@ -30,32 +71,40 @@ internal class PagePainter(private val editor: NoteEditor) {
      * float could not hold a whole pixel.
      */
     fun paint(canvas: Canvas, layout: DocumentLayout, region: Bounds, leftPx: Double, topPx: Double, scale: Float) {
-        val pages = editor.document.pages
+        val pages = source.pages
         layout.forEachPageIn(region) { index ->
             val originX = layout.originX(index)
             val originY = layout.originY(index)
-            val x = (originX * scale.toDouble() - leftPx).toFloat()
-            val y = (originY * scale.toDouble() - topPx).toFloat()
-            canvas.withTranslation(x, y) {
+            val x = originX * scale.toDouble() - leftPx
+            val y = originY * scale.toDouble() - topPx
+            val page = pages[index]
+            val pdfSource = page.source as? PageSource.PdfPage
+            // Before the translation below, because PDF rasters sit on the tile's own pixels.
+            if (pdfSource != null) source.paintPdfTile(canvas, page, pdfSource, originX, originY, x, y, scale)
+            canvas.withTranslation(x.toFloat(), y.toFloat()) {
                 scale(scale, scale)
                 val local = Bounds(region.left - originX, region.top - originY, region.right - originX, region.bottom - originY)
-                paintPage(this, pages[index], local, scale)
+                paintPage(this, page, local, scale)
             }
         }
     }
 
-    /** Paints all of a page into a canvas of its own, as for a thumbnail. */
-    fun paintWholePage(canvas: Canvas, page: Page, scale: Float) {
-        val size = page.size ?: return
-        canvas.scale(scale, scale)
-        paintPage(canvas, page, Bounds(0f, 0f, size.widthPt, size.heightPt), scale)
+    /**
+     * Paints [page] into a canvas already scaled by [scale], with its origin at the page's origin. A
+     * PDF page gets no paper here, because its pixels are already on the canvas.
+     */
+    fun paintPage(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
+        val size = page.size
+        if (size != null) canvas.clipRect(0f, 0f, size.widthPt, size.heightPt)
+        if (page.source == PageSource.Blank) paintPaper(canvas, page, region, scale)
+        highlights[page.id]?.let { paintHighlights(canvas, it) }
+        source.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
     }
 
-    private fun paintPage(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
+    private fun paintPaper(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
         val size = page.size
         paper.color = page.background.color
         if (size != null) {
-            canvas.clipRect(0f, 0f, size.widthPt, size.heightPt)
             canvas.drawRect(0f, 0f, size.widthPt, size.heightPt, paper)
         } else {
             canvas.drawRect(region.left, region.top, region.right, region.bottom, paper)
@@ -66,14 +115,22 @@ internal class PagePainter(private val editor: NoteEditor) {
             pattern.draw(size, region, template)
             template.flush()
         }
-        editor.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
+    }
+
+    /** Multiplying keeps the text under a highlight readable, as a marker on paper does. */
+    private fun paintHighlights(canvas: Canvas, rects: List<PageHighlight>) {
+        for (highlight in rects) {
+            highlightPaint.color = if (highlight.isCurrent) CURRENT_HIGHLIGHT_COLOR else HIGHLIGHT_COLOR
+            val r = highlight.rect
+            canvas.drawRect(r.left, r.top, r.right, r.bottom, highlightPaint)
+        }
     }
 
     private fun paintItems(canvas: Canvas, content: PageContent, region: Bounds, scale: Float) {
         strokeToTile.setScale(scale, scale)
         content.forEachIntersecting(region) { _, item ->
             if (item is StrokeItem) {
-                renderer.draw(canvas, editor.strokes.get(item), strokeToTile)
+                renderer.draw(canvas, source.mesh(item), strokeToTile)
             } else {
                 items.paint(canvas, item)
             }
@@ -89,11 +146,16 @@ internal class PagePainter(private val editor: NoteEditor) {
 
     private companion object {
         const val MIN_PATTERN_SPACING_PX = 4f
+        const val HIGHLIGHT_COLOR = 0xFFFFE680.toInt()
+        const val CURRENT_HIGHLIGHT_COLOR = 0xFFFFA726.toInt()
     }
 }
 
+/** A rectangle to mark on a page, in the page's own points. */
+internal class PageHighlight(val rect: Bounds, val isCurrent: Boolean)
+
 /** Draws template lines directly, and batches dots, of which a dotted page has thousands. */
-private class CanvasTemplateSink : TemplateSink {
+internal class CanvasTemplateSink : TemplateSink {
     lateinit var canvas: Canvas
 
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
