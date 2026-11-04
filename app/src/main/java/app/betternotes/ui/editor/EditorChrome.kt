@@ -84,7 +84,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     val notices = rememberNotices()
     val preset = state.preset
 
-    LaunchedEffect(preset, state.eraser, state.lasso) {
+    LaunchedEffect(preset, state.eraser, state.lasso, state.shape) {
         delay(SAVE_DELAY_MS)
         state.saveTools()
     }
@@ -115,6 +115,8 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                         EraserRow(state, state.eraser, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.LASSO) {
                         LassoRow(state, state.lasso, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.SHAPE) {
+                        ShapeRow(state, state.shape, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     }
                 }
             },
@@ -154,14 +156,15 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         val panelModifier = Modifier
             .align(Alignment.TopEnd)
             .padding(top = panelTop, end = PanelEndMargin, bottom = PanelEndMargin)
-        if (preset != null && state.colorTarget != null) {
-            ColorWheelPanel(state, preset, panelModifier.masksInk(state, "wheel"))
+        if (state.colorTarget != null) {
+            ColorWheelPanel(state, panelModifier.masksInk(state, "wheel"))
         } else if (state.panelOpen) {
             val sheet = panelModifier.masksInk(state, "panel")
             when {
                 preset != null -> InkPanel(state, preset, notices, sheet)
                 state.activeTool == ActiveTool.ERASER -> EraserPanel(state, state.eraser, notices, sheet)
                 state.activeTool == ActiveTool.LASSO -> LassoPanel(state, state.lasso, notices, sheet)
+                state.activeTool == ActiveTool.SHAPE -> ShapePanel(state, state.shape, sheet)
             }
         }
     }
@@ -190,7 +193,7 @@ private val StripItems by lazy {
         StripItem(EditorIcons.Highlighter, R.string.tool_highlighter, ActiveTool.HIGHLIGHTER),
         StripItem(EditorIcons.Eraser, R.string.tool_eraser, ActiveTool.ERASER),
         StripItem(EditorIcons.Tape, R.string.tool_tape),
-        StripItem(EditorIcons.Shapes, R.string.tool_shapes),
+        StripItem(EditorIcons.Shapes, R.string.tool_shapes, ActiveTool.SHAPE),
         StripItem(EditorIcons.Image, R.string.tool_image),
         StripItem(EditorIcons.Text, R.string.tool_text),
         StripItem(EditorIcons.StickyNote, R.string.tool_sticky),
@@ -439,7 +442,7 @@ internal fun LineKind.next() = when (this) {
 
 /** A short bar as thick as the width slot, scaled the way the screenshot's bars are. */
 @Composable
-private fun WidthGlyph(thickness: Int) {
+internal fun WidthGlyph(thickness: Int) {
     val tint = LocalEditorColors.current.icon
     Canvas(Modifier.size(26.dp, 12.dp)) {
         val stroke = (thickness * WIDTH_GLYPH_DP_PER_UNIT).dp.toPx().coerceIn(1.dp.toPx(), size.height)

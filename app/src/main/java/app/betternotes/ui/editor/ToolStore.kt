@@ -5,11 +5,13 @@ import androidx.core.content.edit
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
+import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.TipShape
 import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.LassoOptions
+import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONException
@@ -78,6 +80,37 @@ internal class ToolStore(context: Context) {
         prefs.edit { putString(KEY_LASSO, json.toString()) }
     }
 
+    fun shape(): ShapeOptions = read(KEY_SHAPE, ShapeOptions()) { json ->
+        ShapeOptions(
+            kind = ShapeKind.valueOf(json.getString("kind")),
+            recentKinds = json.getJSONArray("recentKinds").let { a -> List(a.length()) { ShapeKind.valueOf(a.getString(it)) } },
+            widths = json.getJSONArray("widths").ints(),
+            selectedWidth = json.getInt("selectedWidth"),
+            colors = json.getJSONArray("colors").ints(),
+            selectedColor = json.getInt("selectedColor"),
+            fillColor = json.getInt("fillColor"),
+            line = LineKind.valueOf(json.getString("line")),
+            dashLength = json.getDouble("dashLength").toFloat(),
+            cornerRadius = json.getInt("cornerRadius"),
+        )
+    }
+
+    fun save(options: ShapeOptions) {
+        val json = JSONObject().apply {
+            put("kind", options.kind.name)
+            put("recentKinds", JSONArray(options.recentKinds.map { it.name }))
+            put("widths", JSONArray(options.widths))
+            put("selectedWidth", options.selectedWidth)
+            put("colors", JSONArray(options.colors))
+            put("selectedColor", options.selectedColor)
+            put("fillColor", options.fillColor)
+            put("line", options.line.name)
+            put("dashLength", options.dashLength.toDouble())
+            put("cornerRadius", options.cornerRadius)
+        }
+        prefs.edit { putString(KEY_SHAPE, json.toString()) }
+    }
+
     /** Anything saved by an older build that no longer reads back gives way to [fallback]. */
     private inline fun <T> read(key: String, fallback: T, decode: (JSONObject) -> T): T {
         val saved = prefs.getString(key, null) ?: return fallback
@@ -139,5 +172,6 @@ internal class ToolStore(context: Context) {
         const val KEY_THEME = "theme"
         const val KEY_ERASER = "eraser"
         const val KEY_LASSO = "lasso"
+        const val KEY_SHAPE = "shape"
     }
 }

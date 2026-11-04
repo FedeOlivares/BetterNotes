@@ -34,6 +34,7 @@
     <string name="tool_sticker">Sticker</string>
     <string name="tool_add_element">Add element</string>
     <string name="tool_shapes">Shapes</string>
+    <string name="tool_shape">Shape</string>
     <string name="tool_image">Image</string>
     <string name="tool_camera">Photo</string>
     <string name="tool_table">Table</string>
@@ -50,6 +51,12 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="panel_border_width">Border width</string>
+    <string name="panel_dash_size">Dash size</string>
+    <string name="panel_corner_radius">Corner radius</string>
+    <string name="panel_border_color">Border color</string>
+    <string name="panel_fill_color">Fill color</string>
+    <string name="panel_more_shapes">More shapes</string>
     <string name="panel_size">Size</string>
     <string name="panel_erase_entire">Erase entire object</string>
     <string name="panel_erase_locked">Erase locked objects</string>

@@ -36,7 +36,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
-import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.theme.LocalEditorColors
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -51,14 +50,14 @@ import android.graphics.Color as AndroidColor
  * plain wheel in the panel's style until there is a screenshot of the real one to match.
  */
 @Composable
-internal fun ColorWheelPanel(state: EditorState, preset: InkPreset, modifier: Modifier = Modifier) {
+internal fun ColorWheelPanel(state: EditorState, modifier: Modifier = Modifier) {
     val colors = LocalEditorColors.current
-    val start = remember(preset.tool) {
-        FloatArray(3).also { AndroidColor.colorToHSV(preset.color, it) }
+    val start = remember(state.colorTarget) {
+        FloatArray(3).also { AndroidColor.colorToHSV(state.colorStart, it) }
     }
-    var hue by remember(preset.tool) { mutableFloatStateOf(start[0]) }
-    var saturation by remember(preset.tool) { mutableFloatStateOf(start[1]) }
-    var value by remember(preset.tool) { mutableFloatStateOf(start[2]) }
+    var hue by remember(state.colorTarget) { mutableFloatStateOf(start[0]) }
+    var saturation by remember(state.colorTarget) { mutableFloatStateOf(start[1]) }
+    var value by remember(state.colorTarget) { mutableFloatStateOf(start[2]) }
     val picked = AndroidColor.HSVToColor(floatArrayOf(hue, saturation, value))
 
     PanelSheet(stringResource(R.string.panel_color), onClose = { state.colorTarget = null }, modifier = modifier) {

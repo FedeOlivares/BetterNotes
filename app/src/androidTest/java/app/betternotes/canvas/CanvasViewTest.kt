@@ -16,11 +16,14 @@ import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
+import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.ItemKind
+import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.ui.MainActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -348,6 +351,20 @@ class CanvasViewTest {
         onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = setOf(ItemKind.IMAGE), fullOnly = false) }
         drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(220f, 170f))
         assertFalse(onMain { canvas.hasSelection })
+    }
+
+    @Test
+    fun aDraggedShapeLandsOnThePageAndCanBeUndone() {
+        val options = ShapeOptions().withKind(ShapeKind.STAR)
+        onMain { canvas.tool = CanvasTool.Shape(options) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(100f, 100f), worldToScreen(200f, 180f))
+        waitUntil { pageContent().size == 1 }
+        val shape = onMain { pageContent()[0] as ShapeItem }
+        assertEquals(ShapeKind.STAR, shape.kind)
+        assertEquals(100f, shape.frame.width, 0.5f)
+        assertEquals(80f, shape.frame.height, 0.5f)
+        onMain { canvas.undo() }
+        assertEquals(0, pageContent().size)
     }
 
     @Test

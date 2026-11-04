@@ -76,9 +76,13 @@ internal object ShapePaths {
                 path.addOval(box, Path.Direction.CW)
             }
             ShapeKind.PYRAMID -> {
-                polygon(path, w / 2f, 0f, w, h * 0.85f, w * 0.4f, h, 0f, h * 0.8f)
-                path.moveTo(w / 2f, 0f)
-                path.lineTo(w * 0.4f, h)
+                // A cone, as the screenshot's grid draws it.
+                val cap = h * 0.12f
+                path.moveTo(0f, h - cap)
+                path.lineTo(w / 2f, 0f)
+                path.lineTo(w, h - cap)
+                box.set(0f, h - cap * 2f, w, h)
+                path.arcTo(box, 0f, HALF_TURN)
             }
             ShapeKind.CYLINDER -> {
                 val cap = h * 0.15f

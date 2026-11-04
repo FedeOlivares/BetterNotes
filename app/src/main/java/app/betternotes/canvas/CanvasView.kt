@@ -41,6 +41,7 @@ import app.betternotes.core.tools.EraseSession
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
+import app.betternotes.core.tools.ShapeOptions
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -56,6 +57,9 @@ sealed interface CanvasTool {
 
     /** Selects items and moves or resizes the selection. */
     data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean) : CanvasTool
+
+    /** Drags out a new shape. */
+    data class Shape(val options: ShapeOptions) : CanvasTool
 }
 
 /** Reports what happens in the view, for the performance probe. */
@@ -235,6 +239,24 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private var laserPointer = -1
     private var lassoPointer = -1
+    private var shapePointer = -1
+
+    private val shapes by lazy {
+        ShapeController(
+            viewport,
+            { index -> layout?.originX(index) ?: 0f },
+            { index -> layout?.originY(index) ?: 0f },
+            { overlay.invalidate() },
+            { index, item ->
+                val open = editor
+                if (open != null) {
+                    val pageId = open.document.pages[index].id
+                    open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), item))
+                    syncChanges()
+                }
+            },
+        )
+    }
 
     private val lasso by lazy {
         LassoController(
@@ -253,7 +275,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         addView(tiles, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        overlay.extraDraw = { canvas -> lasso.draw(canvas) }
+        overlay.extraDraw = { canvas ->
+            lasso.draw(canvas)
+            shapes.draw(canvas)
+        }
         wet.addFinishedStrokesListener(this)
     }
 
@@ -528,6 +553,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             editor.content(page.id)
             lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly)
             syncChanges()
+        } else if (tool is CanvasTool.Shape) {
+            shapePointer = pointerId
+            shapes.start(index, pageX(x, index), pageY(y, index), tool.options)
         } else if (tool is CanvasTool.Ink) {
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
@@ -548,6 +576,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             lasso.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
             return
         }
+        if (pointerId == shapePointer) {
+            shapes.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+            return
+        }
         if (erase != null) eraseAt(x, y)
     }
 
@@ -560,6 +592,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             lassoPointer = -1
             lasso.end()
             syncChanges()
+            return
+        }
+        if (pointerId == shapePointer) {
+            shapePointer = -1
+            shapes.end()
             return
         }
         strokeWaitingForEvent = false
@@ -589,6 +626,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             lassoPointer = -1
             lasso.cancel()
             syncChanges()
+            return
+        }
+        if (pointerId == shapePointer) {
+            shapePointer = -1
+            shapes.cancel()
             return
         }
         strokeWaitingForEvent = false
