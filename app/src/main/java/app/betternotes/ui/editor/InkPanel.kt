@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.withMatrix
 import androidx.ink.brush.InputToolType
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.MutableStrokeInputBatch
@@ -357,12 +358,8 @@ private fun StrokePreview(style: InkStyle, screenDpi: Float) {
             size.width / 2f - SAMPLE_WIDTH_PT * pxPerPt / 2f,
             size.height / 2f - SAMPLE_HEIGHT_PT * pxPerPt / 2f,
         )
-        drawIntoCanvas {
-            val canvas = it.nativeCanvas
-            canvas.save()
-            canvas.concat(matrix)
-            renderer.draw(canvas, stroke, matrix)
-            canvas.restore()
+        drawIntoCanvas { canvas ->
+            canvas.nativeCanvas.withMatrix(matrix) { renderer.draw(this, stroke, matrix) }
         }
     }
 }

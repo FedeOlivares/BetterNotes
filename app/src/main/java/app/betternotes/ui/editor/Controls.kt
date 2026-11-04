@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.core.model.LineKind
@@ -166,9 +167,9 @@ internal fun ColorDot(color: Int, diameter: Dp = 22.dp) {
 
 /** The curve that stands for a line type: solid, dashed or dotted. */
 @Composable
-internal fun LineTypeGlyph(kind: LineKind, tint: Color, modifier: Modifier = Modifier.size(24.dp)) {
+internal fun LineTypeGlyph(kind: LineKind, tint: Color, modifier: Modifier = Modifier) {
     val path = remember { PathParser().parsePathString("M3.5 20.5c6 0 5.5-17 13.5-17h3.5").toPath() }
-    Canvas(modifier) {
+    Canvas(modifier.size(24.dp)) {
         val unit = size.width / 24f
         scale(unit, pivot = Offset.Zero) {
             val effect = when (kind) {
@@ -214,7 +215,7 @@ internal fun PanelSwitch(checked: Boolean, description: String, onChange: (Boole
         Box(
             Modifier
                 .align(Alignment.CenterStart)
-                .offset(x = thumbOffset)
+                .offset { IntOffset(thumbOffset.roundToPx(), 0) }
                 .size(26.dp)
                 .background(if (checked) colors.switchOnThumb else colors.switchOffThumb, CircleShape),
         )

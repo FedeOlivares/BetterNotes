@@ -1,6 +1,7 @@
 package app.betternotes.ui.editor
 
 import android.content.Context
+import androidx.core.content.edit
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
@@ -27,13 +28,13 @@ internal class ToolStore(context: Context) {
     }
 
     fun save(preset: InkPreset) {
-        prefs.edit().putString(preset.tool.name, encode(preset).toString()).apply()
+        prefs.edit { putString(preset.tool.name, encode(preset).toString()) }
     }
 
     var theme: ThemeMode
         get() = if (prefs.getString(KEY_THEME, null) == ThemeMode.LIGHT.name) ThemeMode.LIGHT else ThemeMode.DARK
         set(value) {
-            prefs.edit().putString(KEY_THEME, value.name).apply()
+            prefs.edit { putString(KEY_THEME, value.name) }
         }
 
     private fun encode(preset: InkPreset) = JSONObject().apply {
