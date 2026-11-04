@@ -30,7 +30,7 @@ internal class TileLayerView(
     context: Context,
     private val viewport: Viewport,
     private val painter: TilePainter,
-    private val backdropColor: Int,
+    var backdropColor: Int,
 ) : View(context) {
     private var grid: TileGrid? = null
     private var slots = emptyArray<Tile?>()

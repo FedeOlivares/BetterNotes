@@ -10,7 +10,6 @@ import app.betternotes.core.geometry.RectClipper
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
-import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePoints
 import app.betternotes.core.model.StrokePointsBuilder
@@ -27,8 +26,9 @@ enum class EraseMode {
  * One drag of the eraser. Each move changes the page at once so the ink disappears under the tip,
  * and [finish] returns the whole drag as a single edit for the undo history to [record].
  *
- * Images, text, tables, sticky notes and recordings are left alone, as a stray eraser pass should
- * not destroy them. The lasso and "clear page" remove those.
+ * Only items of [kinds] are touched. By default images, text, tables, sticky notes and recordings are
+ * left alone, as a stray eraser pass should not destroy them. Only strokes can be erased in part, so
+ * in [EraseMode.PARTIAL] the other kinds stay.
  */
 class EraseSession(
     private val pageId: Long,
@@ -36,6 +36,7 @@ class EraseSession(
     private val mode: EraseMode,
     private val radius: Float,
     private val ids: IdSource = IdSource.Random,
+    private val kinds: Set<ItemKind> = DEFAULT_ERASABLE,
 ) {
     private val steps = ArrayList<Edit>()
     private var lastX = Float.NaN
@@ -61,12 +62,12 @@ class EraseSession(
         val changes = ChangeList()
         content.forEachIntersecting(tip.bounds) { index, item ->
             when (mode) {
-                EraseMode.PARTIAL -> if (item is StrokeItem) {
+                EraseMode.PARTIAL -> if (item is StrokeItem && item.kind in kinds) {
                     cutStroke(item.points, tip, item.style.width / 2f)?.let { pieces ->
                         changes.replace(index, item, pieces.map { item.copy(id = ids.next(), points = it) })
                     }
                 }
-                EraseMode.WHOLE -> if ((item is StrokeItem || item is ShapeItem) && item.touches(tip)) {
+                EraseMode.WHOLE -> if (item.kind in kinds && item.touches(tip)) {
                     changes.replace(index, item, emptyList())
                 }
             }

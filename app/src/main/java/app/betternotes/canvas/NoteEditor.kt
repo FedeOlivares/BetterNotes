@@ -1,5 +1,8 @@
 package app.betternotes.canvas
 
+import android.content.ContentResolver
+import android.graphics.Bitmap
+import android.net.Uri
 import android.graphics.Canvas
 import android.os.Handler
 import android.os.Looper
@@ -15,9 +18,11 @@ import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
+import java.io.File
 import app.betternotes.core.search.TextMatch
 import app.betternotes.pdf.PdfPages
 import java.io.IOException
+import java.util.UUID
 import java.util.concurrent.Executors
 
 /**
@@ -37,6 +42,7 @@ class NoteEditor(
         override val pages get() = document.pages
         override fun contentOrLoad(pageId: Long) = this@NoteEditor.contentOrLoad(pageId)
         override fun mesh(item: StrokeItem) = strokes.get(item)
+        override fun image(assetId: String) = imageOrLoad(assetId)
 
         override fun paintPdfTile(
             canvas: Canvas,
@@ -55,6 +61,46 @@ class NoteEditor(
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
 
+    /** Copies a video into the document, off the main thread, and answers on the main thread. */
+    internal fun importVideo(resolver: ContentResolver, uri: Uri, done: (ImportedVideo?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val imported = images.importVideo(resolver, uri)
+            main.post { done(imported) }
+        }
+    }
+
+    /** The file an asset lives in. */
+    fun assetFile(assetId: String): File = store.assetFile(assetId)
+
+    /** Copies any file into the document's assets, off the main thread, and answers on the main thread. */
+    fun importAsset(resolver: ContentResolver, uri: Uri, done: (assetId: String?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val assetId = UUID.randomUUID().toString()
+            val copied = try {
+                val opened = resolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
+                opened.use { input -> store.assetFile(assetId).outputStream().use { input.copyTo(it) } }
+                true
+            } catch (e: IOException) {
+                Log.e(TAG, "Could not import a file", e)
+                false
+            }
+            main.post { done(if (copied) assetId else null) }
+        }
+    }
+
+    /** Called on the main thread when a picture has been decoded and can now be painted. */
+    var onImageLoaded: () -> Unit = {}
+
+    private val images = ImageAssets(store)
+    private val decoding = HashSet<String>()
+
+    /** Called whenever what can be undone or redone may have changed. */
+    var onHistoryChanged: () -> Unit = {}
+
+    val canUndo get() = session.history.canUndo
+    val canRedo get() = session.history.canRedo
     /** Called on the main thread after edits reach the disk, for whatever reads the saved files. */
     var onSaved: () -> Unit = {}
 
@@ -82,12 +128,14 @@ class NoteEditor(
     fun perform(edit: Edit) {
         session.history.perform(edit, session)
         scheduleSave()
+        onHistoryChanged()
     }
 
     /** Records an edit whose changes are already on the page. */
     fun record(edit: Edit) {
         session.history.record(edit)
         scheduleSave()
+        onHistoryChanged()
     }
 
     /** Takes back an edit that was never recorded. */
@@ -96,6 +144,7 @@ class NoteEditor(
         scheduleSave()
     }
 
+    fun undo(): Boolean = session.history.undo(session).also { if (it) historyStepped() }
     /**
      * Searches the text of the document's PDF pages, in page order, and replaces any search under way.
      * [onMatches] gets each page's matches as they are found. A document with no PDF finishes at once.
@@ -109,9 +158,8 @@ class NoteEditor(
         pdf?.cancelSearch()
     }
 
-    fun undo(): Boolean = session.history.undo(session).also { if (it) scheduleSave() }
 
-    fun redo(): Boolean = session.history.redo(session).also { if (it) scheduleSave() }
+    fun redo(): Boolean = session.history.redo(session).also { if (it) historyStepped() }
 
     fun retainPages(pageIds: Set<Long>) {
         session.retainPages(pageIds)
@@ -148,6 +196,35 @@ class NoteEditor(
         closed = true
         background.shutdown()
         pdf?.close()
+    }
+
+    private fun historyStepped() {
+        scheduleSave()
+        onHistoryChanged()
+    }
+
+    /** The picture if it is decoded. If it is not, starts decoding it and returns null. */
+    fun imageOrLoad(assetId: String): Bitmap? {
+        val bitmap = images.cached(assetId)
+        if (bitmap != null || closed || images.isMissing(assetId) || !decoding.add(assetId)) return bitmap
+        background.execute {
+            val decoded = images.decode(assetId)
+            main.post {
+                decoding.remove(assetId)
+                if (decoded != null) images.install(assetId, decoded) else images.markMissing(assetId)
+                onImageLoaded()
+            }
+        }
+        return null
+    }
+
+    /** Copies a picture into the document, off the main thread, and answers on the main thread. */
+    internal fun importImage(resolver: ContentResolver, uri: Uri, done: (ImportedImage?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val imported = images.import(resolver, uri)
+            main.post { done(imported) }
+        }
     }
 
     private fun scheduleSave() {

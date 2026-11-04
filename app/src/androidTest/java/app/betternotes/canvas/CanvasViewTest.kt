@@ -14,10 +14,22 @@ import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
+import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.TableItem
+import app.betternotes.core.model.TextItem
+import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageBackground
+import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.EraseMode
+import app.betternotes.core.tools.ItemKind
+import app.betternotes.core.tools.NoteOptions
+import app.betternotes.core.tools.ShapeOptions
+import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.TapeOptions
 import app.betternotes.ui.MainActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -211,6 +223,254 @@ class CanvasViewTest {
         val (x0, _) = worldToScreen(0f, 0f)
         val (x1, _) = worldToScreen(72f / 2.54f, 0f)
         assertEquals(expected, x1 - x0, 0.01f)
+    }
+
+    @Test
+    fun holdingThePenStillStraightensTheStrokeAndItsEndKeepsFollowing() {
+        val holdMs = 100
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), holdToLineMs = holdMs) }
+        val tool = MotionEvent.TOOL_TYPE_STYLUS
+        val down = SystemClock.uptimeMillis()
+        val start = worldToScreen(100f, 100f)
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(start)))
+        // A wobbly path, which must not survive.
+        for (i in 1..10) {
+            val at = worldToScreen(100f + i * 10f, 100f + (i % 2) * 40f)
+            send(event(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, tool, listOf(at)))
+        }
+        SystemClock.sleep(holdMs * 3L)
+        waitForIdle()
+        val end = worldToScreen(260f, 180f)
+        send(event(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, tool, listOf(end)))
+        send(event(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, tool, listOf(end)))
+
+        val stroke = onlyStroke()
+        assertEquals(2, stroke.points.size)
+        assertEquals(100f, stroke.points.x(0), 0.5f)
+        assertEquals(100f, stroke.points.y(0), 0.5f)
+        assertEquals(260f, stroke.points.x(1), 0.5f)
+        assertEquals(180f, stroke.points.y(1), 0.5f)
+    }
+
+    @Test
+    fun aStrokeWithoutAHoldKeepsItsShape() {
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), holdToLineMs = 5000) }
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        assertTrue(onlyStroke().points.size > 2)
+    }
+
+    @Test
+    fun theHistoryReportsWhatCanBeUndone() {
+        var reports = 0
+        onMain {
+            canvas.onHistoryChanged = { reports++ }
+            assertFalse(canvas.canUndo)
+        }
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        onMain {
+            assertTrue(canvas.canUndo)
+            assertFalse(canvas.canRedo)
+            canvas.undo()
+            assertFalse(canvas.canUndo)
+            assertTrue(canvas.canRedo)
+        }
+        assertTrue(reports >= 2)
+    }
+
+    @Test
+    fun theLaserLeavesNothingOnThePage() {
+        onMain { canvas.tool = CanvasTool.Laser }
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitForIdle()
+        SystemClock.sleep(100)
+        assertEquals(0, pageContent().size)
+        assertFalse(onMain { canvas.canUndo })
+    }
+
+    @Test
+    fun aStrokeStartingByTheRulerRunsAlongItsEdge() {
+        onMain { canvas.rulerVisible = true }
+        // The ruler sits level at the center of the view, so its lower edge is a fixed screen line.
+        val edgeY = onMain { canvas.height / 2f + 70f * canvas.resources.displayMetrics.density }
+        val centerX = onMain { canvas.width / 2f }
+        val toPageY = { y: Float -> onMain { canvas.viewport.toWorldY(y) } }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, centerX - 200f to edgeY + 6f, centerX + 200f to edgeY + 60f)
+        val stroke = onlyStroke()
+        assertEquals(2, stroke.points.size)
+        assertEquals(stroke.points.y(0), stroke.points.y(1), 0.01f)
+        val pageOriginY = onMain { canvas.viewport.toWorldY(canvas.viewport.toScreenY(0f)) }
+        assertEquals(toPageY(edgeY) - pageOriginY, stroke.points.y(0), 1f)
+    }
+
+    @Test
+    fun twoFingersOnTheRulerMoveItAndNotThePage() {
+        onMain { canvas.rulerVisible = true }
+        val cx = onMain { canvas.width / 2f }
+        val cy = onMain { canvas.height / 2f }
+        val panBefore = onMain { canvas.viewport.panY }
+        val tool = MotionEvent.TOOL_TYPE_FINGER
+        val down = SystemClock.uptimeMillis() - 200
+        val start = listOf(cx - 100f to cy, cx + 100f to cy)
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(start[0])))
+        send(event(down, down + 10, pointerAction(MotionEvent.ACTION_POINTER_DOWN, 1), tool, start))
+        val moved = listOf(cx - 100f to cy + 300f, cx + 100f to cy + 300f)
+        send(event(down, down + 40, MotionEvent.ACTION_MOVE, tool, moved))
+        send(event(down, down + 50, pointerAction(MotionEvent.ACTION_POINTER_UP, 1), tool, moved))
+        send(event(down, down + 60, MotionEvent.ACTION_UP, tool, listOf(moved[0])))
+        waitForIdle()
+        assertEquals(panBefore, onMain { canvas.viewport.panY }, 0f)
+
+        // The ruler is no longer at the center, so a stroke there is free again.
+        SystemClock.sleep(200)
+        val edgeY = cy + 70f * onMain { canvas.resources.displayMetrics.density }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, cx - 100f to edgeY, cx + 100f to edgeY + 40f)
+        assertTrue(onlyStroke().points.size > 2)
+    }
+
+    @Test
+    fun theLassoMovesAndResizesWhatItSelects() {
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        val before = onlyStroke()
+        onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = ALL_ITEM_KINDS, fullOnly = false) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(220f, 170f))
+        assertTrue(onMain { canvas.hasSelection })
+        assertEquals(1, pageContent().size)
+
+        // Inside the selection, away from its handles, so this moves it.
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(150f, 125f), worldToScreen(170f, 145f))
+        val moved = onlyStroke()
+        assertEquals(before.points.x(0) + 20f, moved.points.x(0), 0.5f)
+        assertEquals(before.points.y(0) + 20f, moved.points.y(0), 0.5f)
+        assertTrue(onMain { canvas.hasSelection })
+
+        onMain { canvas.undo() }
+        assertEquals(before.points.x(0), onlyStroke().points.x(0), 0f)
+        assertFalse(onMain { canvas.hasSelection })
+    }
+
+    @Test
+    fun theLassoIgnoresKindsSwitchedOff() {
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = setOf(ItemKind.IMAGE), fullOnly = false) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(220f, 170f))
+        assertFalse(onMain { canvas.hasSelection })
+    }
+
+    @Test
+    fun aDraggedShapeLandsOnThePageAndCanBeUndone() {
+        val options = ShapeOptions().withKind(ShapeKind.STAR)
+        onMain { canvas.tool = CanvasTool.Shape(options) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(100f, 100f), worldToScreen(200f, 180f))
+        waitUntil { pageContent().size == 1 }
+        val shape = onMain { pageContent()[0] as ShapeItem }
+        assertEquals(ShapeKind.STAR, shape.kind)
+        assertEquals(100f, shape.frame.width, 0.5f)
+        assertEquals(80f, shape.frame.height, 0.5f)
+        onMain { canvas.undo() }
+        assertEquals(0, pageContent().size)
+    }
+
+    @Test
+    fun inkInAnOpenNoteStaysInItAndATapOnAClosedOneOpensIt() {
+        onMain { canvas.tool = CanvasTool.Sticky(NoteOptions()) }
+        val at = worldToScreen(100f, 100f)
+        drag(MotionEvent.TOOL_TYPE_STYLUS, at, at.first + 1f to at.second)
+        waitUntil { pageContent().size == 1 }
+        onMain { canvas.endTextEdit() }
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle()) }
+
+        SystemClock.sleep(100)
+        stylusStroke(worldToScreen(120f, 120f), worldToScreen(180f, 150f))
+        waitUntil { (onMain { pageContent()[0] } as StickyNoteItem).items.isNotEmpty() }
+        assertEquals(1, pageContent().size)
+        val note = onMain { pageContent()[0] as StickyNoteItem }
+        val ink = note.items.single() as StrokeItem
+        // Kept relative to the note, so that it moves with it.
+        assertEquals(20f, ink.points.x(0), 0.5f)
+        assertEquals(20f, ink.points.y(0), 0.5f)
+    }
+
+    @Test
+    fun aTableIsPlacedWhereThePenLands() {
+        val options = TableOptions(columns = 2, rows = 2)
+        onMain { canvas.tool = CanvasTool.Table(options) }
+        val at = worldToScreen(100f, 100f)
+        drag(MotionEvent.TOOL_TYPE_STYLUS, at, at.first + 1f to at.second)
+        waitUntil { pageContent().size == 1 }
+        val table = onMain { pageContent()[0] as TableItem }
+        assertEquals(100f, table.frame.left, 0.5f)
+        assertEquals(4, table.cells.size)
+    }
+
+    @Test
+    fun inkInTheLoupeLandsSmallerOnThePage() {
+        val top = onMain {
+            canvas.setLoupeArea(0f, canvas.height / 2f, canvas.width.toFloat(), canvas.height.toFloat())
+            canvas.loupeOpen = true
+            canvas.height / 2f
+        }
+        val width = onMain { canvas.width.toFloat() }
+        val drag = 300f
+        drag(MotionEvent.TOOL_TYPE_STYLUS, width / 2f - drag / 2f to top + 200f, width / 2f + drag / 2f to top + 200f)
+        val stroke = onlyStroke()
+        val pxPerPt = onMain { canvas.viewport.pxPerPt }
+        // The box is 45% of what the view shows across, and the window shows that box across all of it.
+        val expected = drag * 0.45f / pxPerPt
+        assertEquals(expected, stroke.points.x(stroke.points.size - 1) - stroke.points.x(0), 1f)
+    }
+
+    @Test
+    fun aMovedSelectionLinesUpWithThePageUnlessToldNotTo() {
+        for (snapping in listOf(true, false)) {
+            onMain {
+                canvas.undo()
+                canvas.snapToAlign = snapping
+                canvas.tool = CanvasTool.Shape(ShapeOptions())
+            }
+            drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(100f, 100f), worldToScreen(150f, 150f))
+            waitUntil { pageContent().size == 1 }
+            onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = ALL_ITEM_KINDS, fullOnly = false) }
+            drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(80f, 80f), worldToScreen(170f, 170f))
+            // To within a point of the page's left edge, on the box of the border too.
+            val shape = onMain { pageContent()[0] as ShapeItem }
+            val toEdge = -shape.bounds.left + 1f
+            drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(125f, 125f), worldToScreen(125f + toEdge, 125f))
+            val moved = onMain { pageContent()[0] as ShapeItem }
+            if (snapping) {
+                assertEquals(0f, moved.bounds.left, 0.2f)
+            } else {
+                assertEquals(1f, moved.bounds.left, 0.3f)
+            }
+            onMain { canvas.undo() }
+        }
+    }
+
+    @Test
+    fun tapeAndEmojiLandOnThePage() {
+        onMain { canvas.tool = CanvasTool.Tape(TapeOptions()) }
+        drag(MotionEvent.TOOL_TYPE_STYLUS, worldToScreen(100f, 100f), worldToScreen(200f, 100f))
+        waitUntil { pageContent().size == 1 }
+        assertEquals(ShapeKind.TAPE, onMain { (pageContent()[0] as ShapeItem).kind })
+
+        SystemClock.sleep(100)
+        onMain { canvas.tool = CanvasTool.Emoji("⭐", 28) }
+        val at = worldToScreen(300f, 300f)
+        drag(MotionEvent.TOOL_TYPE_STYLUS, at, at.first + 1f to at.second)
+        waitUntil { pageContent().size == 2 }
+        assertEquals("⭐", onMain { (pageContent()[1] as TextItem).text })
+    }
+
+    @Test
+    fun clearingThePageCanBeUndone() {
+        stylusStroke(worldToScreen(100f, 100f), worldToScreen(200f, 150f))
+        waitUntil { pageContent().size == 1 }
+        onMain { canvas.clearPage() }
+        assertEquals(0, pageContent().size)
+        onMain { canvas.undo() }
+        assertEquals(1, pageContent().size)
     }
 
     @Test

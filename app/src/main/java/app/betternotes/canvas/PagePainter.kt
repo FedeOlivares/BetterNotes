@@ -1,5 +1,6 @@
 package app.betternotes.canvas
 
+import android.graphics.Bitmap
 import android.graphics.BlendMode
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -25,6 +26,9 @@ internal interface PaintSource {
     fun contentOrLoad(pageId: Long): PageContent?
 
     fun mesh(item: StrokeItem): Stroke
+
+    /** A decoded picture, or null if it is not ready yet or this source has none. */
+    fun image(assetId: String): Bitmap? = null
 
     /**
      * Paints a PDF page's pixels into a tile, ahead of the ink. [x] and [y] are where the page's corner
@@ -53,6 +57,9 @@ internal class PagePainter(private val source: PaintSource) {
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
+    private val items = ItemPainter(source::image) { canvas, stroke ->
+        renderer.draw(canvas, source.mesh(stroke), strokeToTile)
+    }
     private val highlightPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
 
     /** What to mark on each page, by page id, such as search results. */
@@ -119,11 +126,14 @@ internal class PagePainter(private val source: PaintSource) {
         }
     }
 
-    /** Only ink for now. The other item types arrive with their tools. */
     private fun paintItems(canvas: Canvas, content: PageContent, region: Bounds, scale: Float) {
         strokeToTile.setScale(scale, scale)
         content.forEachIntersecting(region) { _, item ->
-            if (item is StrokeItem) renderer.draw(canvas, source.mesh(item), strokeToTile)
+            if (item is StrokeItem) {
+                renderer.draw(canvas, source.mesh(item), strokeToTile)
+            } else {
+                items.paint(canvas, item)
+            }
         }
     }
 

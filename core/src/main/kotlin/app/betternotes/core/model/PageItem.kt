@@ -82,7 +82,41 @@ data class StrokeItem(
     }
 }
 
-enum class ShapeKind { LINE, ARROW, RECTANGLE, ELLIPSE, TRIANGLE }
+enum class ShapeKind {
+    LINE,
+    ARROW,
+    RECTANGLE,
+    ELLIPSE,
+    TRIANGLE,
+    DIAMOND,
+    PARALLELOGRAM,
+    TRAPEZOID,
+    BLOCK_ARROW,
+    CURVE,
+    PENTAGON,
+    HEXAGON,
+    PIE,
+    ARC,
+    STAR,
+    SPHERE,
+    PYRAMID,
+    CYLINDER,
+    CUBE,
+    TETRAHEDRON,
+    PRISM,
+    DISCS,
+    SINE,
+    COSINE,
+    AXES,
+    PARABOLA,
+    CUBIC,
+    BRACE,
+    HEART,
+    SPEECH_BOX,
+    SPEECH_ROUND,
+    THOUGHT,
+    TAPE,
+}
 
 /**
  * A vector shape. A line or arrow runs along the frame's horizontal center, from left to right,
@@ -139,12 +173,27 @@ data class ImageItem(
     }
 }
 
+enum class HorizontalAlign { START, CENTER, END }
+
+enum class VerticalAlign { TOP, MIDDLE, BOTTOM }
+
+/** How typed text looks, beyond its size and color. */
+data class TextStyle(
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val underline: Boolean = false,
+    val strikethrough: Boolean = false,
+    val align: HorizontalAlign = HorizontalAlign.START,
+    val verticalAlign: VerticalAlign = VerticalAlign.TOP,
+)
+
 data class TextItem(
     override val id: Long,
     val frame: Frame,
     val text: String,
     val textSize: Float = 12f,
     val color: Int = 0xFF000000.toInt(),
+    val style: TextStyle = TextStyle(),
 ) : PageItem {
     override val bounds get() = frame.bounds
 
@@ -204,6 +253,9 @@ data class TableItem(
     val textSize: Float = 12f,
     val lineColor: Int = 0xFF000000.toInt(),
     val lineWidth: Float = 1f,
+    val headerRow: Boolean = false,
+    val headerColumn: Boolean = false,
+    val fillColor: Int = 0,
 ) : PageItem {
     init {
         require(columnWeights.isNotEmpty() && rowWeights.isNotEmpty()) { "A table needs cells" }
@@ -218,6 +270,19 @@ data class TableItem(
         val factor = t.meanScale
         return copy(frame = frame.transformed(t), textSize = textSize * factor, lineWidth = lineWidth * factor)
     }
+}
+
+/** A video stored in the document's assets under [assetId], showing the picture under [posterAssetId] until played. */
+data class VideoItem(
+    override val id: Long,
+    val frame: Frame,
+    val assetId: String,
+    val posterAssetId: String,
+    val durationMs: Long,
+) : PageItem {
+    override val bounds get() = frame.bounds
+
+    override fun transformed(t: Affine) = copy(frame = frame.transformed(t))
 }
 
 /** A voice recording placed on the page as a marker. The audio file is stored under [assetId]. */

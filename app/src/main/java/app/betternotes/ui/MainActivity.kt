@@ -5,13 +5,25 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
-import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -36,6 +48,15 @@ import app.betternotes.library.LibraryRepository
 import app.betternotes.perf.CanvasBenchmark
 import app.betternotes.perf.HandwritingCheck
 import app.betternotes.perf.PerfProbe
+import app.betternotes.library.LibraryPreferences
+import app.betternotes.ui.editor.EditorActions
+import app.betternotes.ui.editor.EditorChrome
+import app.betternotes.ui.editor.EditorState
+import app.betternotes.ui.editor.ToolStore
+import app.betternotes.ui.theme.BetterNotesTheme
+import app.betternotes.ui.theme.DarkEditorColors
+import app.betternotes.ui.theme.LightEditorColors
+import app.betternotes.ui.theme.ThemeMode
 import app.betternotes.search.DocumentSearch
 import app.betternotes.search.MlKitRecognizer
 import app.betternotes.settings.SettingsRepository
@@ -77,10 +98,39 @@ class MainActivity : ComponentActivity() {
             probe = perf
         }
 
+        val tools = ToolStore(this)
+        val state = EditorState(canvas, tools)
         val chrome = ComposeView(this).apply {
             setContent {
-                MaterialTheme(colorScheme = darkColorScheme()) {
-                    DevChrome(canvas, readout, ::openScratch) { shownOverlay.value = it }
+                val library = remember { LibraryPreferences.get(this@MainActivity) }
+                val theme = library.theme
+                var showReadout by remember { mutableStateOf(false) }
+                var showingCanvas by remember { mutableStateOf(false) }
+                canvas.backdropColor = backdropOf(theme)
+                val actions = remember {
+                    EditorActions(
+                        onBack = ::finish,
+                        onZoomToRealSize = { canvas.zoomTo(1f) },
+                        onToggleTheme = {
+                            library.updateTheme(if (theme == ThemeMode.DARK) ThemeMode.LIGHT else ThemeMode.DARK)
+                        },
+                        onToggleScratchKind = {
+                            showingCanvas = !showingCanvas
+                            openScratch(showingCanvas)
+                        },
+                        onOpenSettings = { shownOverlay.value = SettingsOverlay.SCREEN },
+                        documentId = { editor?.document?.id },
+                        onOpenDocument = { id ->
+                            canvas.rememberPage()
+                            editor?.saveNow()
+                            openDocument(id)
+                        },
+                        onTogglePerfReadout = if (BuildConfig.PERF_TOOLS) ({ showReadout = !showReadout }) else null,
+                    )
+                }
+                BetterNotesTheme(theme) {
+                    EditorChrome(state, actions)
+                    if (showReadout && readout.value.isNotEmpty()) PerfReadout(readout.value)
                 }
             }
         }
@@ -98,10 +148,8 @@ class MainActivity : ComponentActivity() {
         setContentView(
             FrameLayout(this).apply {
                 addView(canvas, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                addView(
-                    chrome,
-                    FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL),
-                )
+                // It covers the canvas, but only its controls take touches. The rest fall through.
+                addView(chrome, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 addView(overlays, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             },
         )
@@ -259,6 +307,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun backdropOf(theme: ThemeMode) =
+        (if (theme == ThemeMode.DARK) DarkEditorColors else LightEditorColors).canvasBackdrop.toArgb()
+
     companion object {
         /** The library's id of the document to open. */
         const val EXTRA_DOCUMENT_ID = "document_id"
@@ -269,5 +320,21 @@ class MainActivity : ComponentActivity() {
 
         /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */
         private const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun PerfReadout(text: String) {
+    Box(Modifier.padding(12.dp), contentAlignment = Alignment.BottomStart) {
+        Text(
+            text,
+            color = Color(0xFFB8F0C0),
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .background(Color(0xE01C1E22), RoundedCornerShape(8.dp))
+                .padding(8.dp),
+        )
     }
 }

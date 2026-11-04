@@ -7,8 +7,7 @@ Location: `D:\code\better-notes`, a local git repository with no remote.
 ## Known gaps
 - Lint reports 1 warning: `allowBackup` without `dataExtractionRules`.
 - The release build is not signed, so it cannot be installed as is. The debug build can.
-- The editor's UI is still missing. `DevChrome` is a plain stand-in for the toolbars. `MainActivity` is the editor, and opens a scratch note or canvas when started without a document, as the tests and measuring scripts do.
-- The canvas paints only strokes, the page background and PDF pages. Shapes, images, text, sticky notes, tables and recordings are in the model but are not drawn yet.
+- The editor's toolbars and tools are on branch `ws6-editor`, not yet merged. See `docs/handoff/editor.md`. `MainActivity` is the editor, and opens a scratch note or canvas when started without a document, as the tests and measuring scripts do.
 - The pencil and dotted lines have no brush of their own: the pencil uses the ball pen's brush, and dotted lines use the dashed brush, which ignores dash and gap lengths.
 - Redrawing after a zoom settles happens in one frame, on the main thread. On the emulator, with 3000 strokes all in view at 30%, that frame took about 430 ms. Check on the tablet and spread the work over frames if it shows.
 - `InProgressStrokesView`'s latency data is restricted API, used only by `PerfProbe`, which release builds drop.
