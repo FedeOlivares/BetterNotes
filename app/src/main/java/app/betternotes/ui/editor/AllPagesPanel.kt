@@ -222,7 +222,9 @@ internal fun SidebarMenu(state: EditorState, notices: Notices) {
         ) {
             SidebarEntry(EditorIcons.Insert, R.string.menu_insert) {
                 state.sidebarMenuOpen = false
-                notices.notBuilt()
+                // Insert is the picture tool's panel: camera, gallery, files, scan and recent pictures.
+                state.select(ActiveTool.IMAGE)
+                state.panelOpen = true
             }
             SidebarEntry(EditorIcons.Search, R.string.menu_search) {
                 state.sidebarMenuOpen = false
