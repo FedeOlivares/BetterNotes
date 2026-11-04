@@ -80,6 +80,12 @@ internal object EditorIcons {
     val Scan by lazy { line("scan", "M3.500 8V5.500a2 2 0 0 1 2-2H8 M16 3.500h2.500a2 2 0 0 1 2 2V8 M20.500 16v2.500a2 2 0 0 1-2 2H16 M8 20.500H5.500a2 2 0 0 1-2-2V16 M8.500 8h5l2 2v6h-7z") }
     val ImageRound by lazy { line("image-round", "M12 3a9 9 0 1 0 .01 0") }
     val ImageSquare by lazy { line("image-square", rrect(3.5f, 3.5f, 17f, 17f, 2f)) }
+    val Download by lazy { line("download", "M12 4v11 M7.500 11L12 15.500 16.500 11 M5 20h14") }
+    val PlayCircle by lazy { line("play-circle", "M12 3a9 9 0 1 0 .01 0 M10 8.500v7l5.500-3.500z") }
+    val Play by lazy { filled("play", "M7 4.500v15l13-7.500z") }
+    val Pause by lazy { filled("pause", "M7 4.500h3.500v15H7z M13.500 4.500H17v15h-3.500z") }
+    val StopCircle by lazy { filled("stop-circle", "M12 2.500a9.500 9.500 0 1 0 .01 0z M9 9h6v6H9z") }
+    val CheckCircle by lazy { line("check-circle", "M12 3a9 9 0 1 0 .01 0 M7.500 12.500l3 3 6-6.500") }
     val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
     val Insert by lazy { line("insert", rrect(4f, 4f, 16f, 16f, 2.5f) + "M12 8v8 M8 12h8") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }

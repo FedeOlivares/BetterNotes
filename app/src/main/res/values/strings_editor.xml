@@ -51,6 +51,22 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="recorder_new">New audio recording</string>
+    <string name="recorder_import">Import</string>
+    <string name="recorder_play_all">Play all</string>
+    <string name="recorder_play">Play</string>
+    <string name="recorder_pause">Pause</string>
+    <string name="recorder_stop">Stop</string>
+    <string name="recorder_delete">Delete recording</string>
+    <string name="recorder_item">New recording %1$d</string>
+    <string name="notice_audio_failed">That recording could not be read</string>
+    <string name="pages_all">All pages</string>
+    <string name="pages_add">Add a page</string>
+    <string name="pages_add_after">Add a page after this one</string>
+    <string name="pages_delete">Delete this page</string>
+    <string name="pages_select">Select pages</string>
+    <string name="menu_insert">Insert</string>
+    <string name="menu_search">Search</string>
     <string name="panel_image_library">Pictures</string>
     <string name="panel_image_shape">Picture shape</string>
     <string name="panel_add_image">Add a picture</string>

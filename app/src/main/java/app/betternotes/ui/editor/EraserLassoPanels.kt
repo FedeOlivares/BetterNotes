@@ -311,7 +311,6 @@ private val KIND_FILTERS: List<Triple<ItemKind, ImageVector, Int>> by lazy {
         Triple(ItemKind.TABLE, EditorIcons.Table, R.string.tool_table),
         Triple(ItemKind.TEXT, EditorIcons.Text, R.string.tool_text),
         Triple(ItemKind.STICKY_NOTE, EditorIcons.StickyNote, R.string.tool_sticky),
-        Triple(ItemKind.AUDIO, EditorIcons.Mic, R.string.tool_recorder),
     )
 }
 

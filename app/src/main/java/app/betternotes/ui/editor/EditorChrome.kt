@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,7 @@ private val PillGap = 10.dp
 private val PanelEndMargin = 8.dp
 private val PanelGap = 7.dp
 private const val SAVE_DELAY_MS = 400L
+private val RECORDER_MENU_END = 70.dp
 
 /**
  * The sizes in this package were read off screenshots at 2.5 pixels per unit, and the tablet those
@@ -99,16 +101,21 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
     val sources = rememberImageSources(state)
+    val canvasContext = androidx.compose.ui.platform.LocalContext.current
+    val recorder = remember { RecorderState(canvasContext, state.canvasForRecorder) }
+    DisposableEffect(recorder) { onDispose { recorder.release() } }
     state.say = notices::say
     Box(Modifier.fillMaxSize()) {
         Layout(
             content = {
                 LeftPill(state, actions, notices, Modifier.layoutId(LEFT).masksInk(state, LEFT))
                 if (!state.viewOnly) {
-                    CenterPill(state, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
+                    CenterPill(state, recorder, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
                 }
-                RightPill(state, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
-                if (!state.viewOnly && !state.toolRowCollapsed) {
+                RightPill(state, recorder, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
+                if (!state.viewOnly && recorder.recording) {
+                    RecordingControls(state, recorder, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                } else if (!state.viewOnly && !state.toolRowCollapsed) {
                     if (preset != null) {
                         ToolRow(state, preset, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.LASER) {
@@ -160,6 +167,18 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
 
         PositionControls(state, Modifier.align(Alignment.BottomStart), Modifier.align(Alignment.CenterEnd))
         state.textEdit?.let { request -> TextEditOverlay(request) { request.finish(it) } }
+        if (recorder.menuOpen) {
+            RecorderMenu(
+                state,
+                recorder,
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = EdgeMargin + PillHeight + PanelGap, end = RECORDER_MENU_END)
+                    .masksInk(state, "recorder"),
+            )
+        }
+        if (state.sidebarMenuOpen) SidebarMenu(state, notices)
+        if (state.pagesOpen) AllPagesPanel(state, notices)
 
         val panelTop = EdgeMargin + PillHeight + PillGap + PillHeight + PanelGap
         val panelModifier = Modifier
@@ -187,8 +206,8 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
 private fun LeftPill(state: EditorState, actions: EditorActions, notices: Notices, modifier: Modifier) {
     Pill(modifier) {
         ToolbarIcon(EditorIcons.Back, stringResource(R.string.editor_back), onClick = actions.onBack)
-        ToolbarIcon(EditorIcons.Sidebar, stringResource(R.string.editor_sidebar), onClick = notices::notBuilt)
-        ToolbarIcon(EditorIcons.PageGrid, stringResource(R.string.editor_page_grid), onClick = notices::notBuilt)
+        ToolbarIcon(EditorIcons.Sidebar, stringResource(R.string.editor_sidebar), onClick = { state.sidebarMenuOpen = true })
+        ToolbarIcon(EditorIcons.PageGrid, stringResource(R.string.editor_page_grid), onClick = { state.pagesOpen = true })
         ToolbarIcon(EditorIcons.PageStack, stringResource(R.string.editor_page_stack), onClick = notices::notBuilt)
         ToolbarIcon(EditorIcons.ChevronsUpDown, stringResource(R.string.editor_chevrons), onClick = notices::notBuilt)
     }
@@ -223,7 +242,7 @@ private val StripItems by lazy {
 }
 
 @Composable
-private fun CenterPill(state: EditorState, notices: Notices, modifier: Modifier) {
+private fun CenterPill(state: EditorState, recorder: RecorderState, notices: Notices, modifier: Modifier) {
     Pill(modifier) {
         ToolbarIcon(EditorIcons.Undo, stringResource(R.string.editor_undo), enabled = state.canUndo, onClick = state::undo)
         ToolbarIcon(EditorIcons.Redo, stringResource(R.string.editor_redo), enabled = state.canRedo, onClick = state::redo)
@@ -241,6 +260,10 @@ private fun CenterPill(state: EditorState, notices: Notices, modifier: Modifier)
                 .horizontalScroll(rememberScrollState()),
         ) {
             for (item in StripItems) {
+                if (item.label == R.string.tool_recorder && recorder.recording) {
+                    StopRecordingButton(recorder)
+                    continue
+                }
                 val tool = item.tool
                 ToolbarIcon(
                     item.icon,
@@ -251,6 +274,7 @@ private fun CenterPill(state: EditorState, notices: Notices, modifier: Modifier)
                             tool != null -> state.select(tool)
                             item.label == R.string.tool_ruler -> state.toggleRuler()
                             item.label == R.string.tool_clipboard -> state.paste()
+                            item.label == R.string.tool_recorder -> recorder.menuOpen = !recorder.menuOpen
                             else -> notices.notBuilt()
                         }
                     },
@@ -267,7 +291,7 @@ private fun CenterPill(state: EditorState, notices: Notices, modifier: Modifier)
 }
 
 @Composable
-private fun RightPill(state: EditorState, actions: EditorActions, modifier: Modifier) {
+private fun RightPill(state: EditorState, recorder: RecorderState, actions: EditorActions, modifier: Modifier) {
     val colors = LocalEditorColors.current
     var menuOpen by remember { mutableStateOf(false) }
     Pill(modifier) {
@@ -288,6 +312,7 @@ private fun RightPill(state: EditorState, actions: EditorActions, modifier: Modi
         }
         Box {
             ToolbarIcon(EditorIcons.More, stringResource(R.string.editor_more), onClick = { menuOpen = true })
+            if (recorder.recording) RecordingDot(Modifier.align(Alignment.TopEnd))
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 MenuEntry(R.string.menu_delete_selection) {
                     menuOpen = false

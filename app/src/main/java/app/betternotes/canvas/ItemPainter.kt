@@ -60,7 +60,7 @@ internal class ItemPainter(
             }
             is StickyNoteItem -> paintSticky(canvas, item)
             is ImageItem -> inFrame(canvas, item.frame) { paintImage(canvas, item) }
-            is AudioItem -> inFrame(canvas, item.frame) { paintAudio(canvas, item) }
+            is AudioItem -> Unit
         }
     }
 
@@ -232,12 +232,6 @@ internal class ItemPainter(
         }
     }
 
-    private fun paintAudio(canvas: Canvas, item: AudioItem) {
-        fill.color = AUDIO_COLOR
-        val radius = minOf(item.frame.width, item.frame.height) / 2f
-        canvas.drawCircle(item.frame.width / 2f, item.frame.height / 2f, radius, fill)
-    }
-
     private companion object {
         const val OPAQUE = 255f
         const val DOT_LENGTH = 0.01f
@@ -253,6 +247,5 @@ internal class ItemPainter(
         val ITALIC: Typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
         val BOLD_ITALIC: Typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
         const val IMAGE_PLACEHOLDER = 0x22000000
-        const val AUDIO_COLOR = 0xFF5F9FFB.toInt()
     }
 }

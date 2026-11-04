@@ -13,6 +13,7 @@ import app.betternotes.canvas.CanvasTool
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.TextEditRequest
 import app.betternotes.core.gesture.InputMode
+import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.tools.ALL_ITEM_KINDS
@@ -69,6 +70,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
     var image by mutableStateOf(store.image())
         private set
+    var pagesOpen by mutableStateOf(false)
+    var sidebarMenuOpen by mutableStateOf(false)
+
+    /** Bumped by every edit, so lists drawn from the document know to look again. */
+    var historyVersion by mutableStateOf(0)
+        private set
 
     /** Says something short to the user. Set by the controls, which have the means to. */
     var say: (Int) -> Unit = {}
@@ -102,10 +109,14 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     val screenDpi get() = canvas.viewport.screenDpi
 
+    val canvasForRecorder get() = canvas
+
     init {
         canvas.onHistoryChanged = {
             canUndo = canvas.canUndo
             canRedo = canvas.canRedo
+            historyVersion++
+            pageCount = canvas.pageCount
         }
         canUndo = canvas.canUndo
         canRedo = canvas.canRedo
@@ -198,6 +209,31 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             else -> say(R.string.notice_nothing_to_paste)
         }
     }
+
+    val canAddPages get() = canvas.canAddPages
+
+    fun pages() = canvas.pages
+
+    fun addPage(after: Int) = canvas.addPage(after)
+
+    fun deletePage(index: Int) = canvas.deletePage(index)
+
+    fun movePage(from: Int, to: Int) = canvas.movePage(from, to)
+
+    fun thumbnail(pageId: Long, maxPx: Int) = canvas.thumbnail(pageId, maxPx)
+
+    fun goToPage(index: Int) {
+        canvas.goToPage(index)
+        pagesOpen = false
+    }
+
+    fun recordings() = canvas.recordings()
+
+    fun assetFile(assetId: String) = canvas.assetFile(assetId)
+
+    fun importAudio(uri: Uri) = canvas.importAudio(uri) { say(R.string.notice_audio_failed) }
+
+    fun deleteRecording(item: AudioItem) = canvas.deleteAudio(item)
 
     /** The color the wheel opens on. */
     val colorStart: Int

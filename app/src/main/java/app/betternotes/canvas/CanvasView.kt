@@ -2,10 +2,12 @@ package app.betternotes.canvas
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Path
 import android.graphics.RectF
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.SystemClock
 import android.view.MotionEvent
@@ -13,6 +15,7 @@ import android.view.VelocityTracker
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.OverScroller
+import androidx.core.graphics.createBitmap
 import androidx.ink.authoring.InProgressStrokeId
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
@@ -22,7 +25,10 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import androidx.input.motionprediction.MotionEventPredictor
+import app.betternotes.core.edit.InsertPage
 import app.betternotes.core.edit.ItemsEdit
+import app.betternotes.core.edit.MovePage
+import app.betternotes.core.edit.RemovePage
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Viewport
@@ -34,7 +40,10 @@ import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.gesture.PointerKind
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.layout.ScrollDirection
+import app.betternotes.core.model.AudioItem
+import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.IdSource
+import app.betternotes.core.model.Page
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.PageItem
@@ -57,6 +66,7 @@ import app.betternotes.core.tools.cellAt
 import app.betternotes.core.tools.typedText
 import app.betternotes.core.tools.withCell
 import app.betternotes.core.tools.withText
+import java.io.File
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -882,6 +892,110 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         )
         textEdit = request
         onTextEdit(request)
+    }
+
+    // ---- Pages ----
+
+    val pages get() = editor?.document?.pages.orEmpty()
+
+    val canAddPages get() = editor?.document?.kind != DocumentKind.CANVAS && editor != null
+
+    /** Adds a page like the one at [after], right behind it. */
+    fun addPage(after: Int) {
+        val open = editor ?: return
+        val like = open.document.pages.getOrNull(after) ?: return
+        open.perform(InsertPage(after + 1, Page(IdSource.Random.next(), like.size, like.background)))
+        syncChanges()
+    }
+
+    fun deletePage(index: Int) {
+        val open = editor ?: return
+        val page = open.document.pages.getOrNull(index) ?: return
+        if (open.document.pages.size < 2) return
+        lasso.clear()
+        open.perform(RemovePage(index, page))
+        syncChanges()
+    }
+
+    fun movePage(from: Int, to: Int) {
+        val open = editor ?: return
+        if (from !in open.document.pages.indices || to !in open.document.pages.indices) return
+        lasso.clear()
+        open.perform(MovePage(from, to))
+        syncChanges()
+    }
+
+    /** A picture of a page, at most [maxPx] wide or tall. Null if the page has no edges to fit. */
+    fun thumbnail(pageId: Long, maxPx: Int): Bitmap? {
+        val open = editor ?: return null
+        val paint = painter ?: return null
+        val page = open.document.pages.firstOrNull { it.id == pageId } ?: return null
+        val size = page.size ?: return null
+        open.content(page.id)
+        val scale = maxPx / maxOf(size.widthPt, size.heightPt)
+        val bitmap = createBitmap((size.widthPt * scale).roundToInt().coerceAtLeast(1), (size.heightPt * scale).roundToInt().coerceAtLeast(1))
+        paint.paintWholePage(Canvas(bitmap), page, scale)
+        return bitmap
+    }
+
+    // ---- Recordings ----
+
+    /** The file an asset lives in, or null with nothing open. */
+    fun assetFile(assetId: String): File? = editor?.assetFile(assetId)
+
+    /** Every recording in the document, loading each page to look. */
+    fun recordings(): List<AudioItem> {
+        val open = editor ?: return emptyList()
+        val found = ArrayList<AudioItem>()
+        for (page in open.document.pages) {
+            val content = open.content(page.id)
+            for (i in 0 until content.size) (content[i] as? AudioItem)?.let { found += it }
+        }
+        return found
+    }
+
+    /** A recording goes on the page in view, but has no place on it, as it shows only in the recorder's menu. */
+    fun addAudio(assetId: String, durationMs: Long) {
+        val open = editor ?: return
+        val page = open.document.pages.getOrNull(currentPage) ?: return
+        val item = AudioItem(IdSource.Random.next(), Frame(0f, 0f, 0f, 0f), assetId, durationMs)
+        open.perform(ItemsEdit.addOnTop(page.id, open.content(page.id), item))
+    }
+
+    fun importAudio(uri: Uri, failed: () -> Unit) {
+        val open = editor ?: return
+        open.importAsset(context.contentResolver, uri) { assetId ->
+            if (assetId == null) {
+                failed()
+            } else if (editor === open) {
+                addAudio(assetId, audioDurationMs(open.assetFile(assetId)))
+            }
+        }
+    }
+
+    private fun audioDurationMs(file: File): Long {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.path)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        } catch (_: RuntimeException) {
+            0L
+        } finally {
+            retriever.release()
+        }
+    }
+
+    fun deleteAudio(item: AudioItem) {
+        val open = editor ?: return
+        for (page in open.document.pages) {
+            val content = open.content(page.id)
+            for (i in 0 until content.size) {
+                if (content[i].id == item.id) {
+                    open.perform(ItemsEdit.remove(page.id, content, intArrayOf(i)))
+                    return
+                }
+            }
+        }
     }
 
     /** Copies a picture into the document and puts it in the middle of the view. */

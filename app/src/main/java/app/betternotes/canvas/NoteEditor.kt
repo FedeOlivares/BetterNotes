@@ -15,7 +15,9 @@ import app.betternotes.core.model.Document
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.StrokeItem
+import java.io.File
 import java.io.IOException
+import java.util.UUID
 import java.util.concurrent.Executors
 
 /**
@@ -30,6 +32,26 @@ class NoteEditor(
 
     /** Called on the main thread when a page's ink arrives from the disk. */
     var onPageLoaded: (pageId: Long) -> Unit = {}
+
+    /** The file an asset lives in. */
+    fun assetFile(assetId: String): File = store.assetFile(assetId)
+
+    /** Copies any file into the document's assets, off the main thread, and answers on the main thread. */
+    fun importAsset(resolver: ContentResolver, uri: Uri, done: (assetId: String?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val assetId = UUID.randomUUID().toString()
+            val copied = try {
+                val opened = resolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
+                opened.use { input -> store.assetFile(assetId).outputStream().use { input.copyTo(it) } }
+                true
+            } catch (e: IOException) {
+                Log.e(TAG, "Could not import a file", e)
+                false
+            }
+            main.post { done(if (copied) assetId else null) }
+        }
+    }
 
     /** Called on the main thread when a picture has been decoded and can now be painted. */
     var onImageLoaded: () -> Unit = {}

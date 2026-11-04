@@ -44,6 +44,13 @@ internal class PagePainter(private val editor: NoteEditor) {
         }
     }
 
+    /** Paints all of a page into a canvas of its own, as for a thumbnail. */
+    fun paintWholePage(canvas: Canvas, page: Page, scale: Float) {
+        val size = page.size ?: return
+        canvas.scale(scale, scale)
+        paintPage(canvas, page, Bounds(0f, 0f, size.widthPt, size.heightPt), scale)
+    }
+
     private fun paintPage(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
         val size = page.size
         paper.color = page.background.color

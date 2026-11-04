@@ -44,7 +44,8 @@ data class LassoOptions(
     val lockedToo: Boolean = false,
     val takeScreenshot: Boolean = false,
     val fullSelectionOnly: Boolean = false,
-    val kinds: Set<ItemKind> = ALL_ITEM_KINDS,
+    // Recordings have no place on the page to select them at.
+    val kinds: Set<ItemKind> = ALL_ITEM_KINDS - ItemKind.AUDIO,
 )
 
 /** Adds a kind that is missing, or takes away one that is there. */
