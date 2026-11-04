@@ -31,6 +31,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -53,16 +55,20 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.betternotes.R
@@ -98,6 +104,11 @@ private const val BREADCRUMB_FOLDERS = 3
 
 private val BreadcrumbMaxWidth = 620.dp
 private val RowGap = 12.dp
+private val MenuShape = RoundedCornerShape(24.dp)
+
+/** From the circled "..." to the menu's top right corner, measured on the reference. */
+private val MenuOffsetX = 19.dp
+private val MenuOffsetY = 75.dp
 
 /** Everything a tile or menu can ask for that needs a dialog first. */
 private sealed interface PendingDialog {
@@ -653,15 +664,22 @@ private fun OptionsMenu(
         IconButton(LibraryIcons.MoreCircled, stringResource(R.string.library_options), colors.strongIcon, 49.dp) {
             open = true
         }
-        DropdownMenu(
-            expanded = open,
+        // A popup starts a new composition, with the device's density, so the reference's scale is handed in.
+        val scale = LocalDensity.current
+        if (open) Popup(
+            alignment = Alignment.TopEnd,
+            offset = with(scale) { IntOffset(MenuOffsetX.roundToPx(), MenuOffsetY.roundToPx()) },
             onDismissRequest = { open = false },
-            offset = DpOffset(19.dp, 26.dp),
-            shape = RoundedCornerShape(24.dp),
-            containerColor = colors.surface,
-            modifier = Modifier.width(274.dp),
+            properties = PopupProperties(focusable = true),
+        ) { CompositionLocalProvider(LocalDensity provides scale) { Column(
+            Modifier
+                .width(274.dp)
+                .padding(bottom = 12.dp)
+                .shadow(12.dp, MenuShape)
+                .background(colors.surface, MenuShape)
+                .clip(MenuShape),
         ) {
-            OptionRow(LibraryIcons.CheckCircle, stringResource(R.string.library_select), onClick = choose(onSelect))
+            OptionRow(LibraryIcons.CheckCircle, stringResource(R.string.library_select), height = 64.dp, onClick = choose(onSelect))
             OptionDivider()
             val grid = preferences.layout == LibraryLayout.GRID
             OptionRow(
@@ -682,6 +700,7 @@ private fun OptionsMenu(
                 LibraryIcons.SortDown,
                 stringResource(R.string.library_sort_by),
                 detail = stringResource(if (byName) R.string.library_sort_name else R.string.library_sort_modified),
+                height = 64.dp,
                 onClick = choose { preferences.updateSort(if (byName) LibrarySort.MODIFIED else LibrarySort.NAME) },
             )
             OptionDivider()
@@ -689,7 +708,7 @@ private fun OptionsMenu(
                 OptionRow(LibraryIcons.Bin, stringResource(R.string.library_empty_bin), onClick = choose(onEmptyBin))
             }
             OptionRow(LibraryIcons.Settings, stringResource(R.string.library_settings), onClick = choose(onSettings))
-        }
+        } } }
     }
 }
 
@@ -699,6 +718,7 @@ private fun OptionRow(
     label: String,
     detail: String? = null,
     chosen: Boolean = false,
+    height: Dp = 60.dp,
     onClick: () -> Unit,
 ) {
     val colors = LocalAppColors.current
@@ -707,12 +727,12 @@ private fun OptionRow(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (detail == null) 58.dp else 66.dp)
+            .height(height)
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(start = 17.dp, end = 18.dp),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
-        Column(Modifier.padding(start = 16.dp).weight(1f)) {
+        Column(Modifier.padding(start = 15.dp).weight(1f)) {
             Text(label, color = tint, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1)
             if (detail != null) Text(detail, color = colors.subtitle, fontSize = 16.sp, maxLines = 1)
         }
@@ -756,7 +776,7 @@ private fun SelectionBar(
             .padding(horizontal = 12.dp),
     ) {
         Text(
-            stringResource(R.string.library_selected_count, chosen.size),
+            pluralStringResource(R.plurals.library_selected_count, chosen.size, chosen.size),
             color = colors.title,
             fontSize = 19.sp,
             modifier = Modifier.padding(start = 12.dp, end = 12.dp),
