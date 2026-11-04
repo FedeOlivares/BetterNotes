@@ -103,11 +103,22 @@ internal object InkBrushes {
 
     private fun creativeFamily(kind: BrushKind): BrushFamily = creative.getOrPut(kind) {
         when (kind) {
+            // Graphite: a faint soft body with a cloud of tiny grains over it.
             BrushKind.PENCIL -> brushFamily(
                 tip {
                     setCornerRounding(1f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.55f, 0.95f, noise(1, 0.35f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.8f, 1.05f, noise(2, 0.5f)))
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 0.45f, noise(1, 0.3f)))
+                },
+                *Array(2) { c ->
+                    tip {
+                        setCornerRounding(1f)
+                        setScaleX(0.04f)
+                        setScaleY(0.04f)
+                        setParticleGapDistanceScale(0.05f)
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.5f, 0.5f, noise(50 + c, 0.004f)))
+                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.5f, 0.5f, noise(52 + c, 0.004f)))
+                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 0.9f, noise(54 + c, 0.01f)))
+                    }
                 },
             )
             // Bristle streaks: thin parallel lanes of uneven opacity.
@@ -133,19 +144,29 @@ internal object InkBrushes {
                     }
                 },
             )
+            // Wet washes: big translucent blobs that overlap into darker patches.
             BrushKind.WATERCOLOR -> brushFamily(
                 tip {
                     setCornerRounding(1f)
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.85f, 1.15f, noise(9, 0.6f)))
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.6f, 1f, noise(10, 0.3f)))
+                    setScaleX(0.9f)
+                    setScaleY(0.9f)
+                    setParticleGapDistanceScale(0.25f)
+                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.25f, noise(9, 0.15f)))
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(60, 0.1f)))
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(61, 0.1f)))
+                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.12f, 0.35f, noise(10, 0.2f)))
                 },
             )
+            // Sparse thin hatch marks, like shading lines in a comic.
             BrushKind.COMICS -> brushFamily(
                 tip {
-                    setScaleX(0.1f)
-                    setCornerRounding(0f)
-                    setParticleGapDistanceScale(0.12f)
+                    setScaleX(0.03f)
+                    setScaleY(1.1f)
+                    setCornerRounding(0.5f)
+                    setParticleGapDistanceScale(0.35f)
                     addBehavior(aimedAtDirection())
+                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, -0.15f, 0.15f, noise(20, 0.05f)))
+                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.6f, 1.2f, noise(21, 0.08f)))
                 },
             )
             // Parallel dotted lines of different weight.
@@ -181,19 +202,20 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.2f, noise(13, 0.1f)))
                 },
             )
+            // Small leaves: pointed ovals at random angles.
             BrushKind.LEAVES -> brushFamily(
                 tip {
-                    setCornerRounding(1f)
-                    setPinch(0.7f)
-                    setScaleX(0.55f)
-                    setScaleY(0.3f)
-                    setParticleGapDistanceScale(0.8f)
-                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(14, 0.04f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.6f, 1.4f, noise(15, 0.06f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.5f, 0.5f, noise(16, 0.07f)))
+                    setCornerRounding(0.5f)
+                    setPinch(0.85f)
+                    setScaleX(0.5f)
+                    setScaleY(0.28f)
+                    setParticleGapDistanceScale(0.9f)
+                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(14, 0.03f)))
+                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.3f, noise(15, 0.06f)))
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, noise(16, 0.05f)))
+                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, noise(22, 0.05f)))
                 },
             )
-            // Thin straight needles at random angles.
             BrushKind.CROSS -> brushFamily(
                 tip {
                     setCornerRounding(0f)
