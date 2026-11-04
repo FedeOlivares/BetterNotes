@@ -128,7 +128,7 @@ internal object InkBrushes {
                     setScaleY(1.05f)
                     addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.35f, 0.65f, noise(3, 0.2f)))
                 },
-                *lanes(-0.45f, 0.45f, 0.1f) { lane, i ->
+                *lanes(-0.45f, 0.45f, 0.15f) { lane, i ->
                     setCornerRounding(0.3f)
                     setScaleY(0.1f)
                     addBehavior(lane)
