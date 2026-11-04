@@ -5,13 +5,18 @@ import androidx.core.content.edit
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
+import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TextStyle
+import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.TipShape
 import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.LassoOptions
+import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
+import app.betternotes.core.tools.TableOptions
 import app.betternotes.ui.theme.ThemeMode
 import org.json.JSONArray
 import org.json.JSONException
@@ -111,6 +116,64 @@ internal class ToolStore(context: Context) {
         prefs.edit { putString(KEY_SHAPE, json.toString()) }
     }
 
+    fun note(): NoteOptions = read(KEY_NOTE, NoteOptions()) { json ->
+        NoteOptions(
+            colors = json.getJSONArray("colors").ints(),
+            selectedColor = json.getInt("selectedColor"),
+            textSize = json.getInt("textSize"),
+            style = TextStyle(
+                bold = json.getBoolean("bold"),
+                italic = json.getBoolean("italic"),
+                underline = json.getBoolean("underline"),
+                strikethrough = json.getBoolean("strike"),
+                align = HorizontalAlign.valueOf(json.getString("align")),
+                verticalAlign = VerticalAlign.valueOf(json.getString("verticalAlign")),
+            ),
+        )
+    }
+
+    fun save(options: NoteOptions) {
+        val json = JSONObject().apply {
+            put("colors", JSONArray(options.colors))
+            put("selectedColor", options.selectedColor)
+            put("textSize", options.textSize)
+            put("bold", options.style.bold)
+            put("italic", options.style.italic)
+            put("underline", options.style.underline)
+            put("strike", options.style.strikethrough)
+            put("align", options.style.align.name)
+            put("verticalAlign", options.style.verticalAlign.name)
+        }
+        prefs.edit { putString(KEY_NOTE, json.toString()) }
+    }
+
+    fun table(): TableOptions = read(KEY_TABLE, TableOptions()) { json ->
+        TableOptions(
+            columns = json.getInt("columns"),
+            rows = json.getInt("rows"),
+            headerColumn = json.getBoolean("headerColumn"),
+            headerRow = json.getBoolean("headerRow"),
+            borderWidth = json.getInt("borderWidth"),
+            colors = json.getJSONArray("colors").ints(),
+            selectedColor = json.getInt("selectedColor"),
+            fillColor = json.getInt("fillColor"),
+        )
+    }
+
+    fun save(options: TableOptions) {
+        val json = JSONObject().apply {
+            put("columns", options.columns)
+            put("rows", options.rows)
+            put("headerColumn", options.headerColumn)
+            put("headerRow", options.headerRow)
+            put("borderWidth", options.borderWidth)
+            put("colors", JSONArray(options.colors))
+            put("selectedColor", options.selectedColor)
+            put("fillColor", options.fillColor)
+        }
+        prefs.edit { putString(KEY_TABLE, json.toString()) }
+    }
+
     /** Anything saved by an older build that no longer reads back gives way to [fallback]. */
     private inline fun <T> read(key: String, fallback: T, decode: (JSONObject) -> T): T {
         val saved = prefs.getString(key, null) ?: return fallback
@@ -173,5 +236,7 @@ internal class ToolStore(context: Context) {
         const val KEY_ERASER = "eraser"
         const val KEY_LASSO = "lasso"
         const val KEY_SHAPE = "shape"
+        const val KEY_NOTE = "note"
+        const val KEY_TABLE = "table"
     }
 }

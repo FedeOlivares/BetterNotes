@@ -65,6 +65,16 @@ internal object EditorIcons {
     val LassoRectangle by lazy { line("lasso-rectangle", "M3 7V4.500A1.500 1.500 0 0 1 4.500 3H7 M11 3h3 M21 11v3 M21 18v1.500a1.500 1.500 0 0 1-1.500 1.500H17 M13 21h-3 M6 21H4.500A1.500 1.500 0 0 1 3 19.500V18 M3 14v-3 M17.500 5.500l2 2-7 7-2.500.5.500-2.500z") }
     val LassoLocked by lazy { line("lasso-locked", dashedCircle() + "M8.500 11h7v5.500h-7z M10 11V9.500a2 2 0 0 1 4 0V11") }
     val LassoScreenshot by lazy { line("lasso-screenshot", dashedCircle() + "M8 10h1.500l1-1.500h3l1 1.500H16v6H8z M12 11a1.700 1.700 0 1 0 .01 0") }
+    val Bold by lazy { line("bold", "M8 5h5a3.500 3.500 0 0 1 0 7H8z M8 12h6a3.500 3.500 0 0 1 0 7H8z", width = 2.4f) }
+    val Italic by lazy { line("italic", "M10 5h7 M7 19h7 M14 5l-4 14") }
+    val Underline by lazy { line("underline", "M7 4v8a5 5 0 0 0 10 0V4 M6 20h12") }
+    val Strike by lazy { line("strike", "M17 7c-1-1.800-3-2.500-5-2.500-2.800 0-5 1.300-5 3.800 0 1.700 1 2.900 3 3.700 M4 12h16 M15.500 15c.5.600.8 1.300.8 2 0 2.300-2 3.500-4.800 3.500-2.300 0-4.200-.8-5.200-2.500") }
+    val AlignStart by lazy { line("align-start", "M4 6h16 M4 12h10 M4 18h13") }
+    val AlignCenter by lazy { line("align-center", "M4 6h16 M7 12h10 M5.500 18h13") }
+    val AlignEnd by lazy { line("align-end", "M4 6h16 M10 12h10 M7 18h13") }
+    val AlignTop by lazy { line("align-top", "M5 4h14 M12 20V8 M7.500 12.500L12 8l4.500 4.500") }
+    val AlignMiddle by lazy { line("align-middle", "M5 12h14 M12 3v5 M9.500 6L12 8.500 14.500 6 M12 21v-5 M9.500 18l2.500-2.500 2.500 2.500") }
+    val AlignBottom by lazy { line("align-bottom", "M5 20h14 M12 4v12 M7.500 11.500L12 16l4.500-4.500") }
     val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
     val Insert by lazy { line("insert", rrect(4f, 4f, 16f, 16f, 2.5f) + "M12 8v8 M8 12h8") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }

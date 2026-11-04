@@ -20,7 +20,9 @@ internal class PagePainter(private val editor: NoteEditor) {
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
-    private val items = ItemPainter()
+    private val items = ItemPainter { canvas, stroke ->
+        renderer.draw(canvas, editor.strokes.get(stroke), strokeToTile)
+    }
 
     /**
      * Paints [region], given in document points. [leftPx] and [topPx] are where the canvas's origin

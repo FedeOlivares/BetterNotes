@@ -12,6 +12,9 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TextStyle
+import app.betternotes.core.model.HorizontalAlign
+import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePoints
@@ -28,6 +31,11 @@ private const val TAG_TEXT = 4
 private const val TAG_STICKY = 5
 private const val TAG_TABLE = 6
 private const val TAG_AUDIO = 7
+
+// Added after format version 1 shipped, for items that use what it could not hold. An item that doesn't
+// is written under its old tag, so plain items keep their bytes.
+private const val TAG_STYLED_TEXT = 8
+private const val TAG_STYLED_TABLE = 9
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -59,6 +67,8 @@ internal val SHAPE_KINDS =
         ShapeKind.CYLINDER,
     )
 internal val IMAGE_SHAPES = WireEnum(ImageShape.RECTANGLE, ImageShape.ELLIPSE)
+internal val HORIZONTAL_ALIGNS = WireEnum(HorizontalAlign.START, HorizontalAlign.CENTER, HorizontalAlign.END)
+internal val VERTICAL_ALIGNS = WireEnum(VerticalAlign.TOP, VerticalAlign.MIDDLE, VerticalAlign.BOTTOM)
 
 /**
  * The file holding one page's items. Stroke samples are written as raw floats, which uses more
@@ -116,12 +126,21 @@ private fun ByteWriter.item(item: PageItem) {
             float(item.borderWidth)
         }
         is TextItem -> {
-            byte(TAG_TEXT)
+            val styled = item.style != TextStyle()
+            byte(if (styled) TAG_STYLED_TEXT else TAG_TEXT)
             long(item.id)
             frame(item.frame)
             string(item.text)
             float(item.textSize)
             int(item.color)
+            if (styled) {
+                bool(item.style.bold)
+                bool(item.style.italic)
+                bool(item.style.underline)
+                bool(item.style.strikethrough)
+                HORIZONTAL_ALIGNS.write(this, item.style.align)
+                VERTICAL_ALIGNS.write(this, item.style.verticalAlign)
+            }
         }
         is StickyNoteItem -> {
             byte(TAG_STICKY)
@@ -134,7 +153,8 @@ private fun ByteWriter.item(item: PageItem) {
             items(item.items)
         }
         is TableItem -> {
-            byte(TAG_TABLE)
+            val styled = item.headerRow || item.headerColumn || item.fillColor != 0
+            byte(if (styled) TAG_STYLED_TABLE else TAG_TABLE)
             long(item.id)
             frame(item.frame)
             floatList(item.columnWeights)
@@ -143,6 +163,11 @@ private fun ByteWriter.item(item: PageItem) {
             float(item.textSize)
             int(item.lineColor)
             float(item.lineWidth)
+            if (styled) {
+                bool(item.headerRow)
+                bool(item.headerColumn)
+                int(item.fillColor)
+            }
         }
         is AudioItem -> {
             byte(TAG_AUDIO)
@@ -152,6 +177,26 @@ private fun ByteWriter.item(item: PageItem) {
             long(item.durationMs)
         }
     }
+}
+
+private fun ByteReader.table(): TableItem {
+    val id = long()
+    val frame = frame()
+    val columns = floatList()
+    val rows = floatList()
+    val cellCount = columns.size.toLong() * rows.size
+    if (cellCount > remaining) throw CorruptFileException("$cellCount cells, $remaining bytes left")
+    val cells = List(cellCount.toInt()) { string() }
+    return TableItem(
+        id = id,
+        frame = frame,
+        columnWeights = columns,
+        rowWeights = rows,
+        cells = cells,
+        textSize = float(),
+        lineColor = int(),
+        lineWidth = float(),
+    )
 }
 
 private fun ByteReader.item(): PageItem = when (val tag = byte()) {
@@ -181,6 +226,21 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         borderColor = int(),
         borderWidth = float(),
     )
+    TAG_STYLED_TEXT -> TextItem(
+        id = long(),
+        frame = frame(),
+        text = string(),
+        textSize = float(),
+        color = int(),
+        style = TextStyle(
+            bold = bool(),
+            italic = bool(),
+            underline = bool(),
+            strikethrough = bool(),
+            align = HORIZONTAL_ALIGNS.read(this),
+            verticalAlign = VERTICAL_ALIGNS.read(this),
+        ),
+    )
     TAG_TEXT -> TextItem(
         id = long(),
         frame = frame(),
@@ -197,24 +257,9 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         closedHeight = float(),
         items = items(),
     )
-    TAG_TABLE -> {
-        val id = long()
-        val frame = frame()
-        val columns = floatList()
-        val rows = floatList()
-        val cellCount = columns.size.toLong() * rows.size
-        if (cellCount > remaining) throw CorruptFileException("$cellCount cells, $remaining bytes left")
-        val cells = List(cellCount.toInt()) { string() }
-        TableItem(
-            id = id,
-            frame = frame,
-            columnWeights = columns,
-            rowWeights = rows,
-            cells = cells,
-            textSize = float(),
-            lineColor = int(),
-            lineWidth = float(),
-        )
+    TAG_TABLE -> table()
+    TAG_STYLED_TABLE -> table().let { plain ->
+        plain.copy(headerRow = bool(), headerColumn = bool(), fillColor = int())
     }
     TAG_AUDIO -> AudioItem(
         id = long(),

@@ -22,6 +22,7 @@ import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import androidx.input.motionprediction.MotionEventPredictor
 import app.betternotes.core.edit.ItemsEdit
+import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.gesture.GestureConfig
@@ -34,14 +35,26 @@ import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.InkStyle
+import app.betternotes.core.geometry.Frame
+import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.model.TableItem
+import app.betternotes.core.model.TextItem
+import app.betternotes.core.model.TextStyle
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.DEFAULT_ERASABLE
 import app.betternotes.core.tools.EraseSession
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
+import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
+import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.cellAt
+import app.betternotes.core.tools.typedText
+import app.betternotes.core.tools.withCell
+import app.betternotes.core.tools.withText
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -60,6 +73,35 @@ sealed interface CanvasTool {
 
     /** Drags out a new shape. */
     data class Shape(val options: ShapeOptions) : CanvasTool
+
+    /** Places a sticky note, or opens, closes or types in the one under the pen. */
+    data class Sticky(val options: NoteOptions) : CanvasTool
+
+    /** Places text, or edits the text under the pen. */
+    data class Text(val options: NoteOptions) : CanvasTool
+
+    /** Places a table, or edits the cell under the pen. */
+    data class Table(val options: TableOptions) : CanvasTool
+}
+
+/**
+ * A request to show a text box over the canvas, in view pixels. [commitNow] is filled in by whoever shows
+ * it, so that the canvas can end the edit when the pen comes down somewhere else.
+ */
+class TextEditRequest(
+    val initial: String,
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float,
+    val textSizePx: Float,
+    val color: Int,
+    val style: TextStyle,
+    private val commit: (String) -> Unit,
+) {
+    var commitNow: () -> Unit = {}
+
+    fun finish(text: String) = commit(text)
 }
 
 /** Reports what happens in the view, for the performance probe. */
@@ -79,6 +121,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Called whenever the zoom changes. */
     var onZoomChanged: (zoom: Float) -> Unit = {}
+
+    /** Asks for a text box. Null takes it away. */
+    var onTextEdit: (TextEditRequest?) -> Unit = {}
+
+    private var textEdit: TextEditRequest? = null
 
     /** Called whenever the page moves under the view, for the page and zoom indicator. */
     var onViewMoved: () -> Unit = {}
@@ -268,7 +315,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         )
     }
 
-    private class PendingStroke(val editor: NoteEditor, val pageId: Long, val style: InkStyle)
+    private class PendingStroke(val editor: NoteEditor, val pageId: Long, val style: InkStyle, val stickyId: Long?)
+
+    /** The open note that the stroke in progress belongs to, if it started in one. */
+    private var strokeStickyId: Long? = null
 
     init {
         setBackgroundColor(backdropColor)
@@ -347,6 +397,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val y = layout.originY(currentPage)
             Bounds(world.left - x, world.top - y, world.right - x, world.bottom - y)
         }
+        endTextEdit()
         lasso.clear()
         clearEdit(page.id, editor.content(page.id), region)?.let { editor.perform(it) }
         syncChanges()
@@ -542,6 +593,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val page = editor.document.pages[index]
         drawPointerId = pointerId
         drawPageIndex = index
+        endTextEdit()
+        strokeStickyId = null
+        if (kind != PointerKind.STYLUS_ERASER && handlePlacement(index, pageX(x, index), pageY(y, index))) return
 
         val tool = tool
         if (kind == PointerKind.STYLUS_ERASER || tool is CanvasTool.Eraser) {
@@ -650,6 +704,190 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         strokeId = null
     }
 
+    // ---- Placing notes, text and tables ----
+
+    /**
+     * What the pen does when it comes down on or for one of these. Returns true if that was all it did.
+     * Ink on a closed note opens it, and ink in an open one will stay in it.
+     */
+    private fun handlePlacement(index: Int, x: Float, y: Float): Boolean {
+        val editor = editor ?: return false
+        val page = editor.document.pages[index]
+        val content = editor.content(page.id)
+        val sticky = topItemOfType<StickyNoteItem>(page.id, x, y)
+        if (sticky != null && (tool is CanvasTool.Sticky || tool is CanvasTool.Ink)) {
+            val (at, note) = sticky
+            when {
+                !note.isOpen -> setSticky(page.id, at, note.copy(isOpen = true))
+                note.isInFoldCorner(x, y) -> setSticky(page.id, at, note.copy(isOpen = false))
+                tool is CanvasTool.Ink -> {
+                    strokeStickyId = note.id
+                    return false
+                }
+                else -> editStickyText(index, page.id, note)
+            }
+            return true
+        }
+        when (val current = tool) {
+            is CanvasTool.Sticky -> {
+                val note = current.options.newSticky(x, y)
+                editor.perform(ItemsEdit.addOnTop(page.id, content, note))
+                syncChanges()
+                editStickyText(index, page.id, note)
+            }
+            is CanvasTool.Text -> {
+                val found = topItemOfType<TextItem>(page.id, x, y)?.second
+                val item = found ?: TextItem(
+                    IdSource.Random.next(),
+                    Frame(x, y, NEW_TEXT_WIDTH_PT, NEW_TEXT_HEIGHT_PT),
+                    "",
+                    current.options.textSize.toFloat(),
+                    NoteOptions.TEXT_COLOR,
+                    current.options.style,
+                )
+                editText(index, page.id, item, isNew = found == null)
+            }
+            is CanvasTool.Table -> {
+                val found = topItemOfType<TableItem>(page.id, x, y)?.second
+                if (found != null) {
+                    editCell(index, page.id, found, found.cellAt(x, y))
+                } else {
+                    editor.perform(ItemsEdit.addOnTop(page.id, content, current.options.newTable(x, y)))
+                    syncChanges()
+                }
+            }
+            else -> return false
+        }
+        return true
+    }
+
+    private inline fun <reified T : PageItem> topItemOfType(pageId: Long, x: Float, y: Float): Pair<Int, T>? {
+        val content = editor?.content(pageId) ?: return null
+        for (i in content.size - 1 downTo 0) {
+            val item = content[i]
+            if (item is T && item.bounds.contains(x, y)) return i to item
+        }
+        return null
+    }
+
+    private fun indexOfItem(pageId: Long, id: Long): Int {
+        val content = editor?.content(pageId) ?: return -1
+        for (i in 0 until content.size) if (content[i].id == id) return i
+        return -1
+    }
+
+    private fun setSticky(pageId: Long, at: Int, note: StickyNoteItem) {
+        val editor = editor ?: return
+        editor.perform(ItemsEdit.replace(pageId, editor.content(pageId), intArrayOf(at), listOf(note)))
+        syncChanges()
+    }
+
+    private fun addToSticky(editor: NoteEditor, pageId: Long, stickyId: Long, stroke: StrokeItem): Boolean {
+        val at = indexOfItem(pageId, stickyId)
+        val note = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? StickyNoteItem ?: return false
+        val relative = stroke.transformed(Affine.translate(-note.frame.left, -note.frame.top))
+        setSticky(pageId, at, note.copy(items = note.items + relative))
+        return true
+    }
+
+    private fun StickyNoteItem.isInFoldCorner(x: Float, y: Float): Boolean {
+        val reach = STICKY_CORNER_DP * resources.displayMetrics.density / viewport.pxPerPt
+        return x > frame.left + frame.width - reach && y > frame.top + frame.height - reach
+    }
+
+    private fun editStickyText(index: Int, pageId: Long, note: StickyNoteItem) {
+        val options = (tool as? CanvasTool.Sticky)?.options ?: NoteOptions()
+        val inset = NoteOptions.STICKY_TEXT_INSET
+        val size = options.textSize.toFloat()
+        beginTextEdit(
+            index,
+            Frame(note.frame.left + inset, note.frame.top + inset, note.frame.width - 2 * inset, note.frame.height - 2 * inset),
+            note.typedText,
+            size,
+            NoteOptions.TEXT_COLOR,
+            options.style,
+        ) { text ->
+            val at = indexOfItem(pageId, note.id)
+            val latest = editor?.content(pageId)?.takeIf { at >= 0 }?.get(at) as? StickyNoteItem
+            if (latest != null && text != latest.typedText) setSticky(pageId, at, latest.withText(text, size, options.style))
+        }
+    }
+
+    private fun editText(index: Int, pageId: Long, item: TextItem, isNew: Boolean) {
+        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style) { text ->
+            val editor = editor ?: return@beginTextEdit
+            val content = editor.content(pageId)
+            val at = indexOfItem(pageId, item.id)
+            when {
+                isNew && text.isNotEmpty() -> editor.perform(ItemsEdit.addOnTop(pageId, content, item.copy(text = text)))
+                at >= 0 && text.isEmpty() -> editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(at)))
+                at >= 0 && text != item.text ->
+                    editor.perform(ItemsEdit.replace(pageId, content, intArrayOf(at), listOf(item.copy(text = text))))
+            }
+            syncChanges()
+        }
+    }
+
+    private fun editCell(index: Int, pageId: Long, table: TableItem, cell: Int) {
+        if (cell < 0) return
+        val columns = table.columnWeights.size
+        val column = cell % columns
+        val row = cell / columns
+        val columnTotal = table.columnWeights.sum()
+        val rowTotal = table.rowWeights.sum()
+        val left = table.frame.left + table.columnWeights.take(column).sum() / columnTotal * table.frame.width
+        val top = table.frame.top + table.rowWeights.take(row).sum() / rowTotal * table.frame.height
+        val box = Frame(
+            left + CELL_INSET_PT,
+            top + CELL_INSET_PT,
+            table.columnWeights[column] / columnTotal * table.frame.width - 2 * CELL_INSET_PT,
+            table.rowWeights[row] / rowTotal * table.frame.height - 2 * CELL_INSET_PT,
+        )
+        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle()) { text ->
+            val editor = editor ?: return@beginTextEdit
+            val at = indexOfItem(pageId, table.id)
+            val latest = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? TableItem
+            if (latest != null && text != latest.cells[cell]) {
+                editor.perform(ItemsEdit.replace(pageId, editor.content(pageId), intArrayOf(at), listOf(latest.withCell(cell, text))))
+                syncChanges()
+            }
+        }
+    }
+
+    private fun beginTextEdit(
+        index: Int,
+        box: Frame,
+        initial: String,
+        size: Float,
+        color: Int,
+        style: TextStyle,
+        commit: (String) -> Unit,
+    ) {
+        val layout = layout ?: return
+        val scale = viewport.pxPerPt
+        val request = TextEditRequest(
+            initial,
+            viewport.toScreenX(layout.originX(index) + box.left),
+            viewport.toScreenY(layout.originY(index) + box.top),
+            box.width * scale,
+            box.height * scale,
+            size * scale,
+            color,
+            style,
+            commit,
+        )
+        textEdit = request
+        onTextEdit(request)
+    }
+
+    /** Finishes any text being typed. */
+    fun endTextEdit() {
+        val request = textEdit ?: return
+        textEdit = null
+        request.commitNow()
+        onTextEdit(null)
+    }
+
     private fun pageX(screenX: Float, index: Int) = viewport.toWorldX(screenX) - (layout?.originX(index) ?: 0f)
 
     private fun pageY(screenY: Float, index: Int) = viewport.toWorldY(screenY) - (layout?.originY(index) ?: 0f)
@@ -674,7 +912,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return
         }
         val id = wet.startStroke(event, drawPointerId, InkBrushes.brush(drawStyle), screenToPage)
-        pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle)
+        pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle, strokeStickyId)
         strokeId = id
         strokeStartedInThisEvent = true
         if (holdDelayMs > 0L) watchForHold(event)
@@ -715,7 +953,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         strokeStartY = start[1]
         screenToPage.invert(pageToScreen)
         val id = wet.startStroke(strokeInput(strokeStartX, strokeStartY, 0L), InkBrushes.brush(drawStyle), pageToScreen)
-        pendingStrokes[id] = PendingStroke(editor, pageId, drawStyle)
+        pendingStrokes[id] = PendingStroke(editor, pageId, drawStyle, strokeStickyId)
         strokeId = id
         straightening = true
         strokeStartedInThisEvent = true
@@ -832,6 +1070,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val pending = pendingStrokes.remove(id) ?: continue
             val editor = pending.editor
             val item = StrokeItem(IdSource.Random.next(), pending.style, stroke.inputs.toStrokePoints())
+            val stickyId = pending.stickyId
+            if (stickyId != null && addToSticky(editor, pending.pageId, stickyId, item)) continue
             editor.strokes.put(item, stroke)
             editor.perform(ItemsEdit.addOnTop(pending.pageId, editor.content(pending.pageId), item))
         }
@@ -994,6 +1234,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         /** How far a held pen can wander and still count as still. */
         const val HOLD_SLOP_DP = 3f
         const val MIN_HOLD_CHECK_MS = 8L
+        const val NEW_TEXT_WIDTH_PT = 200f
+        const val NEW_TEXT_HEIGHT_PT = 60f
+        const val CELL_INSET_PT = 3f
+        const val STICKY_CORNER_DP = 28f
 
         /** Long enough to cross the screen at any angle, wherever two fingers carry it. */
         const val RULER_LENGTH_OF_DIAGONAL = 3f

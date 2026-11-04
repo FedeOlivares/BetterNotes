@@ -17,13 +17,17 @@ import app.betternotes.core.model.Document
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageBackground
 import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.EraseMode
 import app.betternotes.core.tools.ItemKind
+import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
+import app.betternotes.core.tools.TableOptions
 import app.betternotes.ui.MainActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -365,6 +369,38 @@ class CanvasViewTest {
         assertEquals(80f, shape.frame.height, 0.5f)
         onMain { canvas.undo() }
         assertEquals(0, pageContent().size)
+    }
+
+    @Test
+    fun inkInAnOpenNoteStaysInItAndATapOnAClosedOneOpensIt() {
+        onMain { canvas.tool = CanvasTool.Sticky(NoteOptions()) }
+        val at = worldToScreen(100f, 100f)
+        drag(MotionEvent.TOOL_TYPE_STYLUS, at, at.first + 1f to at.second)
+        waitUntil { pageContent().size == 1 }
+        onMain { canvas.endTextEdit() }
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle()) }
+
+        SystemClock.sleep(100)
+        stylusStroke(worldToScreen(120f, 120f), worldToScreen(180f, 150f))
+        waitUntil { (onMain { pageContent()[0] } as StickyNoteItem).items.isNotEmpty() }
+        assertEquals(1, pageContent().size)
+        val note = onMain { pageContent()[0] as StickyNoteItem }
+        val ink = note.items.single() as StrokeItem
+        // Kept relative to the note, so that it moves with it.
+        assertEquals(20f, ink.points.x(0), 0.5f)
+        assertEquals(20f, ink.points.y(0), 0.5f)
+    }
+
+    @Test
+    fun aTableIsPlacedWhereThePenLands() {
+        val options = TableOptions(columns = 2, rows = 2)
+        onMain { canvas.tool = CanvasTool.Table(options) }
+        val at = worldToScreen(100f, 100f)
+        drag(MotionEvent.TOOL_TYPE_STYLUS, at, at.first + 1f to at.second)
+        waitUntil { pageContent().size == 1 }
+        val table = onMain { pageContent()[0] as TableItem }
+        assertEquals(100f, table.frame.left, 0.5f)
+        assertEquals(4, table.cells.size)
     }
 
     @Test

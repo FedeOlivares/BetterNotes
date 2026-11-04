@@ -8,12 +8,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.betternotes.canvas.CanvasTool
 import app.betternotes.canvas.CanvasView
+import app.betternotes.canvas.TextEditRequest
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.InkTool
+import app.betternotes.core.model.TextStyle
 import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.LassoOptions
+import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
+import app.betternotes.core.tools.TableOptions
 
 /** The tools the strip can put in the pen's hand so far. */
 internal enum class ActiveTool(val ink: InkTool?) {
@@ -24,12 +28,15 @@ internal enum class ActiveTool(val ink: InkTool?) {
     LASER(null),
     LASSO(null),
     SHAPE(null),
+    STICKY(null),
+    TEXT(null),
+    TABLE(null),
 }
 
-private val ActiveTool.hasPanel get() = ink != null || this == ActiveTool.ERASER || this == ActiveTool.LASSO || this == ActiveTool.SHAPE
+private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.LASER
 
 /** What the color wheel's result is for. */
-internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL }
+internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL }
 
 /** What the toolbars show, and the one place that passes their choices on to the canvas. */
 @Stable
@@ -47,6 +54,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     var lasso by mutableStateOf(store.lasso())
         private set
     var shape by mutableStateOf(store.shape())
+        private set
+    var note by mutableStateOf(store.note())
+        private set
+    var table by mutableStateOf(store.table())
+        private set
+    var textEdit by mutableStateOf<TextEditRequest?>(null)
         private set
     var panelOpen by mutableStateOf(false)
     var toolRowCollapsed by mutableStateOf(false)
@@ -85,6 +98,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
         canUndo = canvas.canUndo
         canRedo = canvas.canRedo
+        canvas.onTextEdit = { textEdit = it }
         canvas.onViewMoved = ::refreshPosition
         canvas.onZoomChanged = { refreshPosition() }
         refreshPosition()
@@ -96,6 +110,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             if (tool.hasPanel) panelOpen = !panelOpen
             return
         }
+        canvas.endTextEdit()
         activeTool = tool
         colorTarget = null
         if (!tool.hasPanel) panelOpen = false
@@ -133,11 +148,33 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
     }
 
+    fun updateNote(change: (NoteOptions) -> NoteOptions) {
+        note = change(note)
+        applyTool()
+    }
+
+    fun updateNoteStyle(change: (TextStyle) -> TextStyle) = updateNote { it.copy(style = change(it.style)) }
+
+    fun updateTable(change: (TableOptions) -> TableOptions) {
+        table = change(table)
+        applyTool()
+    }
+
+    fun tapTableFill() {
+        if (table.fillColor ushr ALPHA_SHIFT != 0) {
+            updateTable { it.copy(fillColor = 0) }
+        } else {
+            colorTarget = ColorTarget.TABLE_FILL
+        }
+    }
+
     /** The color the wheel opens on. */
     val colorStart: Int
         get() = when (colorTarget) {
             ColorTarget.SHAPE_BORDER -> shape.color
-            ColorTarget.SHAPE_FILL -> DEFAULT_FILL
+            ColorTarget.SHAPE_FILL, ColorTarget.TABLE_FILL -> DEFAULT_FILL
+            ColorTarget.NOTE -> note.color
+            ColorTarget.TABLE_BORDER -> table.color
             else -> preset?.color ?: DEFAULT_FILL
         }
 
@@ -150,6 +187,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         store.save(eraser)
         store.save(lasso)
         store.save(shape)
+        store.save(note)
+        store.save(table)
     }
 
     fun applyColor(color: Int) {
@@ -159,6 +198,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.PALETTE -> update { it.withPaletteColor(color).pickColor(color) }
             ColorTarget.SHAPE_BORDER -> updateShape { it.withColor(color) }
             ColorTarget.SHAPE_FILL -> updateShape { it.copy(fillColor = color) }
+            ColorTarget.NOTE -> updateNote { it.withColor(color) }
+            ColorTarget.TABLE_BORDER -> updateTable { it.withColor(color) }
+            ColorTarget.TABLE_FILL -> updateTable { it.copy(fillColor = color) }
             null -> Unit
         }
         colorTarget = null
@@ -220,6 +262,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             activeTool == ActiveTool.LASER -> CanvasTool.Laser
             activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly)
             activeTool == ActiveTool.SHAPE -> CanvasTool.Shape(shape)
+            activeTool == ActiveTool.STICKY -> CanvasTool.Sticky(note)
+            activeTool == ActiveTool.TEXT -> CanvasTool.Text(note)
+            activeTool == ActiveTool.TABLE -> CanvasTool.Table(table)
             else -> CanvasTool.Eraser(eraser.mode, eraser.radiusPt, eraser.kinds)
         }
     }

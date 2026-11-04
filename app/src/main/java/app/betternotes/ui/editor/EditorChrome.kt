@@ -84,7 +84,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     val notices = rememberNotices()
     val preset = state.preset
 
-    LaunchedEffect(preset, state.eraser, state.lasso, state.shape) {
+    LaunchedEffect(preset, state.eraser, state.lasso, state.shape, state.note, state.table) {
         delay(SAVE_DELAY_MS)
         state.saveTools()
     }
@@ -117,6 +117,10 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                         LassoRow(state, state.lasso, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     } else if (state.activeTool == ActiveTool.SHAPE) {
                         ShapeRow(state, state.shape, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                    } else if (state.activeTool == ActiveTool.STICKY || state.activeTool == ActiveTool.TEXT) {
+                        NoteRow(state, state.note, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW), state.activeTool == ActiveTool.STICKY)
+                    } else if (state.activeTool == ActiveTool.TABLE) {
+                        TableRow(state, state.table, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
                     }
                 }
             },
@@ -151,6 +155,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         }
 
         PositionControls(state, Modifier.align(Alignment.BottomStart), Modifier.align(Alignment.CenterEnd))
+        state.textEdit?.let { request -> TextEditOverlay(request) { request.finish(it) } }
 
         val panelTop = EdgeMargin + PillHeight + PillGap + PillHeight + PanelGap
         val panelModifier = Modifier
@@ -165,6 +170,9 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 state.activeTool == ActiveTool.ERASER -> EraserPanel(state, state.eraser, notices, sheet)
                 state.activeTool == ActiveTool.LASSO -> LassoPanel(state, state.lasso, notices, sheet)
                 state.activeTool == ActiveTool.SHAPE -> ShapePanel(state, state.shape, sheet)
+                state.activeTool == ActiveTool.STICKY -> NotePanel(state, state.note, sheet, sticky = true)
+                state.activeTool == ActiveTool.TEXT -> NotePanel(state, state.note, sheet, sticky = false)
+                state.activeTool == ActiveTool.TABLE -> TablePanel(state, state.table, sheet)
             }
         }
     }
@@ -195,10 +203,10 @@ private val StripItems by lazy {
         StripItem(EditorIcons.Tape, R.string.tool_tape),
         StripItem(EditorIcons.Shapes, R.string.tool_shapes, ActiveTool.SHAPE),
         StripItem(EditorIcons.Image, R.string.tool_image),
-        StripItem(EditorIcons.Text, R.string.tool_text),
-        StripItem(EditorIcons.StickyNote, R.string.tool_sticky),
+        StripItem(EditorIcons.Text, R.string.tool_text, ActiveTool.TEXT),
+        StripItem(EditorIcons.StickyNote, R.string.tool_sticky, ActiveTool.STICKY),
         StripItem(EditorIcons.Sticker, R.string.tool_sticker),
-        StripItem(EditorIcons.Table, R.string.tool_table),
+        StripItem(EditorIcons.Table, R.string.tool_table, ActiveTool.TABLE),
         StripItem(EditorIcons.Tray, R.string.tool_clipboard),
         StripItem(EditorIcons.AddElement, R.string.tool_add_element),
         StripItem(EditorIcons.Loupe, R.string.tool_loupe),

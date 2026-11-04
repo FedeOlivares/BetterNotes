@@ -51,6 +51,18 @@
     <string name="pen_calligraphy">Calligraphy</string>
 
     <string name="panel_close">Close</string>
+    <string name="panel_font_size">Font size</string>
+    <string name="panel_style">Style</string>
+    <string name="panel_horizontal_alignment">Horizontal alignment</string>
+    <string name="panel_vertical_alignment">Vertical alignment</string>
+    <string name="style_bold">Bold</string>
+    <string name="style_italic">Italic</string>
+    <string name="style_underline">Underline</string>
+    <string name="style_strike">Strikethrough</string>
+    <string name="panel_header_column">Header column</string>
+    <string name="panel_header_row">Header row</string>
+    <string name="panel_column_count">Column count</string>
+    <string name="panel_row_count">Row count</string>
     <string name="panel_border_width">Border width</string>
     <string name="panel_dash_size">Dash size</string>
     <string name="panel_corner_radius">Corner radius</string>

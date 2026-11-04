@@ -158,12 +158,27 @@ data class ImageItem(
     }
 }
 
+enum class HorizontalAlign { START, CENTER, END }
+
+enum class VerticalAlign { TOP, MIDDLE, BOTTOM }
+
+/** How typed text looks, beyond its size and color. */
+data class TextStyle(
+    val bold: Boolean = false,
+    val italic: Boolean = false,
+    val underline: Boolean = false,
+    val strikethrough: Boolean = false,
+    val align: HorizontalAlign = HorizontalAlign.START,
+    val verticalAlign: VerticalAlign = VerticalAlign.TOP,
+)
+
 data class TextItem(
     override val id: Long,
     val frame: Frame,
     val text: String,
     val textSize: Float = 12f,
     val color: Int = 0xFF000000.toInt(),
+    val style: TextStyle = TextStyle(),
 ) : PageItem {
     override val bounds get() = frame.bounds
 
@@ -223,6 +238,9 @@ data class TableItem(
     val textSize: Float = 12f,
     val lineColor: Int = 0xFF000000.toInt(),
     val lineWidth: Float = 1f,
+    val headerRow: Boolean = false,
+    val headerColumn: Boolean = false,
+    val fillColor: Int = 0,
 ) : PageItem {
     init {
         require(columnWeights.isNotEmpty() && rowWeights.isNotEmpty()) { "A table needs cells" }
