@@ -25,7 +25,7 @@
     <string name="menu_perf">Show performance readout</string>
 
     <string name="tool_pen">Pen</string>
-    <string name="tool_pencil">Pencil</string>
+    <string name="tool_pencil">Creative brush</string>
     <string name="tool_highlighter">Highlighter</string>
     <string name="tool_eraser">Eraser</string>
     <string name="tool_lasso">Lasso</string>
@@ -173,4 +173,15 @@
     <string name="add_file_detail">Pictures from your files</string>
     <string name="info_color_list">Touch a color to use it. Drag the dots to put colors in order.</string>
     <string name="color_list_drag">Move color</string>
+    <string name="brush_pencil">Pencil</string>
+    <string name="brush_oil">Oil</string>
+    <string name="brush_spill">Spill</string>
+    <string name="brush_watercolor">Watercolor</string>
+    <string name="brush_comics">Comics</string>
+    <string name="brush_scratches">Scratches</string>
+    <string name="brush_dots">Dots</string>
+    <string name="brush_leaves">Leaves</string>
+    <string name="brush_cross">Cross</string>
+    <string name="brush_glow">Glow</string>
+    <string name="panel_brush_type">Brush type</string>
 </resources>

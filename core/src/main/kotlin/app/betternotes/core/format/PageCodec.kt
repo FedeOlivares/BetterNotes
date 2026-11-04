@@ -4,6 +4,7 @@ import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
+import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
@@ -45,6 +46,18 @@ private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
 internal val INK_TOOLS = WireEnum(InkTool.PEN, InkTool.PENCIL, InkTool.HIGHLIGHTER)
 internal val PEN_TYPES = WireEnum(PenType.NATURAL, PenType.BALL, PenType.CALLIGRAPHY)
 internal val TIP_SHAPES = WireEnum(TipShape.ROUND, TipShape.SQUARE)
+internal val BRUSH_KINDS = WireEnum(
+    BrushKind.PENCIL,
+    BrushKind.OIL,
+    BrushKind.SPILL,
+    BrushKind.WATERCOLOR,
+    BrushKind.COMICS,
+    BrushKind.SCRATCHES,
+    BrushKind.DOTS,
+    BrushKind.LEAVES,
+    BrushKind.CROSS,
+    BrushKind.GLOW,
+)
 internal val LINE_KINDS = WireEnum(LineKind.SOLID, LineKind.DOTTED, LineKind.DASHED)
 internal val SHAPE_KINDS =
     WireEnum(
@@ -318,6 +331,7 @@ private fun ByteWriter.inkStyle(style: InkStyle) {
     float(style.width)
     float(style.opacity)
     lineStyle(style.line)
+    if (version >= 3) BRUSH_KINDS.write(this, style.brush)
 }
 
 private fun ByteReader.inkStyle() = InkStyle(
@@ -328,6 +342,7 @@ private fun ByteReader.inkStyle() = InkStyle(
     width = float(),
     opacity = float(),
     line = lineStyle(),
+    brush = if (version >= 3) BRUSH_KINDS.read(this) else BrushKind.PENCIL,
 )
 
 private fun ByteWriter.lineStyle(style: LineStyle) {

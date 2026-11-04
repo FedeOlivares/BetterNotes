@@ -1,5 +1,6 @@
 package app.betternotes.core.tools
 
+import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
@@ -31,6 +32,8 @@ data class InkPreset(
     val scribbleToErase: Boolean = false,
     val circleToLasso: Boolean = false,
     val stabilization: Int = 1,
+    /** For the pencil slot, which creative brush it draws with. */
+    val brush: BrushKind = BrushKind.PENCIL,
 ) {
     init {
         require(colors.size == DEFAULT_COLOR_SLOTS || colors.size == DEFAULT_COLOR_SLOTS + 1) { "${colors.size} colors" }
@@ -54,6 +57,7 @@ data class InkPreset(
         width = thickness * POINTS_PER_THICKNESS_UNIT,
         opacity = opacity,
         line = LineStyle(kind = line),
+        brush = brush,
     )
 
     /** Fine-tunes the width slot in use. */

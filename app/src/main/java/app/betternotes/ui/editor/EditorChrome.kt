@@ -272,7 +272,7 @@ private val StripItems by lazy {
     listOf(
         StripItem(EditorIcons.Lasso, R.string.tool_lasso, ActiveTool.LASSO),
         StripItem(EditorIcons.Pen, R.string.tool_pen, ActiveTool.PEN),
-        StripItem(EditorIcons.Pencil, R.string.tool_pencil, ActiveTool.PENCIL),
+        StripItem(EditorIcons.Brush, R.string.tool_pencil, ActiveTool.PENCIL),
         StripItem(EditorIcons.Highlighter, R.string.tool_highlighter, ActiveTool.HIGHLIGHTER),
         StripItem(EditorIcons.Eraser, R.string.tool_eraser, ActiveTool.ERASER),
         StripItem(EditorIcons.Tape, R.string.tool_tape, ActiveTool.TAPE),

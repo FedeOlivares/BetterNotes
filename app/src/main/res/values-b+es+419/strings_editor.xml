@@ -26,7 +26,7 @@
     <string name="menu_perf">Mostrar datos de rendimiento</string>
 
     <string name="tool_pen">Pluma</string>
-    <string name="tool_pencil">Lápiz</string>
+    <string name="tool_pencil">Pincel creativo</string>
     <string name="tool_highlighter">Resaltador</string>
     <string name="tool_eraser">Borrador</string>
     <string name="tool_lasso">Lazo</string>
@@ -174,4 +174,15 @@
     <string name="add_file_detail">Imágenes de tus archivos</string>
     <string name="info_color_list">Toca un color para usarlo. Arrastra los puntos para ordenar los colores.</string>
     <string name="color_list_drag">Mover color</string>
+    <string name="brush_pencil">Lápiz</string>
+    <string name="brush_oil">Óleo</string>
+    <string name="brush_spill">Derrame</string>
+    <string name="brush_watercolor">Acuarela</string>
+    <string name="brush_comics">Cómic</string>
+    <string name="brush_scratches">Rasguños</string>
+    <string name="brush_dots">Puntos</string>
+    <string name="brush_leaves">Hojas</string>
+    <string name="brush_cross">Cruz</string>
+    <string name="brush_glow">Brillo</string>
+    <string name="panel_brush_type">Tipo de pincel</string>
 </resources>

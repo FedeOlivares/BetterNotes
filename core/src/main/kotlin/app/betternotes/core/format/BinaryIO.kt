@@ -15,10 +15,10 @@ class UnsupportedVersionException(val version: Int) : IOException("Unsupported f
 internal const val FORMAT_VERSION = 1
 
 /**
- * The page files are at version 2: shapes gained a tip length and width. Version 1 pages still open, and
- * their shapes get the default tips. The other files are still at [FORMAT_VERSION].
+ * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).
+ * Older pages still open, with the default tips and the pencil brush. The other files are still at [FORMAT_VERSION].
  */
-internal const val PAGE_FORMAT_VERSION = 2
+internal const val PAGE_FORMAT_VERSION = 3
 
 private const val MAGIC_SIZE = 4
 private const val CRC_SIZE = 4

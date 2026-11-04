@@ -2,6 +2,7 @@ package app.betternotes.ui.editor
 
 import android.content.Context
 import androidx.core.content.edit
+import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
@@ -241,6 +242,7 @@ internal class ToolStore(context: Context) {
         put("scribbleToErase", preset.scribbleToErase)
         put("circleToLasso", preset.circleToLasso)
         put("stabilization", preset.stabilization)
+        put("brush", preset.brush.name)
     }
 
     private fun decode(tool: InkTool, json: JSONObject) = InkPreset(
@@ -259,6 +261,7 @@ internal class ToolStore(context: Context) {
         scribbleToErase = json.getBoolean("scribbleToErase"),
         circleToLasso = json.getBoolean("circleToLasso"),
         stabilization = json.getInt("stabilization"),
+        brush = BrushKind.entries.firstOrNull { it.name == json.optString("brush") } ?: BrushKind.PENCIL,
     )
 
     private fun JSONArray.ints() = List(length()) { getInt(it) }

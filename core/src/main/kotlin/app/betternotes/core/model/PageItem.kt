@@ -34,6 +34,9 @@ enum class PenType { NATURAL, BALL, CALLIGRAPHY }
 
 enum class TipShape { ROUND, SQUARE }
 
+/** The kinds of the creative brush, which is what the pencil slot of the toolbar holds. */
+enum class BrushKind { PENCIL, OIL, SPILL, WATERCOLOR, COMICS, SCRATCHES, DOTS, LEAVES, CROSS, GLOW }
+
 /** [color] is ARGB, and [opacity] multiplies its alpha. [width] is the widest the line can get, in points. */
 data class InkStyle(
     val tool: InkTool = InkTool.PEN,
@@ -43,6 +46,8 @@ data class InkStyle(
     val width: Float = 2f,
     val opacity: Float = 1f,
     val line: LineStyle = LineStyle.Solid,
+    /** Which creative brush a pencil-slot stroke was drawn with. The pen and the highlighter ignore it. */
+    val brush: BrushKind = BrushKind.PENCIL,
 )
 
 /**

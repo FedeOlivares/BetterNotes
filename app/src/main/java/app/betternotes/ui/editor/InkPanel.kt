@@ -135,6 +135,9 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
         if (preset.tool == InkTool.PEN) {
             PenTypeCards(preset.penType) { type -> state.update { it.copy(penType = type) } }
         }
+        if (preset.tool == InkTool.PENCIL) {
+            BrushTypeSelector(preset, state.screenDpi) { kind -> state.update { it.copy(brush = kind) } }
+        }
         LabeledRow(R.string.panel_thickness) { ValuePill { ValueText(preset.thickness.toString()) } }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) {
