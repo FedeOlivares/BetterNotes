@@ -83,6 +83,24 @@ object StrokeGestures {
     /** The stroke as packed x,y pairs, for [selectWithLasso]. */
     fun polygon(points: StrokePoints): FloatArray = sample(points)
 
+    /** Whether (x, y) is inside the shape the stroke's points enclose, closing it from its last point to its first. */
+    fun isInside(points: StrokePoints, x: Float, y: Float): Boolean {
+        val path = sample(points)
+        var inside = false
+        var j = path.size - 2
+        var i = 0
+        while (i < path.size) {
+            val xi = path[i]
+            val yi = path[i + 1]
+            val xj = path[j]
+            val yj = path[j + 1]
+            if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+            j = i
+            i += 2
+        }
+        return inside
+    }
+
     /** Whether (x, y) is within [tolerance] of the stroke's line. */
     fun isNearLine(points: StrokePoints, x: Float, y: Float, tolerance: Float): Boolean {
         for (i in 0 until points.size - 1) {

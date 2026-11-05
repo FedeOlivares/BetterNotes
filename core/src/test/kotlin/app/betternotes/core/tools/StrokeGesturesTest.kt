@@ -93,4 +93,10 @@ class StrokeGesturesTest {
         }
         assertEquals(after(2L), after(8L), 1f)
     }
+
+    @Test fun `a point is inside a circle only within its line`() {
+        val loop = circle(1.05f)
+        assertTrue(StrokeGestures.isInside(loop, 100f, 100f))
+        assertFalse(StrokeGestures.isInside(loop, 200f, 100f))
+    }
 }

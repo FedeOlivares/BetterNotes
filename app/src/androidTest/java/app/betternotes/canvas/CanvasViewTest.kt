@@ -611,6 +611,28 @@ class CanvasViewTest {
         assertEquals(150f, onMain { frame().centerX }, 2f)
     }
 
+    @Test
+    fun aFingerTappingInsideACircleDrawnWithCircleToLassoSelectsIt() {
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), circleToLasso = true) }
+        var requested = false
+        onMain { canvas.onLassoRequested = { requested = true } }
+        stylusStroke(worldToScreen(190f, 200f), worldToScreen(210f, 200f))
+        waitUntil { pageContent().size == 1 }
+        val circle = (0..60).map { i ->
+            val angle = 2.0 * Math.PI * 1.05 * i / 60
+            worldToScreen((200 + 60 * Math.cos(angle)).toFloat(), (200 + 60 * Math.sin(angle)).toFloat())
+        }
+        stylusPath(circle)
+        waitUntil { pageContent().size == 2 }
+        val inside = worldToScreen(200f, 240f)
+        val tool = MotionEvent.TOOL_TYPE_FINGER
+        val down = SystemClock.uptimeMillis()
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(inside)))
+        send(event(down, down + 40, MotionEvent.ACTION_UP, tool, listOf(inside)))
+        waitUntil { onMain { requested } }
+        assertEquals(1, pageContent().size)
+    }
+
     // ---- Helpers ----
 
     private fun stylusPath(points: List<Pair<Float, Float>>) {

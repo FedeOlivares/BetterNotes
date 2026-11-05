@@ -930,7 +930,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val editor = editor ?: return
         val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
         if (index < 0) return
-        selectLoopAt(index, editor.document.pages[index].id, pageX(x, index), pageY(y, index))
+        selectLoopAt(index, editor.document.pages[index].id, pageX(x, index), pageY(y, index), byFinger = true)
     }
 
     private fun pointerDown(event: MotionEvent, index: Int) {
@@ -2163,12 +2163,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     /** Touching the last circle's line selects what it surrounds, and hands the canvas over to the lasso. */
-    private fun selectLoopAt(pageIndex: Int, pageId: Long, x: Float, y: Float): Boolean {
+    private fun selectLoopAt(pageIndex: Int, pageId: Long, x: Float, y: Float, byFinger: Boolean = false): Boolean {
         val loop = lastLoop ?: return false
         val editor = editor ?: return false
         if (loop.pageId != pageId) return false
-        val reach = LOOP_TAP_REACH_DP * resources.displayMetrics.density / viewport.pxPerPt
-        if (!StrokeGestures.isNearLine(loop.item.points, x, y, reach)) return false
+        // A finger is blunter than the pen, so it may also touch inside the circle.
+        val reachDp = if (byFinger) FINGER_LOOP_REACH_DP else LOOP_TAP_REACH_DP
+        val reach = reachDp * resources.displayMetrics.density / viewport.pxPerPt
+        val touched = StrokeGestures.isNearLine(loop.item.points, x, y, reach) ||
+            byFinger && StrokeGestures.isInside(loop.item.points, x, y)
+        if (!touched) return false
         lastLoop = null
         // The circle itself is the lasso: its line is taken off the page and what it surrounds is selected.
         val content = editor.content(pageId)
@@ -2401,6 +2405,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val MINIMAP_ZOOM_OUT = 0.25f
         const val SCRIBBLE_REACH_PT = 2f
         const val LOOP_TAP_REACH_DP = 14f
+        const val FINGER_LOOP_REACH_DP = 28f
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
 
