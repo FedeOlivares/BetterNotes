@@ -18,6 +18,8 @@ import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePattern
+import app.betternotes.core.model.TapeShadow
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePointsBuilder
@@ -66,6 +68,15 @@ class CodecTest {
             fillColor = 0x40445566,
             cornerRadius = 7f,
             opacity = 0.75f,
+        ),
+        ShapeItem(
+            22,
+            frame,
+            ShapeKind.TAPE,
+            strokeWidth = 0f,
+            fillColor = 0xB3A8D8FF.toInt(),
+            pattern = TapePattern.CROSSHATCH,
+            shadow = TapeShadow(2.5f, 120f, 0.4f),
         ),
         ImageItem(3, frame, "photo-ñ.jpg", ImageShape.ELLIPSE, 8f, 0xFF00FF00.toInt(), 2f),
         TextItem(4, frame, "Hola, ¿qué tal? 日本語 🙂", 14f, 0xFF0000FF.toInt()),
@@ -217,9 +228,9 @@ class CodecTest {
 
     @Test
     fun `a newer version is refused, not skipped`() {
-        val newer = encodeWithVersion("BNPG", 4)
+        val newer = encodeWithVersion("BNPG", 5)
         val thrown = assertThrows(UnsupportedVersionException::class.java) { PageCodec.decode(newer) }
-        assertEquals(4, thrown.version)
+        assertEquals(5, thrown.version)
     }
 
     /** Builds a well-formed file with a bad body, to check values the checksum cannot catch. */

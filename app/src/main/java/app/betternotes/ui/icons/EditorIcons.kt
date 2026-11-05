@@ -129,6 +129,14 @@ internal object EditorIcons {
     }
     val Sliders by lazy { line("sliders", "M3 8h10 M19 8h2 M3 16h2 M11 16h10 M16 5a3 3 0 1 0 .01 0 M8 13a3 3 0 1 0 .01 0") }
     val Close by lazy { line("close", "M6 6l12 12 M18 6L6 18") }
+    // What the tape is printed with, and how it is laid down. Each tape icon is a strip with its mark inside.
+    val TapePlain by lazy { line("tape-plain", "M3 8h18v8H3z") }
+    val TapeDots by lazy { line("tape-dots", "M3 8h18v8H3z M8 12v.01 M12 12v.01 M16 12v.01 M10 10v.01 M14 10v.01 M10 14v.01 M14 14v.01") }
+    val TapeLines by lazy { line("tape-lines", "M3 8h18v8H3z M7 16l3-8 M12 16l3-8 M17 16l3-8") }
+    val TapeHatch by lazy { line("tape-hatch", "M3 8h18v8H3z M7 16l3-8 M12 16l3-8 M7 8l3 8 M12 8l3 8") }
+    val LineAlways by lazy { line("line-always", "M4 19L20 5") }
+    val LineHold by lazy { line("line-hold", "M4 19L14 9 M18 4a3 3 0 1 0 .01 0 M18 2.5V4l1 1") }
+    val LineNever by lazy { line("line-never", "M3 16c3-9 5-9 7-2s5 7 8-4") }
     val Check by lazy { line("check", "M5 12.5l4.5 4.5L19 7.5") }
     val Minus by lazy { line("minus", "M5 12h14") }
     val Plus by lazy { line("plus", "M12 5v14 M5 12h14") }

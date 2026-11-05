@@ -20,6 +20,8 @@ import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.model.TapePattern
+import app.betternotes.core.tools.TapeLineMode
 import app.betternotes.core.tools.TapeOptions
 import org.json.JSONArray
 import org.json.JSONException
@@ -206,6 +208,12 @@ internal class ToolStore(context: Context) {
             selectedColor = json.getInt("selectedColor"),
             thickness = json.optInt("thickness", 0),
             opacity = json.optDouble("opacity", 1.0).toFloat(),
+            pattern = TapePattern.entries.firstOrNull { it.name == json.optString("pattern") } ?: TapePattern.PLAIN,
+            shadowDistance = json.optDouble("shadowDistance", TapeOptions.DEFAULT_SHADOW_DISTANCE.toDouble()).toFloat(),
+            shadowAngle = json.optDouble("shadowAngle", TapeOptions.DEFAULT_SHADOW_ANGLE.toDouble()).toFloat(),
+            shadowOpacity = json.optDouble("shadowOpacity", TapeOptions.DEFAULT_SHADOW_OPACITY.toDouble()).toFloat(),
+            lineMode = TapeLineMode.entries.firstOrNull { it.name == json.optString("lineMode") } ?: TapeLineMode.ALWAYS,
+            holdMs = json.optInt("holdMs", TapeOptions.DEFAULT_HOLD_MS),
         )
     }
 
@@ -217,6 +225,12 @@ internal class ToolStore(context: Context) {
             put("selectedColor", options.selectedColor)
             put("thickness", options.thickness)
             put("opacity", options.opacity.toDouble())
+            put("pattern", options.pattern.name)
+            put("shadowDistance", options.shadowDistance.toDouble())
+            put("shadowAngle", options.shadowAngle.toDouble())
+            put("shadowOpacity", options.shadowOpacity.toDouble())
+            put("lineMode", options.lineMode.name)
+            put("holdMs", options.holdMs)
         }
         prefs.edit { putString(KEY_TAPE, json.toString()) }
     }

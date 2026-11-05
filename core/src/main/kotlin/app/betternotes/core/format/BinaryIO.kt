@@ -18,7 +18,7 @@ internal const val FORMAT_VERSION = 1
  * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).
  * Older pages still open, with the default tips and the pencil brush. The other files are still at [FORMAT_VERSION].
  */
-internal const val PAGE_FORMAT_VERSION = 3
+internal const val PAGE_FORMAT_VERSION = 4
 
 private const val MAGIC_SIZE = 4
 private const val CRC_SIZE = 4

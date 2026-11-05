@@ -121,6 +121,11 @@
     <string name="panel_hold_shape">Hold to draw shape</string>
     <string name="panel_hold_options">Hold options</string>
     <string name="panel_hold_time">Hold time</string>
+    <string name="editor_tape_pattern">Tape pattern</string>
+    <string name="editor_tape_line_mode">Straight tape: always, on hold, or never</string>
+    <string name="panel_shadow_distance">Shadow distance</string>
+    <string name="panel_shadow_angle">Shadow angle</string>
+    <string name="panel_shadow_opacity">Shadow opacity</string>
     <string name="panel_scribble">Scribble to erase</string>
     <string name="panel_circle">Circle to lasso</string>
     <string name="panel_stabilization">Stabilization</string>

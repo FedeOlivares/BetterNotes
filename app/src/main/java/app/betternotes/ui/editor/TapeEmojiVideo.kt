@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.betternotes.R
 import app.betternotes.canvas.VideoPlayRequest
+import app.betternotes.core.model.TapePattern
+import app.betternotes.core.tools.TapeLineMode
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
@@ -47,6 +49,14 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
     Pill(modifier) {
         // The row holds more than fits beside the other pills, so it scrolls, as the pen's row does. The warning tape is last.
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            // On the left: what is printed on the tape, and whether it is always a straight strip, straightens on hold, or never does.
+            ToolbarIcon(patternIcon(options.pattern), stringResource(R.string.editor_tape_pattern)) {
+                state.updateTape { it.copy(pattern = TapePattern.entries[(it.pattern.ordinal + 1) % TapePattern.entries.size]) }
+            }
+            ToolbarIcon(lineModeIcon(options.lineMode), stringResource(R.string.editor_tape_line_mode)) {
+                state.updateTape { it.copy(lineMode = TapeLineMode.entries[(it.lineMode.ordinal + 1) % TapeLineMode.entries.size]) }
+            }
+            PillDivider()
             options.widths.forEachIndexed { slot, width ->
                 ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot, thickness = 0) } }) {
                     WidthGlyph(width)
@@ -72,6 +82,19 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
     }
 }
 
+private fun patternIcon(pattern: TapePattern) = when (pattern) {
+    TapePattern.PLAIN -> EditorIcons.TapePlain
+    TapePattern.DOTS -> EditorIcons.TapeDots
+    TapePattern.LINES -> EditorIcons.TapeLines
+    TapePattern.CROSSHATCH -> EditorIcons.TapeHatch
+}
+
+private fun lineModeIcon(mode: TapeLineMode) = when (mode) {
+    TapeLineMode.ALWAYS -> EditorIcons.LineAlways
+    TapeLineMode.HOLD -> EditorIcons.LineHold
+    TapeLineMode.NEVER -> EditorIcons.LineNever
+}
+
 /** The tape's thickness and opacity, for the next strip laid down. */
 @Composable
 internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modifier) {
@@ -83,6 +106,34 @@ internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modif
             onThickness = { value -> state.updateTape { it.copy(thickness = value.roundToInt()) } },
             onOpacity = { value -> state.updateTape { it.copy(opacity = value) } },
             onFinished = {},
+        )
+        PanelDivider()
+        LabeledRow(R.string.panel_shadow_distance) { ValuePill { ValueText("%.1f".format(options.shadowDistance)) } }
+        PanelSlider(
+            fraction = options.shadowDistance / TapeOptions.MAX_SHADOW_DISTANCE,
+            onChange = { f -> state.updateTape { it.copy(shadowDistance = f * TapeOptions.MAX_SHADOW_DISTANCE) } },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+        )
+        LabeledRow(R.string.panel_shadow_angle) { ValuePill { ValueText("${options.shadowAngle.roundToInt()}°") } }
+        PanelSlider(
+            fraction = options.shadowAngle / 360f,
+            onChange = { f -> state.updateTape { it.copy(shadowAngle = f * 360f) } },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+        )
+        LabeledRow(R.string.panel_shadow_opacity) { ValuePill { ValueText("${(options.shadowOpacity * 100).roundToInt()}%") } }
+        PanelSlider(
+            fraction = options.shadowOpacity,
+            onChange = { f -> state.updateTape { it.copy(shadowOpacity = f) } },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+        )
+        PanelDivider()
+        LabeledRow(R.string.panel_hold_time) { ValuePill { ValueText("%.1f s".format(options.holdMs / 1000f)) } }
+        PanelSlider(
+            fraction = (options.holdMs - TapeOptions.MIN_HOLD_MS).toFloat() / (TapeOptions.MAX_HOLD_MS - TapeOptions.MIN_HOLD_MS),
+            onChange = { f ->
+                state.updateTape { it.copy(holdMs = TapeOptions.MIN_HOLD_MS + (f * (TapeOptions.MAX_HOLD_MS - TapeOptions.MIN_HOLD_MS)).roundToInt()) }
+            },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
         )
         Spacer(Modifier.height(18.dp))
     }

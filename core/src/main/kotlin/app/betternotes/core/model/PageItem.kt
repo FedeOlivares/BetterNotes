@@ -131,6 +131,18 @@ enum class ShapeKind {
     TAPE,
 }
 
+/** What is printed on a strip of tape, in white. */
+enum class TapePattern { PLAIN, DOTS, LINES, CROSSHATCH }
+
+/** A tape's drop shadow: how far it falls, in points, at which angle on the page, and how dark. */
+data class TapeShadow(val distance: Float = 0f, val angleDegrees: Float = 45f, val opacity: Float = 0f) {
+    val isVisible get() = distance > 0f && opacity > 0f
+
+    companion object {
+        val NONE = TapeShadow()
+    }
+}
+
 /**
  * A vector shape. A line or arrow runs along the frame's horizontal center, from left to right,
  * so its direction comes from the frame's rotation and its height is zero. A [fillColor] with zero
@@ -149,11 +161,14 @@ data class ShapeItem(
     /** The size of the shape's tip, cap or depth that its handles change. 0 means the shape's own proportions. */
     val tipLength: Float = 0f,
     val tipWidth: Float = 0f,
+    /** Only for tape: what is printed on it, and its shadow. */
+    val pattern: TapePattern = TapePattern.PLAIN,
+    val shadow: TapeShadow = TapeShadow.NONE,
 ) : PageItem {
     /** The frame, and for a speech or thought bubble also the tail, which can reach out of it in any direction. */
     override val bounds: Bounds
         get() {
-            val box = frame.bounds.outset(strokeWidth / 2f)
+            val box = frame.bounds.outset(strokeWidth / 2f + if (shadow.isVisible) shadow.distance + SHADOW_SOFTNESS else 0f)
             if (!ShapeTips.isBubble(kind) || frame.width <= 0f || frame.height <= 0f) return box
             val tip = ShapeTips.speechTip(this)
             val x = frame.worldX(tip[0] / frame.width, tip[1] / frame.height)
@@ -336,3 +351,6 @@ fun PageItem.withId(id: Long): PageItem = when (this) {
     is VideoItem -> copy(id = id)
     is AudioItem -> copy(id = id)
 }
+
+/** How far the soft edge of a drop shadow reaches beyond its offset, in points. */
+const val SHADOW_SOFTNESS = 2f

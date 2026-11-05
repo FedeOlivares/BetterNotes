@@ -25,7 +25,9 @@ import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.LineStyle
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.SHADOW_SOFTNESS
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePattern
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
@@ -53,6 +55,7 @@ internal class ItemPainter(
     private val text = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
     private val stripes = Path()
+    private val mark = Paint(Paint.ANTI_ALIAS_FLAG)
 
     fun paint(canvas: Canvas, item: PageItem) {
         when (item) {
@@ -81,8 +84,8 @@ internal class ItemPainter(
         val height = item.frame.height
         ShapePaths.build(path, item.kind, width, height, item.cornerRadius, item.tipLength, item.tipWidth)
         val alpha = (item.opacity * OPAQUE).roundToInt()
-        if (item.kind == ShapeKind.TAPE && item.fillColor == TapeOptions.WARNING_FILL) {
-            paintWarningTape(canvas, width, height)
+        if (item.kind == ShapeKind.TAPE) {
+            paintTape(canvas, item)
             return
         }
         if (item.isFilled) {
@@ -95,6 +98,80 @@ internal class ItemPainter(
         line.alpha = line.alpha * alpha / OPAQUE.toInt()
         canvas.drawPath(path, line)
         line.pathEffect = null
+    }
+
+    /** A strip of tape: its shadow, its color or warning stripes, and what is printed on it in white. */
+    private fun paintTape(canvas: Canvas, item: ShapeItem) {
+        val width = item.frame.width
+        val height = item.frame.height
+        val alpha = (item.opacity * OPAQUE).roundToInt()
+        val shadow = item.shadow
+        if (shadow.isVisible) {
+            // The shadow's angle is on the page, so it is turned back by the strip's own rotation.
+            val radians = Math.toRadians((shadow.angleDegrees - item.frame.rotation).toDouble())
+            val dx = (shadow.distance * Math.cos(radians)).toFloat()
+            val dy = (shadow.distance * Math.sin(radians)).toFloat()
+            fill.color = 0xFF000000.toInt()
+            fill.alpha = (shadow.opacity * alpha).roundToInt().coerceIn(0, 255)
+            canvas.save()
+            // Only what falls outside the strip shows, so see-through tape is not darkened by it.
+            canvas.clipOutPath(path)
+            canvas.translate(dx, dy)
+            canvas.drawPath(path, fill)
+            // A second, slightly fatter copy at lower strength softens the edge.
+            line.pathEffect = null
+            line.style = Paint.Style.STROKE
+            line.color = 0xFF000000.toInt()
+            line.strokeWidth = SHADOW_SOFTNESS
+            line.alpha = (shadow.opacity * alpha * 0.4f).roundToInt().coerceIn(0, 255)
+            canvas.drawPath(path, line)
+            canvas.restore()
+        }
+        if (item.fillColor == TapeOptions.WARNING_FILL) {
+            paintWarningTape(canvas, width, height)
+        } else {
+            fill.color = item.fillColor
+            fill.alpha = fill.alpha * alpha / OPAQUE.toInt()
+            canvas.drawPath(path, fill)
+        }
+        if (item.pattern != TapePattern.PLAIN) {
+            canvas.withClip(path) { paintPattern(this, item.pattern, width, height) }
+        }
+    }
+
+    /** White marks over a strip: tiny dots, thin slanted lines, or two sets of lines crossing. */
+    private fun paintPattern(canvas: Canvas, pattern: TapePattern, width: Float, height: Float) {
+        mark.color = 0xFFFFFFFF.toInt()
+        mark.alpha = PATTERN_ALPHA
+        val gap = maxOf(height * PATTERN_GAP, MIN_PATTERN_GAP)
+        when (pattern) {
+            TapePattern.DOTS -> {
+                mark.style = Paint.Style.FILL
+                val radius = maxOf(gap * 0.14f, 0.5f)
+                var row = 0
+                var y = gap / 2f
+                while (y < height) {
+                    var x = if (row % 2 == 0) gap / 2f else gap
+                    while (x < width) {
+                        canvas.drawCircle(x, y, radius, mark)
+                        x += gap
+                    }
+                    y += gap * 0.6f
+                    row++
+                }
+            }
+            TapePattern.LINES, TapePattern.CROSSHATCH -> {
+                mark.style = Paint.Style.STROKE
+                mark.strokeWidth = maxOf(gap * 0.09f, 0.4f)
+                var x = -height
+                while (x < width) {
+                    canvas.drawLine(x, height, x + height, 0f, mark)
+                    if (pattern == TapePattern.CROSSHATCH) canvas.drawLine(x, 0f, x + height, height, mark)
+                    x += gap
+                }
+            }
+            TapePattern.PLAIN -> Unit
+        }
     }
 
     /** Yellow with red stripes slanted across it, like police tape, clipped to the torn strip. */
@@ -291,6 +368,11 @@ internal class ItemPainter(
     private companion object {
         const val OPAQUE = 255f
         const val WARNING_STRIPE_RATIO = 0.8f
+
+        /** The spacing of a tape's printed marks as a part of its thickness, and the least spacing in points. */
+        const val PATTERN_GAP = 0.3f
+        const val MIN_PATTERN_GAP = 3f
+        const val PATTERN_ALPHA = 210
         const val DOT_LENGTH = 0.01f
         const val CELL_PADDING = 3f
         const val TEXT_LAYOUT_SCALE = 8f

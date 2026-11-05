@@ -13,6 +13,8 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePattern
+import app.betternotes.core.model.TapeShadow
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.HorizontalAlign
@@ -98,6 +100,7 @@ internal val SHAPE_KINDS =
         ShapeKind.THOUGHT,
         ShapeKind.TAPE,
     )
+internal val TAPE_PATTERNS = WireEnum(TapePattern.PLAIN, TapePattern.DOTS, TapePattern.LINES, TapePattern.CROSSHATCH)
 internal val IMAGE_SHAPES = WireEnum(ImageShape.RECTANGLE, ImageShape.ELLIPSE)
 internal val HORIZONTAL_ALIGNS = WireEnum(HorizontalAlign.START, HorizontalAlign.CENTER, HorizontalAlign.END)
 internal val VERTICAL_ALIGNS = WireEnum(VerticalAlign.TOP, VerticalAlign.MIDDLE, VerticalAlign.BOTTOM)
@@ -151,6 +154,12 @@ private fun ByteWriter.item(item: PageItem) {
             if (version >= 2) {
                 float(item.tipLength)
                 float(item.tipWidth)
+            }
+            if (version >= 4) {
+                TAPE_PATTERNS.write(this, item.pattern)
+                float(item.shadow.distance)
+                float(item.shadow.angleDegrees)
+                float(item.shadow.opacity)
             }
         }
         is ImageItem -> {
@@ -264,6 +273,8 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         opacity = float(),
         tipLength = if (version >= 2) float() else 0f,
         tipWidth = if (version >= 2) float() else 0f,
+        pattern = if (version >= 4) TAPE_PATTERNS.read(this) else TapePattern.PLAIN,
+        shadow = if (version >= 4) TapeShadow(float(), float(), float()) else TapeShadow.NONE,
     )
     TAG_IMAGE -> ImageItem(
         id = long(),

@@ -3,8 +3,13 @@ package app.betternotes.core.tools
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePattern
+import app.betternotes.core.model.TapeShadow
 import kotlin.math.atan2
 import kotlin.math.hypot
+
+/** Whether tape is always a straight strip, straightens when the pen is held, or never does and follows the pen. */
+enum class TapeLineMode { ALWAYS, HOLD, NEVER }
 
 /** What the tape tool lays down. [widths] are in points, as a strip of tape is a real size on the page. */
 data class TapeOptions(
@@ -16,7 +21,17 @@ data class TapeOptions(
     val thickness: Int = 0,
     /** How see-through the whole strip is, on top of the color's own transparency. */
     val opacity: Float = 1f,
+    val pattern: TapePattern = TapePattern.PLAIN,
+    /** A tiny shadow, which the panel can change. Distance is in points and the angle is on the page. */
+    val shadowDistance: Float = DEFAULT_SHADOW_DISTANCE,
+    val shadowAngle: Float = DEFAULT_SHADOW_ANGLE,
+    val shadowOpacity: Float = DEFAULT_SHADOW_OPACITY,
+    val lineMode: TapeLineMode = TapeLineMode.ALWAYS,
+    /** How long the pen must stay still to straighten tape, in the HOLD mode. */
+    val holdMs: Int = DEFAULT_HOLD_MS,
 ) {
+    val shadow get() = TapeShadow(shadowDistance, shadowAngle, shadowOpacity)
+
     val width get() = if (thickness > 0) thickness else widths[selectedWidth]
 
     /** The slot after the last color is the warning tape: yellow and red stripes, drawn by the painter. */
@@ -34,11 +49,18 @@ data class TapeOptions(
         val length = hypot(x1 - x0, y1 - y0)
         val degrees = Math.toDegrees(atan2(y1 - y0, x1 - x0).toDouble()).toFloat()
         val frame = Frame((x0 + x1 - length) / 2f, (y0 + y1 - width) / 2f, length, width.toFloat(), degrees)
-        return ShapeItem(id = id, frame = frame, kind = ShapeKind.TAPE, strokeWidth = 0f, fillColor = color, opacity = opacity)
+        return ShapeItem(id = id, frame = frame, kind = ShapeKind.TAPE, strokeWidth = 0f, fillColor = color, opacity = opacity, pattern = pattern, shadow = shadow)
     }
 
     companion object {
         const val WASHI_ALPHA = 0xB3000000.toInt()
+        const val DEFAULT_SHADOW_DISTANCE = 1.5f
+        const val DEFAULT_SHADOW_ANGLE = 45f
+        const val DEFAULT_SHADOW_OPACITY = 0.3f
+        const val MAX_SHADOW_DISTANCE = 8f
+        const val DEFAULT_HOLD_MS = 500
+        const val MIN_HOLD_MS = 200
+        const val MAX_HOLD_MS = 2000
         const val MIN_THICKNESS = 4
         const val MAX_THICKNESS = 80
         const val MIN_OPACITY = 0.1f
