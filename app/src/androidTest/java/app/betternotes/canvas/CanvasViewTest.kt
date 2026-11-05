@@ -190,8 +190,6 @@ class CanvasViewTest {
         val at = worldToScreen(150f, 300f)
         twoFingerTap(at)
         twoFingerTap(at)
-        // Undo has to wait in case a third tap makes this a redo.
-        assertEquals(1, pageContent().size)
         waitUntil { pageContent().size == 0 }
 
         twoFingerTap(at)

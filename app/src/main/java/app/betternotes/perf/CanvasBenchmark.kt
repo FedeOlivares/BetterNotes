@@ -72,8 +72,19 @@ internal object CanvasBenchmark {
         val pdf = PdfDocument()
         val text = Paint().apply { color = Color.DKGRAY; textSize = 10f }
         val line = Paint().apply { color = Color.GRAY; strokeWidth = 0.5f }
+        // Every other page is a scan: one large picture of noisy "print", which is what a scanned book costs PDFium.
+        val scan = android.graphics.Bitmap.createBitmap(1650, 2200, android.graphics.Bitmap.Config.ARGB_8888)
+        val noise = Random(7)
+        val pixels = IntArray(scan.width * scan.height) { val v = 200 + noise.nextInt(56); (0xFF shl 24) or (v shl 16) or (v shl 8) or v }
+        for (row in 0 until 120) for (x in 100 until 1500) pixels[(150 + row * 16) * scan.width + x] = 0xFF202020.toInt()
+        scan.setPixels(pixels, 0, scan.width, 0, 0, scan.width, scan.height)
         repeat(PDF_PAGES) { index ->
             val page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, index + 1).create())
+            if (index % 2 == 1) {
+                page.canvas.drawBitmap(scan, null, android.graphics.RectF(0f, 0f, 595f, 842f), null)
+                pdf.finishPage(page)
+                return@repeat
+            }
             for (row in 0 until 60) page.canvas.drawText("lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor", 40f, 60f + row * 12f, text)
             for (i in 0 until 800) {
                 val x = (i * 37 % 500).toFloat() + 40f
@@ -139,10 +150,9 @@ internal object CanvasBenchmark {
             "pan_zoom_400" to { frame -> pan(canvas, frame) },
             "pan_zoom_1500" to { frame -> pan(canvas, frame) },
             "pan_zoom_30" to { frame -> pan(canvas, frame) },
-            "lasso_move_live" to { frame -> app.betternotes.canvas.useDragLayer = false; canvas.benchmarkDrag(frame) },
-            "lasso_move_layer" to { frame -> app.betternotes.canvas.useDragLayer = true; canvas.benchmarkDrag(frame) },
+            "lasso_move_100" to { frame -> canvas.benchmarkDrag(frame) },
         )
-        val zooms = listOf(1f, 1f, 1f, 4f, 15f, 0.3f, 1f, 1f)
+        val zooms = listOf(1f, 1f, 1f, 4f, 15f, 0.3f, 1f)
         runScenario(canvas, probe, scenarios, zooms, 0, onDone)
     }
 

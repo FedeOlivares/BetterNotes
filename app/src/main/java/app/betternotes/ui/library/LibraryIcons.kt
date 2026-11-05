@@ -31,7 +31,6 @@ private fun dot(x: Float, y: Float, radius: Float) =
 
 internal object LibraryIcons {
     val Star = icon("star", outline = STAR)
-    val StarFilled = icon("starFilled", filled = STAR)
     val Tag = icon(
         "tag",
         outline = "M20 11.3V5.5A1.5 1.5 0 0 0 18.5 4h-5.8a1.5 1.5 0 0 0-1.06.44l-7.2 7.2a1.5 1.5 0 0 0 0 2.12l5.8 5.8" +

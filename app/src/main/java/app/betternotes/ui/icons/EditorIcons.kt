@@ -98,13 +98,11 @@ internal object EditorIcons {
     val Crosshair by lazy { line("crosshair", "M12 5a7 7 0 1 0 .01 0 M12 2.500V8 M12 16v5.500 M2.500 12H8 M16 12h5.500") }
     val Forward by lazy { line("forward", "M4 12h15.500 M13 5l7 7-7 7") }
     val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
-    val Insert by lazy { line("insert", rrect(4f, 4f, 16f, 16f, 2.5f) + "M12 8v8 M8 12h8") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }
     val Camera by lazy { line("camera", "M4 7.5h3.5L9 5h6l1.5 2.5H20a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18V9A1.5 1.5 0 0 1 4 7.5z M12 9.8a3.5 3.5 0 1 0 .01 0") }
     val StickyNote by lazy { line("sticky", "M6 3.5h12A2.5 2.5 0 0 1 20.5 6v8l-6.5 6.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5z M20.5 14H16a2 2 0 0 0-2 2v4.5") }
     val Table by lazy { line("table", rrect(3f, 5f, 18f, 14f, 2.5f) + "M3 10h18 M3 14.5h18 M12 10v9") }
     val Tray by lazy { line("tray", rrect(3f, 6.5f, 18f, 13.5f, 3f) + "M6 6.5V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1.5 M8 13c1.5-3 2.5-3 3 0s2 3 3 0 1.5-2 2-1") }
-    val StickyAdd by lazy { line("sticky-add", rrect(4f, 4f, 9f, 7f, 1.5f) + rrect(4f, 14f, 16f, 6f, 1.5f) + "M18 4v6 M15 7h6") }
     val Loupe by lazy { line("loupe", rrect(3f, 4f, 17f, 15.5f, 2f) + "M11.5 7.5a3.8 3.8 0 1 0 .01 0 M11.5 9.6v3.4 M9.8 11.3h3.4 M14.3 14l6 6.5") }
     val Ruler by lazy { line("ruler", "M3.7 16L16 3.7a1.5 1.5 0 0 1 2.1 0l2.2 2.2a1.5 1.5 0 0 1 0 2.1L8 20.3a1.5 1.5 0 0 1-2.1 0l-2.2-2.2a1.5 1.5 0 0 1 0-2.1z M8 11.7l2 2 M11 8.7l2 2 M14 5.7l2 2") }
     val Mic by lazy { line("mic", rrect(9f, 3f, 6f, 11f, 3f) + "M5.5 11a6.5 6.5 0 0 0 13 0 M12 17.5V21 M9 21h6") }

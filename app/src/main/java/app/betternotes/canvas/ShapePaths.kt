@@ -294,9 +294,6 @@ internal object ShapePaths {
         floatArrayOf(0.75f, 0.38f, 0.2f),
         floatArrayOf(0.45f, 0.5f, 0.22f),
     )
-    private const val HEAD_RATIO = 0.25f
-    private const val HEAD_MAX = 24f
-    private const val HEAD_SPREAD = 0.6f
     private const val SLANT = 0.22f
     private const val PIE_SWEEP = 270f
     private const val ARC_START = 180f

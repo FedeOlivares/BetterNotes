@@ -35,9 +35,6 @@ import kotlin.math.roundToInt
  * go back to the page, as one edit, when the pen lifts. Coordinates are the page's own unless named
  * otherwise.
  */
-/** Off only for the benchmark, to compare a move drawn live with one drawn as a picture. */
-internal var useDragLayer = true
-
 internal class LassoController(
     private val viewport: Viewport,
     private val density: Float,
@@ -528,7 +525,7 @@ internal class LassoController(
      * is too big to hold as a picture, and the caller draws it item by item.
      */
     private fun drawMoved(canvas: Canvas, selected: Selection): Boolean {
-        if (!useDragLayer || !canvas.isHardwareAccelerated || transform.a != 1f || transform.d != 1f || transform.b != 0f || transform.c != 0f) return false
+        if (!canvas.isHardwareAccelerated || transform.a != 1f || transform.d != 1f || transform.b != 0f || transform.c != 0f) return false
         val scale = viewport.pxPerPt
         if (dragNode == null || dragNodeSelection !== selected || dragNodeScale != scale) {
             if (!recordDragNode(selected, scale)) return false

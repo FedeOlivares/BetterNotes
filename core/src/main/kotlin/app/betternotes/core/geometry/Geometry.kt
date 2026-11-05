@@ -51,27 +51,14 @@ data class Affine(
     fun mapX(x: Float, y: Float) = a * x + c * y + e
     fun mapY(x: Float, y: Float) = b * x + d * y + f
 
-    val scaleX get() = hypot(a, b)
-    val scaleY get() = hypot(c, d)
-    val rotationDegrees get() = Math.toDegrees(atan2(b, a).toDouble()).toFloat()
-
     /** How much a stroke width grows under this transform. */
     val meanScale get() = sqrt(abs(a * d - b * c))
 
     companion object {
-        val Identity = Affine()
-
         fun translate(dx: Float, dy: Float) = Affine(e = dx, f = dy)
 
         /** Scales about a fixed point, as when dragging a selection handle. */
         fun scaleAbout(sx: Float, sy: Float, px: Float, py: Float) =
             Affine(a = sx, d = sy, e = px - sx * px, f = py - sy * py)
-
-        fun rotateAbout(degrees: Float, px: Float, py: Float): Affine {
-            val r = Math.toRadians(degrees.toDouble())
-            val c = cos(r).toFloat()
-            val s = sin(r).toFloat()
-            return Affine(c, s, -s, c, px - c * px + s * py, py - s * px - c * py)
-        }
     }
 }
