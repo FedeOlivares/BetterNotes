@@ -1,12 +1,8 @@
 package app.betternotes.ui.editor
 
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
@@ -147,24 +143,39 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
 }
 
 /**
- * The second row, which turns into the next tool's row when the tool changes: its box grows or shrinks to the new size,
- * icons that both rows have move to their new place, colors change to the new colors, and icons only one row has grow
- * from nothing or shrink away.
+ * The second row. When the tool changes, its box grows or shrinks to the size of the new row's while the icons are
+ * hidden, and they appear all at once when it has got there.
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun ToolRowTransition(state: EditorState, recorder: RecorderState, sources: ImageSources) {
-    SharedTransitionLayout {
-        val shared = this
-        AnimatedContent(
-            targetState = if (recorder.recording) null else state.activeTool,
-            transitionSpec = {
-                (EnterTransition.None togetherWith ExitTransition.None)
-                    .using(SizeTransform(clip = false) { _, _ -> tween(MORPH_MS) })
-            },
-            label = "toolRow",
-        ) { tool ->
-            CompositionLocalProvider(LocalMorph provides MorphScopes(shared, this)) {
+    val colors = LocalEditorColors.current
+    val target = if (recorder.recording) null else state.activeTool
+    var shown by remember { mutableStateOf(target) }
+    // The tool whose icons may be seen. While it is not the one shown, the icons are hidden, with no frame in between.
+    var revealedFor by remember { mutableStateOf(target) }
+    LaunchedEffect(target) {
+        if (target != shown) {
+            shown = target
+            delay(BAR_RESIZE_MS.toLong())
+            revealedFor = target
+        }
+    }
+    Box(
+        Modifier
+            .height(PillHeight)
+            .shadow(4.dp, PillShape, clip = false)
+            .clip(PillShape)
+            .background(colors.pill)
+            .border(1.dp, colors.pillBorder, PillShape)
+            .animateContentSize(tween(BAR_RESIZE_MS))
+            .padding(horizontal = 6.dp),
+    ) {
+        CompositionLocalProvider(LocalInToolBar provides true) {
+            // Nothing shows until the box has its new size, then the icons come in. The box clips them, so none is ever outside it.
+            val revealed = revealedFor == shown
+            val visible by animateFloatAsState(if (revealed) 1f else 0f, tween(if (revealed) ICONS_IN_MS else 0), label = "toolIcons")
+            Box(Modifier.alpha(if (revealed) visible else 0f)) {
+                val tool = shown
                 if (tool == null) RecordingControls(state, recorder, Modifier) else ToolRowFor(tool, state, sources)
             }
         }
@@ -190,8 +201,12 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
     }
 }
 
-/** How long a change of tool takes to show: the row turning into the next one and the selection circle growing, together. */
+/** How long the highlight on a tool takes to grow from its center. */
 internal const val TOOL_CHANGE_MS = 250
+
+/** The second bar resizes within this long after the tool changes, and its icons then come in within the next [ICONS_IN_MS]. */
+private const val BAR_RESIZE_MS = 100
+private const val ICONS_IN_MS = 50
 
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
@@ -630,12 +645,12 @@ private fun ToolRow(state: EditorState, preset: InkPreset, modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.horizontalScroll(rememberScrollState()),
         ) {
-            ToolbarCellBox(morphKey = "line", onClick = { state.update { it.copy(line = it.line.next()) } }) {
+            ToolbarCellBox(onClick = { state.update { it.copy(line = it.line.next()) } }) {
                 LineTypeGlyph(preset.line, colors.icon)
             }
             PillDivider()
             preset.widths.forEachIndexed { slot, thickness ->
-                ToolbarCellBox(morphKey = "width-$slot", onClick = { state.update { it.copy(selectedWidth = slot) } }) {
+                ToolbarCellBox(onClick = { state.update { it.copy(selectedWidth = slot) } }) {
                     WidthGlyph(thickness)
                     if (slot == preset.selectedWidth) SelectedDot()
                 }
@@ -646,7 +661,7 @@ private fun ToolRow(state: EditorState, preset: InkPreset, modifier: Modifier) {
                 ColorEditor(state, draft)
             } else {
                 preset.colors.forEachIndexed { slot, color ->
-                    ToolbarCellBox(morphKey = "color-$slot", onClick = { state.update { it.copy(selectedColor = slot) } }) {
+                    ToolbarCellBox(onClick = { state.update { it.copy(selectedColor = slot) } }) {
                         ColorDot(color)
                         if (slot == preset.selectedColor) SelectedDot()
                     }

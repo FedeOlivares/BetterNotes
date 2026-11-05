@@ -60,21 +60,24 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.core.model.LineKind
-import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
 
 internal val PillHeight = 48.dp
 internal val ToolbarCell = 40.dp
-private val PillShape = RoundedCornerShape(PillHeight / 2)
+internal val PillShape = RoundedCornerShape(PillHeight / 2)
 
 /** The dark capsule that every toolbar sits in. */
 @Composable
 internal fun Pill(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     val colors = LocalEditorColors.current
+    if (LocalInToolBar.current) {
+        // The second toolbar draws its own box, which resizes between tools, so its row brings only its contents.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier, content = content)
+        return
+    }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .morphBar()
             .height(PillHeight)
             .shadow(4.dp, PillShape, clip = false)
             .clip(PillShape)
@@ -84,6 +87,9 @@ internal fun Pill(modifier: Modifier = Modifier, content: @Composable RowScope.(
         content = content,
     )
 }
+
+/** True inside the second toolbar's box, which looks after the pill's background, shadow and border. */
+internal val LocalInToolBar = androidx.compose.runtime.compositionLocalOf { false }
 
 /** Keeps wet ink out from under this control for as long as it is on screen. */
 @Composable
@@ -115,15 +121,12 @@ internal fun ToolbarIcon(
     selected: Boolean = false,
     accent: Boolean = false,
     tintOverride: Color? = null,
-    morphKey: String? = null,
     onClick: () -> Unit,
 ) {
     val colors = LocalEditorColors.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            // The settings button stays where it is in every row, so it moves with the row.
-            .morph(morphKey ?: if (icon === EditorIcons.Sliders) "settings" else null)
             .size(ToolbarCell, PillHeight)
             .tappable(radius = 20.dp, enabled = enabled, onClick = onClick),
     ) {
@@ -323,11 +326,10 @@ internal fun rememberNotices(): Notices {
 
 /** A fixed-width cell for a toolbar's glyphs. */
 @Composable
-internal fun ToolbarCellBox(morphKey: String? = null, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+internal fun ToolbarCellBox(onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .morph(morphKey)
             .width(ToolbarCell)
             .height(PillHeight)
             .tappable(radius = 20.dp, onClick = onClick),

@@ -62,14 +62,14 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
             }
             PillDivider()
             options.widths.forEachIndexed { slot, width ->
-                ToolbarCellBox(morphKey = "width-$slot", onClick = { state.updateTape { it.copy(selectedWidth = slot) } }) {
+                ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot) } }) {
                     WidthGlyph(width)
                     if (slot == options.selectedWidth) SelectedDot()
                 }
             }
             PillDivider()
             options.colors.forEachIndexed { slot, color ->
-                ToolbarCellBox(morphKey = "color-$slot", onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
+                ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
                     ColorDot(color or OPAQUE, diameter = 24.dp)
                     if (slot == options.selectedColor) SelectedDot()
                 }
