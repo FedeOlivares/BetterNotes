@@ -247,7 +247,7 @@ internal object InkBrushes {
                             setCornerRounding(1f)
                             setScaleX(1.9f)
                             setScaleY(1.9f)
-                            setParticleGapDistanceScale(0.22f)
+                            setParticleGapDistanceScale(0.286f)
                             addBehavior(aimedAtDirection())
                             addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, -0.5f, 0.5f, noise(62, 0.2f)))
                             addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.8f, 1.15f, noise(9, 0.15f)))
