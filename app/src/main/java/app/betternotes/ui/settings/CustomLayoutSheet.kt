@@ -58,8 +58,10 @@ private const val MIN_ELEMENT_PT = 12f
 private const val TAP_TOLERANCE_PT = 12f
 private val UNITS = listOf(LengthUnit.PX, LengthUnit.CM, LengthUnit.INCH)
 
-internal enum class LayoutTool { SELECT, LINE, BOX, STICKY, TABLE, RULED }
+internal enum class LayoutTool { SELECT, LINE, HIGHLIGHTER, BOX, STICKY, TABLE, RULED }
 
+private const val HIGHLIGHTER_WIDTH = 14f
+private const val HIGHLIGHTER_COLOR = 0x66FFEB3B
 private const val STICKY_COLOR = 0xFFFFE680.toInt()
 
 /** The element a drag from (x0, y0) to (x1, y1) makes with this tool, or null when the drag is too small. */
@@ -68,6 +70,9 @@ private fun LayoutTool.draw(x0: Float, y0: Float, x1: Float, y1: Float): LayoutE
     val top = min(y0, y1)
     val width = abs(x1 - x0)
     val height = abs(y1 - y0)
+    if (this == LayoutTool.HIGHLIGHTER) {
+        return if (width + height < MIN_ELEMENT_PT) null else LayoutElement.Line(x0, y0, x1, y1, HIGHLIGHTER_WIDTH, HIGHLIGHTER_COLOR)
+    }
     if (this == LayoutTool.LINE) {
         return if (width + height < MIN_ELEMENT_PT) null else LayoutElement.Line(x0, y0, x1, y1, DEFAULT_LINE_WIDTH, ELEMENT_COLOR)
     }
@@ -188,6 +193,7 @@ fun CustomLayoutSheet(
                         layout,
                         selected,
                         drawing = tool != LayoutTool.SELECT,
+                        drawsLine = tool == LayoutTool.LINE || tool == LayoutTool.HIGHLIGHTER,
                         onTap = { x, y ->
                             panel = null
                             selected = if (tool == LayoutTool.SELECT) builder.elementAt(x, y, TAP_TOLERANCE_PT) else -1
@@ -291,6 +297,7 @@ fun CustomLayoutSheet(
 private fun toolLabels() = listOf(
     LayoutTool.SELECT to stringResource(R.string.layout_tool_select),
     LayoutTool.LINE to stringResource(R.string.layout_add_line),
+    LayoutTool.HIGHLIGHTER to stringResource(R.string.layout_add_highlighter),
     LayoutTool.BOX to stringResource(R.string.layout_add_box),
     LayoutTool.STICKY to stringResource(R.string.layout_add_sticky),
     LayoutTool.TABLE to stringResource(R.string.layout_add_table),

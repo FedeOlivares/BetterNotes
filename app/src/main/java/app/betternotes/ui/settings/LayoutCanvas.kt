@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.betternotes.core.template.CustomLayout
+import app.betternotes.core.template.LayoutElement
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.bounds
 import kotlin.math.abs
@@ -56,6 +57,8 @@ internal fun LayoutCanvas(
     layout: CustomLayout,
     selected: Int,
     drawing: Boolean,
+    /** True when the tool in hand makes a line, so the drag and the selection show as a line, not a box. */
+    drawsLine: Boolean,
     onTap: (Float, Float) -> Unit,
     onPress: (Float, Float) -> Unit,
     onDraw: (Float, Float, Float, Float) -> Unit,
@@ -70,6 +73,7 @@ internal fun LayoutCanvas(
     var end by remember { mutableStateOf<Offset?>(null) }
     val layoutNow by rememberUpdatedState(layout)
     val drawingNow by rememberUpdatedState(drawing)
+    val drawsLineNow by rememberUpdatedState(drawsLine)
     val onTapNow by rememberUpdatedState(onTap)
     val onPressNow by rememberUpdatedState(onPress)
     val onDrawNow by rememberUpdatedState(onDraw)
@@ -154,21 +158,35 @@ internal fun LayoutCanvas(
         translate(now.x, now.y) { paintPage(layout, width, height, now.scale, mirrored = false, shadow) }
         val index = selected
         if (index in layout.elements.indices) {
-            val box = layout.elements[index].bounds
-            drawRect(
-                colors.accent,
-                Offset(now.x + box.left * now.scale, now.y + box.top * now.scale),
-                Size(box.width * now.scale, box.height * now.scale),
-                style = Stroke(2.dp.toPx()),
-            )
+            val element = layout.elements[index]
+            if (element is LayoutElement.Line) {
+                drawLine(
+                    colors.accent,
+                    Offset(now.x + element.x0 * now.scale, now.y + element.y0 * now.scale),
+                    Offset(now.x + element.x1 * now.scale, now.y + element.y1 * now.scale),
+                    strokeWidth = maxOf(element.lineWidth * now.scale, 2.dp.toPx()),
+                )
+            } else {
+                val box = element.bounds
+                drawRect(
+                    colors.accent,
+                    Offset(now.x + box.left * now.scale, now.y + box.top * now.scale),
+                    Size(box.width * now.scale, box.height * now.scale),
+                    style = Stroke(2.dp.toPx()),
+                )
+            }
         }
         end?.takeIf { drawingNow }?.let {
-            drawRect(
-                colors.accent,
-                Offset(min(start.x, it.x), min(start.y, it.y)),
-                Size(abs(it.x - start.x), abs(it.y - start.y)),
-                style = Stroke(1.dp.toPx()),
-            )
+            if (drawsLineNow) {
+                drawLine(colors.accent, start, it, strokeWidth = 2.dp.toPx())
+            } else {
+                drawRect(
+                    colors.accent,
+                    Offset(min(start.x, it.x), min(start.y, it.y)),
+                    Size(abs(it.x - start.x), abs(it.y - start.y)),
+                    style = Stroke(1.dp.toPx()),
+                )
+            }
         }
     }
 }

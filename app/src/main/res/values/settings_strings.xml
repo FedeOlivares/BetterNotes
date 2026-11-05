@@ -129,6 +129,7 @@
     <string name="layout_name">Name</string>
     <string name="layout_size">Page size</string>
     <string name="layout_add_line">Line</string>
+    <string name="layout_add_highlighter">Highlighter</string>
     <string name="layout_discard">Discard</string>
     <string name="layout_confirm">Confirm</string>
     <string name="layout_discard_title">Discard changes?</string>
