@@ -17,8 +17,8 @@ internal object BrushTextures : TextureBitmapStore {
     const val BLOT = "blot-stamp"
     const val OIL = "oil-stamp"
     const val LEAVES = "leaf-stamps"
-    const val LEAF_COLUMNS = 3
-    const val LEAF_ROWS = 2
+    const val LEAF_COLUMNS = 4
+    const val LEAF_ROWS = 3
     const val LEAF_COUNT = LEAF_COLUMNS * LEAF_ROWS
 
     private const val FOLDER = "brush_textures/"

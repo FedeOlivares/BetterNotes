@@ -319,8 +319,8 @@ internal object InkBrushes {
                     painted(
                         tip {
                             setCornerRounding(1f)
-                            setScaleX(2.2f)
-                            setScaleY(2.2f)
+                            setScaleX(1.54f)
+                            setScaleY(1.54f)
                             setParticleGapDistanceScale(0.9f)
                             addBehavior(vary(TargetNode.Target.PAINT_ANIMATION_PROGRESS_OFFSET, 0f, 1f, noise(80, 0.002f)))
                             addBehavior(aimedAtDirection())

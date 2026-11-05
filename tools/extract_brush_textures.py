@@ -92,7 +92,67 @@ def leaf_stamps():
     # The reference leaves are slightly see-through; the brush's own opacity sets how much shows, so firm them up.
     leaves = [fit(leaf ** 0.45) for _, leaf in found[::step][:8]]
     # Two of these are pairs of leaves that overlap in the reference, so they are left out.
-    return [leaf for i, leaf in enumerate(leaves) if i not in (1, 2)]
+    return [leaf for i, leaf in enumerate(leaves) if i not in (1, 2)] + [maple_stamp()] + drawn_leaves()
+
+
+def maple_stamp():
+    """The owner's own maple silhouette (tools/sources/maple-leaf.png): black on white."""
+    image = Image.open(os.path.join(ROOT, 'tools', 'sources', 'maple-leaf.png')).convert('L')
+    return fit(1 - np.asarray(image).astype(np.float32) / 255)
+
+
+def drawn_leaves():
+    """Generic leaves drawn here: oak, birch, ginkgo, willow and linden, each with a midrib and veins."""
+    from PIL import ImageDraw
+
+    size = 640
+    cx = size / 2
+    top, bottom = 40, size - 100
+
+    def render(outline_points, veins=True):
+        image = Image.new('L', (size, size), 0)
+        draw = ImageDraw.Draw(image)
+        draw.polygon(outline_points, fill=255)
+        draw.rectangle((cx - 6, bottom - 10, cx + 6, size - 20), fill=255)
+        if veins:
+            draw.line((cx, bottom, cx, top + (bottom - top) * 0.1), fill=150, width=7)
+            for step in range(1, 5):
+                y = bottom - (bottom - top) * (0.12 + step * 0.17)
+                reach = (bottom - top) * 0.2
+                draw.line((cx, y, cx - reach, y - reach * 0.75), fill=170, width=5)
+                draw.line((cx, y, cx + reach, y - reach * 0.75), fill=170, width=5)
+        return np.asarray(image).astype(np.float32) / 255
+
+    def profile(width_at, steps=240, right=None):
+        left_points, right_points = [], []
+        for i in range(steps + 1):
+            t = i / steps
+            y = top + t * (bottom - top)
+            left_points.append((cx - width_at(t) * size, y))
+            right_points.append((cx + (right or width_at)(t) * size, y))
+        return right_points + left_points[::-1]
+
+    body = lambda t, power=1.0: np.sin(np.pi * t ** power)
+    saw = lambda t: t - np.floor(t)
+    leaves = []
+    # Oak: long, with rounded lobes.
+    leaves.append(render(profile(lambda t: 0.34 * body(t, 0.85) * (0.72 + 0.28 * abs(np.cos(t * np.pi * 3.5))))))
+    # Birch: a pointed oval with a toothed edge.
+    leaves.append(render(profile(lambda t: 0.32 * body(t, 0.75) * (0.9 + 0.1 * saw(t * 14)))))
+    # Willow: long and narrow.
+    leaves.append(render(profile(lambda t: 0.13 * body(t, 0.9))))
+    # Linden: a heart.
+    leaves.append(render(profile(lambda t: 0.42 * body(t, 0.6) * (1 - max(0.0, (t - 0.88) * 4)))))
+    # Ginkgo: a fan with a notch in its rim.
+    points = [(cx, bottom)]
+    for i in range(161):
+        r = i / 160
+        angle = -np.pi / 2 + (r - 0.5) * np.pi * 0.92
+        notch = 1 - 0.45 * max(0.0, 1 - abs(r - 0.5) * 16)
+        reach = 0.5 * size * notch * (0.96 + 0.04 * np.cos(r * np.pi * 10))
+        points.append((cx + np.cos(angle) * reach, bottom + np.sin(angle) * reach))
+    leaves.append(render(points, veins=False))
+    return [fit(leaf) for leaf in leaves]
 
 
 def blot_stamp():
@@ -117,7 +177,7 @@ def oil_stamp():
 
 
 if __name__ == '__main__':
-    save_cells(leaf_stamps(), 'leaf-stamps.png', 3)
+    save_cells(leaf_stamps(), 'leaf-stamps.png', 4)
     save_cells([blot_stamp()], 'blot-stamp.png', 1)
     save_cells([grain_stamp()], 'grain-stamp.png', 1)
     # The slice keeps its own shape: wider than tall, so it is saved as it is, not fitted to a square.
