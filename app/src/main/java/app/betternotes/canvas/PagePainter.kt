@@ -6,8 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.core.graphics.withTranslation
-import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
-import app.betternotes.canvas.BrushTextures
 import androidx.ink.strokes.Stroke
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.layout.DocumentLayout
@@ -53,13 +51,12 @@ internal interface PaintSource {
  * Paints pages: the part of a document inside one tile, or a page for an export. Use from one thread,
  * which must be the one its [PaintSource] expects.
  */
-internal class PagePainter(private val source: PaintSource) {
-    private val renderer = CanvasStrokeRenderer.create(BrushTextures)
+internal class PagePainter(private val source: PaintSource, private val ink: InkRenderer = InkRenderer()) {
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
     private val items = ItemPainter(source::image) { canvas, stroke ->
-        InkBrushes.draw(renderer, canvas, source.mesh(stroke), strokeToTile)
+        ink.drawOrStandIn(canvas, source.mesh(stroke), strokeToTile)
     }
     private val highlightPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
 
@@ -131,7 +128,7 @@ internal class PagePainter(private val source: PaintSource) {
         strokeToTile.setScale(scale, scale)
         content.forEachIntersecting(region) { _, item ->
             if (item is StrokeItem) {
-                renderer.draw(canvas, source.mesh(item), strokeToTile)
+                ink.draw(canvas, source.mesh(item), strokeToTile)
             } else {
                 items.paint(canvas, item)
             }

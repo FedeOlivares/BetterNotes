@@ -6,9 +6,8 @@ import android.os.SystemClock
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.RenderNode
 import androidx.core.graphics.withMatrix
-import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
-import app.betternotes.canvas.BrushTextures
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
@@ -27,6 +26,8 @@ import app.betternotes.core.tools.resizeTransform
 import app.betternotes.core.tools.selectWithLasso
 import app.betternotes.core.tools.snapToAlign
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Selecting items and moving or resizing them. While a selection is dragged its items leave the page
@@ -34,6 +35,9 @@ import kotlin.math.abs
  * go back to the page, as one edit, when the pen lifts. Coordinates are the page's own unless named
  * otherwise.
  */
+/** Off only for the benchmark, to compare a move drawn live with one drawn as a picture. */
+internal var useDragLayer = true
+
 internal class LassoController(
     private val viewport: Viewport,
     private val density: Float,
@@ -62,9 +66,8 @@ internal class LassoController(
     private var param: ShapeParam? = null
     private val polygon = ArrayList<Float>()
 
-    private val renderer = CanvasStrokeRenderer.create(BrushTextures)
     private val itemPainter = ItemPainter({ editor?.imageOrLoad(it) }) { canvas, stroke ->
-        editor?.strokes?.get(stroke)?.let { renderer.draw(canvas, it, strokeToScreen) }
+        editor?.let { it.ink.draw(canvas, it.strokes.get(stroke), strokeToScreen) }
     }
     private val pageToScreen = Matrix()
     private val strokeToScreen = Matrix()
@@ -256,6 +259,7 @@ internal class LassoController(
     }
 
     fun end() {
+        releaseDragNode()
         guideX = null
         guideY = null
         when (drag) {
@@ -269,6 +273,7 @@ internal class LassoController(
     }
 
     fun cancel() {
+        releaseDragNode()
         val selected = selection
         val page = pageContent()
         if ((drag == Drag.MOVE || drag == Drag.RESIZE || drag == Drag.PARAM) && selected != null && page != null) {
@@ -505,8 +510,78 @@ internal class LassoController(
         canvas.drawPath(outline, marquee)
     }
 
+    /** The dragged items drawn once at the current zoom, so a move only has to slide this picture. */
+    private var dragNode: RenderNode? = null
+    private var dragNodeSelection: Selection? = null
+    private var dragNodeScale = 0f
+    private var dragNodeBox = Bounds(0f, 0f, 0f, 0f)
+
+    private fun releaseDragNode() {
+        dragNode?.discardDisplayList()
+        dragNode = null
+        dragNodeSelection = null
+    }
+
+    /**
+     * Draws a move as a picture of the selection slid into place, rounded to whole pixels. Drawing every
+     * stroke again each frame costs as much as the selection is large. Returns false when the selection
+     * is too big to hold as a picture, and the caller draws it item by item.
+     */
+    private fun drawMoved(canvas: Canvas, selected: Selection): Boolean {
+        if (!useDragLayer || !canvas.isHardwareAccelerated || transform.a != 1f || transform.d != 1f || transform.b != 0f || transform.c != 0f) return false
+        val scale = viewport.pxPerPt
+        if (dragNode == null || dragNodeSelection !== selected || dragNodeScale != scale) {
+            if (!recordDragNode(selected, scale)) return false
+        }
+        val node = dragNode ?: return false
+        val x = (dragNodeBox.left + transform.e) * scale + pageToScreenX
+        val y = (dragNodeBox.top + transform.f) * scale + pageToScreenY
+        canvas.save()
+        canvas.translate(x.roundToInt().toFloat(), y.roundToInt().toFloat())
+        canvas.drawRenderNode(node)
+        canvas.restore()
+        return true
+    }
+
+    private val pageToScreenX get() = viewport.toScreenX(pageOriginX(pageIndex))
+    private val pageToScreenY get() = viewport.toScreenY(pageOriginY(pageIndex))
+
+    private fun recordDragNode(selected: Selection, scale: Float): Boolean {
+        val editor = editor ?: return false
+        val bounds = selected.bounds ?: return false
+        // Stamped brushes reach past a stroke's bounds, by up to a line width.
+        val margin = selected.items.maxOf { (it as? StrokeItem)?.style?.width ?: 0f } * DRAG_MARGIN_OF_WIDTH + 2f
+        val box = Bounds(bounds.left - margin, bounds.top - margin, bounds.right + margin, bounds.bottom + margin)
+        val width = ceil(box.width * scale).toInt().coerceAtLeast(1)
+        val height = ceil(box.height * scale).toInt().coerceAtLeast(1)
+        if (width > MAX_DRAG_NODE_PX || height > MAX_DRAG_NODE_PX || width.toLong() * height > MAX_DRAG_NODE_AREA) return false
+        releaseDragNode()
+        val node = RenderNode("lasso-drag")
+        node.setPosition(0, 0, width, height)
+        node.setClipToBounds(false)
+        node.setUseCompositingLayer(true, null)
+        strokeToScreen.setScale(scale, scale)
+        strokeToScreen.postTranslate(-box.left * scale, -box.top * scale)
+        val recording = node.beginRecording(width, height)
+        try {
+            recording.withMatrix(strokeToScreen) {
+                for (item: PageItem in selected.items) {
+                    if (item is StrokeItem) editor.ink.draw(this, editor.strokes.get(item), strokeToScreen) else itemPainter.paint(this, item)
+                }
+            }
+        } finally {
+            node.endRecording()
+        }
+        dragNode = node
+        dragNodeSelection = selected
+        dragNodeScale = scale
+        dragNodeBox = box
+        return true
+    }
+
     private fun drawDraggedItems(canvas: Canvas) {
         val selected = selection ?: return
+        if (drag == Drag.MOVE && drawMoved(canvas, selected)) return
         val strokes = editor?.strokes ?: return
         itemMatrix.setValues(
             floatArrayOf(transform.a, transform.c, transform.e, transform.b, transform.d, transform.f, 0f, 0f, 1f),
@@ -516,7 +591,7 @@ internal class LassoController(
         canvas.withMatrix(strokeToScreen) {
             for (item: PageItem in selected.items) {
                 if (item is StrokeItem) {
-                    renderer.draw(this, strokes.get(item), strokeToScreen)
+                    editor?.ink?.draw(this, strokes.get(item), strokeToScreen)
                 } else {
                     itemPainter.paint(this, item)
                 }
@@ -608,6 +683,10 @@ internal class LassoController(
     }
 
     private companion object {
+        /** A stamp can reach this many line widths past the stroke's bounds. */
+        const val DRAG_MARGIN_OF_WIDTH = 2f
+        const val MAX_DRAG_NODE_PX = 8192
+        const val MAX_DRAG_NODE_AREA = 24_000_000L
         const val MARQUEE_COLOR = 0xFF4A9BF5.toInt()
         const val HANDLE_FILL = 0xFFFFFFFF.toInt()
         const val MARQUEE_WIDTH_DP = 1.2f

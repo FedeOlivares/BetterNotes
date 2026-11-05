@@ -95,6 +95,7 @@ import java.io.File
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /** What the stylus does: lay down ink, erase, or point. */
 sealed interface CanvasTool {
@@ -629,7 +630,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         close()
         this.editor = editor
         lasso.open(editor)
-        painter = PagePainter(editor.paintSource)
+        painter = PagePainter(editor.paintSource, editor.ink)
         loupe.painter = painter
         editor.onPageLoaded = ::redrawPage
         editor.pdf?.onRegionReady = ::redrawPageRegion
@@ -2389,6 +2390,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         editor?.pdf?.setFocus(viewport.toWorldX(width / 2f), viewport.toWorldY(height / 2f))
         painter?.paint(canvas, layout, region, leftPx, topPx, scale)
     }
+
+    /**
+     * For the benchmark: grabs everything on page 1 with the lasso and drags it about by script. [step]
+     * counts from 0, and a negative step lets it go.
+     */
+    internal fun benchmarkDrag(step: Int) {
+        if (step < 0) {
+            lasso.cancel()
+            lasso.clear()
+            return
+        }
+        if (step == 0) {
+            val editor = editor ?: return
+            val pageId = editor.document.pages[0].id
+            val content = editor.content(pageId)
+            benchmarkBox = content.toList().map { it.bounds }.reduce(Bounds::union)
+            layout?.moveToPage(viewport, 0, width, height, pageMarginPx)
+            settlePan()
+            lasso.select(0, Selection(pageId, IntArray(content.size) { it }, content.toList()))
+            lasso.start(0, benchmarkBox.centerX, benchmarkBox.centerY, rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
+        }
+        lasso.move(benchmarkBox.centerX + 60f * sin(step * 0.04f), benchmarkBox.centerY + 40f * sin(step * 0.03f))
+    }
+
+    private var benchmarkBox = Bounds(0f, 0f, 0f, 0f)
 
     /** Keeps the pages near the view in memory and lets the others go. */
     private fun retainNearbyPages() {

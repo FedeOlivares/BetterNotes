@@ -171,6 +171,7 @@ class MainActivity : ComponentActivity() {
 
         val benchmarkStrokes = if (BuildConfig.PERF_TOOLS) intent.getIntExtra(EXTRA_BENCHMARK_STROKES, 0) else 0
         when {
+            BuildConfig.PERF_TOOLS && intent.getBooleanExtra(EXTRA_BENCHMARK_HEAVY, false) -> runHeavyBenchmark()
             benchmarkStrokes > 0 -> runBenchmark(benchmarkStrokes)
             intent.hasExtra(EXTRA_DOCUMENT_ID) -> openDocument(intent.getLongExtra(EXTRA_DOCUMENT_ID, 0L))
             else -> openScratch(canvasKind = false)
@@ -259,6 +260,13 @@ class MainActivity : ComponentActivity() {
         canvas.post { CanvasBenchmark.run(canvas, perf) { finish() } }
     }
 
+    private fun runHeavyBenchmark() {
+        val perf = probe ?: return
+        val store = CanvasBenchmark.writeHeavyDocument(this, File(cacheDir, "benchmark-heavy"))
+        show(NoteEditor(store, DocumentSession.open(store)))
+        canvas.post { CanvasBenchmark.run(canvas, perf) { finish() } }
+    }
+
     private fun apply(next: AppSettings) {
         canvas.applySettings(next)
         if (next.canvas.keepScreenOn) {
@@ -335,6 +343,9 @@ class MainActivity : ComponentActivity() {
 
         /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */
         private const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"
+
+        /** Debug and profile builds only: run the scripted benchmark on a PDF covered in every kind of ink. */
+        private const val EXTRA_BENCHMARK_HEAVY = "benchmark_heavy"
     }
 }
 

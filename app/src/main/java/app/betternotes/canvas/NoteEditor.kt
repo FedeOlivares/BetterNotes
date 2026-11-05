@@ -37,6 +37,7 @@ class NoteEditor(
     private val session: DocumentSession,
 ) {
     internal val strokes = StrokeCache()
+    internal val ink = InkRenderer()
 
     /** The PDF behind this document's pages, if it has any. */
     internal val pdf: PdfPages? =
@@ -295,6 +296,7 @@ class NoteEditor(
                 return@execute
             }
             val meshed = meshAll(items)
+            ink.warm(meshed.map { it.second })
             main.post { install(pageId, items, meshed) }
         }
     }

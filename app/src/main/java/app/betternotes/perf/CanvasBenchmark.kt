@@ -1,5 +1,10 @@
 package app.betternotes.perf
 
+import android.content.Context
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.pdf.PdfDocument
+import android.net.Uri
 import android.util.Log
 import android.view.Choreographer
 import app.betternotes.canvas.CanvasView
@@ -8,7 +13,16 @@ import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.IdSource
+import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
+import app.betternotes.core.model.InkTool
+import app.betternotes.core.geometry.Frame
+import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.ShapeKind
+import app.betternotes.pdf.PdfImportResult
+import app.betternotes.pdf.PdfImporter
+import java.io.File
+import java.io.FileOutputStream
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePointsBuilder
@@ -25,6 +39,7 @@ import kotlin.random.Random
 internal object CanvasBenchmark {
     private const val SAMPLES_PER_STROKE = 40
     private const val ROWS = 40
+    private const val PDF_PAGES = 6
     private const val SCENARIO_FRAMES = 700
 
     /** Writes a one-page A4 note holding [strokeCount] handwriting-sized strokes. */
@@ -34,6 +49,69 @@ internal object CanvasBenchmark {
         store.writeDocument(document)
         store.writePage(document.pages[0].id, handwriting(strokeCount))
         return document
+    }
+
+    /**
+     * A PDF of [PDF_PAGES] pages, text and vector art, with ink of every costly kind over it: the stamped
+     * brushes, plain pens and shapes. It is the load a heavy study document puts on the screen.
+     */
+    fun writeHeavyDocument(context: Context, root: File): DocumentStore {
+        root.deleteRecursively()
+        root.mkdirs()
+        val pdfFile = File(root, "heavy.pdf")
+        writePdf(pdfFile)
+        val imported = PdfImporter.import(context.contentResolver, Uri.fromFile(pdfFile), File(root, "documents")) as PdfImportResult.Imported
+        for ((index, page) in imported.document.pages.withIndex()) {
+            val size = page.size ?: continue
+            imported.store.writePage(page.id, heavyInk(size.widthPt, size.heightPt, Random(index)))
+        }
+        return imported.store
+    }
+
+    private fun writePdf(file: File) {
+        val pdf = PdfDocument()
+        val text = Paint().apply { color = Color.DKGRAY; textSize = 10f }
+        val line = Paint().apply { color = Color.GRAY; strokeWidth = 0.5f }
+        repeat(PDF_PAGES) { index ->
+            val page = pdf.startPage(PdfDocument.PageInfo.Builder(595, 842, index + 1).create())
+            for (row in 0 until 60) page.canvas.drawText("lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor", 40f, 60f + row * 12f, text)
+            for (i in 0 until 800) {
+                val x = (i * 37 % 500).toFloat() + 40f
+                page.canvas.drawLine(x, 300f + i % 400, x + 30f, 330f + i % 400, line)
+            }
+            pdf.finishPage(page)
+        }
+        FileOutputStream(file).use(pdf::writeTo)
+        pdf.close()
+    }
+
+    private fun heavyInk(width: Float, height: Float, random: Random): List<PageItem> {
+        val items = ArrayList<PageItem>()
+        fun strokes(count: Int, style: InkStyle, lengthPt: Float) {
+            repeat(count) {
+                val x = random.nextFloat() * (width - lengthPt)
+                val y = random.nextFloat() * height
+                val builder = StrokePointsBuilder(SAMPLES_PER_STROKE)
+                val wave = random.nextFloat() * 6.28f
+                for (s in 0 until SAMPLES_PER_STROKE) {
+                    val t = s.toFloat() / (SAMPLES_PER_STROKE - 1)
+                    builder.add(x + t * lengthPt, y + sin(wave + t * 7f) * 12f, pressure = 0.4f + 0.3f * sin(t * PI.toFloat()), timeMs = s * 4f)
+                }
+                items += StrokeItem(IdSource.Random.next(), style, builder.build())
+            }
+        }
+        strokes(120, InkStyle(width = 1.6f), 90f)
+        for ((kind, count) in listOf(BrushKind.PENCIL to 80, BrushKind.WATERCOLOR to 40, BrushKind.LEAVES to 40, BrushKind.OIL to 40, BrushKind.GLOW to 10, BrushKind.SCRATCHES to 20)) {
+            strokes(count, InkStyle(tool = InkTool.PENCIL, brush = kind, width = if (kind == BrushKind.GLOW) 3f else 6f, color = 0xFF2A5CAA.toInt()), 150f)
+        }
+        strokes(10, InkStyle(tool = InkTool.HIGHLIGHTER, width = 14f, color = 0xFFFFE680.toInt(), opacity = 0.5f), 200f)
+        val kinds = listOf(ShapeKind.RECTANGLE, ShapeKind.ELLIPSE, ShapeKind.STAR, ShapeKind.ARROW, ShapeKind.CUBE, ShapeKind.HEART)
+        repeat(60) {
+            val x = random.nextFloat() * (width - 80f)
+            val y = random.nextFloat() * (height - 60f)
+            items += ShapeItem(IdSource.Random.next(), Frame(x, y, 70f, 50f, 0f), kinds[it % kinds.size], fillColor = if (it % 2 == 0) 0x40FFAA00 else 0)
+        }
+        return items
     }
 
     /** Times meshing alone, which is the larger part of opening a page. */
@@ -61,8 +139,10 @@ internal object CanvasBenchmark {
             "pan_zoom_400" to { frame -> pan(canvas, frame) },
             "pan_zoom_1500" to { frame -> pan(canvas, frame) },
             "pan_zoom_30" to { frame -> pan(canvas, frame) },
+            "lasso_move_live" to { frame -> app.betternotes.canvas.useDragLayer = false; canvas.benchmarkDrag(frame) },
+            "lasso_move_layer" to { frame -> app.betternotes.canvas.useDragLayer = true; canvas.benchmarkDrag(frame) },
         )
-        val zooms = listOf(1f, 1f, 1f, 4f, 15f, 0.3f)
+        val zooms = listOf(1f, 1f, 1f, 4f, 15f, 0.3f, 1f, 1f)
         runScenario(canvas, probe, scenarios, zooms, 0, onDone)
     }
 
@@ -93,6 +173,7 @@ internal object CanvasBenchmark {
                     choreographer.postFrameCallback(this)
                 } else {
                     canvas.onTransformEnd()
+                    if (name.startsWith("lasso")) canvas.benchmarkDrag(-1)
                     probe.report(name)
                     runScenario(canvas, probe, scenarios, zooms, index + 1, onDone)
                 }
