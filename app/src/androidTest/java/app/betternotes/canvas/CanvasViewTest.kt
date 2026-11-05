@@ -702,6 +702,21 @@ class CanvasViewTest {
         assertEquals(1f, onMain { tape().opacity }, 0.001f)
     }
 
+    @Test
+    fun aLineWithinThreeDegreesOfAReferenceAngleSnapsToIt() {
+        onMain { canvas.tool = CanvasTool.Shape(app.betternotes.core.tools.ShapeOptions(kind = app.betternotes.core.model.ShapeKind.LINE)) }
+        // About 2 degrees off horizontal.
+        stylusStroke(worldToScreen(100f, 400f), worldToScreen(300f, 393f))
+        waitUntil { pageContent().size == 1 }
+        val line = onMain { pageContent()[0] as app.betternotes.core.model.ShapeItem }
+        assertEquals("snapped onto 0 degrees", 0f, line.frame.rotation, 0.05f)
+        // About 6 degrees off is left as drawn.
+        stylusStroke(worldToScreen(100f, 500f), worldToScreen(300f, 479f))
+        waitUntil { pageContent().size == 2 }
+        val loose = onMain { pageContent()[1] as app.betternotes.core.model.ShapeItem }
+        assertTrue(Math.abs(loose.frame.rotation) > 3f)
+    }
+
     private fun tapeItems() = pageContent().let { c -> (0 until c.size).map { c[it] } }
 
     @Test

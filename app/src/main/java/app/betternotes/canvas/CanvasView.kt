@@ -88,6 +88,7 @@ import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.AngleGuide
 import app.betternotes.core.tools.TapeLineMode
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.tools.cellAt
@@ -567,6 +568,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private val hold = HoldDetector(HOLD_SLOP_DP * resources.displayMetrics.density)
     private var holdDelayMs = 0L
     private var straightening = false
+
+    // The angle tool for a pen stroke made straight, in page coordinates from the stroke's start.
+    private val angleGuide = AngleGuidePainter(resources.displayMetrics.density)
+    private var lineGuideOn = false
+    private var lineGuideEndX = 0f
+    private var lineGuideEndY = 0f
     private var drawScribble = false
     private var drawCircle = false
     private var lastLoop: LoopMark? = null
@@ -620,6 +627,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     if (item !is TapePathItem && !(item is ShapeItem && item.kind == ShapeKind.TAPE)) selectLast(pageId)
                 }
             },
+            resources.displayMetrics.density,
         )
     }
 
@@ -656,6 +664,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         addView(loupe, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         overlay.extraDraw = { canvas ->
             drawAudioBars(canvas)
+            drawLineGuide(canvas)
             lasso.draw(canvas)
             shapes.draw(canvas)
             drawLoupeBox(canvas)
@@ -1723,6 +1732,21 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
+    private fun drawLineGuide(canvas: Canvas) {
+        if (!lineGuideOn || !straightening) return
+        val layout = layout ?: return
+        val ox = layout.originX(drawPageIndex)
+        val oy = layout.originY(drawPageIndex)
+        angleGuide.draw(
+            canvas,
+            viewport.toScreenX(ox + strokeStartX),
+            viewport.toScreenY(oy + strokeStartY),
+            viewport.toScreenX(ox + lineGuideEndX),
+            viewport.toScreenY(oy + lineGuideEndY),
+            AngleGuide.angle(strokeStartX, strokeStartY, lineGuideEndX, lineGuideEndY),
+        )
+    }
+
     private fun drawAudioBars(canvas: Canvas) {
         val open = editor ?: return
         val layout = layout ?: return
@@ -2177,6 +2201,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private fun moveStraightEnd(id: InProgressStrokeId, timeMs: Long) {
         val end = currentLineEnd(timeMs)
+        overlay.invalidate()
         val prediction = MutableStrokeInputBatch().add(end)
         wet.addToStroke(ImmutableStrokeInputBatch.EMPTY, id, prediction)
     }
@@ -2186,6 +2211,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (index >= 0) hold.move(event.getX(index), event.getY(index), event.eventTime)
         val end = currentLineEnd(event.eventTime)
         straightening = false
+        lineGuideOn = false
+        overlay.invalidate()
         strokeEdge = Ruler.NO_EDGE
         wet.finishStroke(end, id)
     }
@@ -2198,6 +2225,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             floatArrayOf(hold.x, hold.y)
         }
         screenToPage.mapPoints(end)
+        if (strokeEdge == Ruler.NO_EDGE || ruler == null) {
+            // Within a few degrees of a reference angle the line turns onto it, and the angle is shown until the pen lifts.
+            val snapped = AngleGuide.snap(strokeStartX, strokeStartY, end[0], end[1])
+            end[0] = snapped[0]
+            end[1] = snapped[1]
+            lineGuideEndX = end[0]
+            lineGuideEndY = end[1]
+            lineGuideOn = hypot(end[0] - strokeStartX, end[1] - strokeStartY) >= AngleGuide.MIN_LENGTH_PT
+        } else {
+            lineGuideOn = false
+        }
         return strokeInput(end[0], end[1], (timeMs - strokeStartMs).coerceAtLeast(1L))
     }
 

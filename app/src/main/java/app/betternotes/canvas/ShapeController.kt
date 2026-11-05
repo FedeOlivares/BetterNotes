@@ -10,7 +10,10 @@ import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.tools.smoothTapePath
+import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.tools.AngleGuide
 import kotlin.math.abs
+import kotlin.math.hypot
 
 /** Dragging out a new shape. Until the pen lifts it floats over the page, drawn by the same painter. */
 internal class ShapeController(
@@ -19,7 +22,13 @@ internal class ShapeController(
     private val pageOriginY: (pageIndex: Int) -> Float,
     private val redraw: () -> Unit,
     private val add: (pageIndex: Int, item: PageItem) -> Unit,
+    density: Float,
 ) {
+    private val guidePainter = AngleGuidePainter(density)
+    private var guideEndX = 0f
+    private var guideEndY = 0f
+    private var guideOn = false
+
     private val painter = ItemPainter()
     private var make: ((x0: Float, y0: Float, x1: Float, y1: Float) -> ShapeItem)? = null
     private var pageIndex = -1
@@ -71,7 +80,11 @@ internal class ShapeController(
     fun moveTape(x: Float, y: Float, slop: Float): Boolean {
         val options = tape ?: return false
         if (straight) {
-            preview = options.item(0L, startX, startY, x, y)
+            val end = AngleGuide.snap(startX, startY, x, y)
+            preview = options.item(0L, startX, startY, end[0], end[1])
+            guideEndX = end[0]
+            guideEndY = end[1]
+            guideOn = hypot(end[0] - startX, end[1] - startY) >= AngleGuide.MIN_LENGTH_PT
         } else {
             val last = tapePoints.size
             if (last < 2 || abs(x - tapePoints[last - 2]) + abs(y - tapePoints[last - 1]) >= TAPE_SAMPLE_PT) {
@@ -94,16 +107,32 @@ internal class ShapeController(
         val options = tape ?: return
         if (straight || tapePoints.size < 2) return
         straight = true
-        preview = options.item(0L, startX, startY, tapePoints[tapePoints.size - 2], tapePoints[tapePoints.size - 1])
+        val end = AngleGuide.snap(startX, startY, tapePoints[tapePoints.size - 2], tapePoints[tapePoints.size - 1])
+        preview = options.item(0L, startX, startY, end[0], end[1])
+        guideEndX = end[0]
+        guideEndY = end[1]
+        guideOn = hypot(end[0] - startX, end[1] - startY) >= AngleGuide.MIN_LENGTH_PT
         pathPreview = null
         redraw()
     }
 
     fun move(x: Float, y: Float) {
         val current = make ?: return
-        preview = current(startX, startY, x, y)
+        var item = current(startX, startY, x, y)
+        guideOn = false
+        if (isStraight(item)) {
+            // A straight line turns onto a reference angle that it is close to, and shows the angle while it is drawn.
+            val end = AngleGuide.snap(startX, startY, x, y)
+            item = current(startX, startY, end[0], end[1])
+            guideEndX = end[0]
+            guideEndY = end[1]
+            guideOn = hypot(end[0] - startX, end[1] - startY) >= AngleGuide.MIN_LENGTH_PT
+        }
+        preview = item
         redraw()
     }
+
+    private fun isStraight(item: ShapeItem) = item.kind == ShapeKind.LINE || item.kind == ShapeKind.ARROW || item.kind == ShapeKind.TAPE
 
     fun end() {
         val path = pathPreview
@@ -127,6 +156,7 @@ internal class ShapeController(
     }
 
     fun cancel() {
+        guideOn = false
         make = null
         preview = null
         tape = null
@@ -145,6 +175,18 @@ internal class ShapeController(
                 if (item != null) painter.paint(this, item)
                 if (path != null) painter.paint(this, path)
             }
+        }
+        if (guideOn) {
+            val ox = pageOriginX(pageIndex)
+            val oy = pageOriginY(pageIndex)
+            guidePainter.draw(
+                canvas,
+                viewport.toScreenX(ox + startX),
+                viewport.toScreenY(oy + startY),
+                viewport.toScreenX(ox + guideEndX),
+                viewport.toScreenY(oy + guideEndY),
+                AngleGuide.angle(startX, startY, guideEndX, guideEndY),
+            )
         }
     }
 
