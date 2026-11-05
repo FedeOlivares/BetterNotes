@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -24,13 +25,17 @@ object OpenFrom {
 }
 
 /**
- * Makes a menu or panel grow from [origin] to its full size and fade in, in [OPEN_MS], when it enters the composition.
+ * Makes a menu or panel grow from [origin] to its full size and fade in, in [OPEN_MS], after the frame in which it enters the composition.
  * Only the drawing changes; the layout, and so the touch area, is the full size from the first frame.
  */
 @Composable
 fun Modifier.opensFrom(origin: TransformOrigin): Modifier {
     val progress = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { progress.animateTo(1f, tween(OPEN_MS)) }
+    LaunchedEffect(Unit) {
+        // The first frame composes and measures the whole menu, and would use up much of the time. The growth starts after it.
+        withFrameNanos { }
+        progress.animateTo(1f, tween(OPEN_MS))
+    }
     return graphicsLayer {
         val p = progress.value
         val scale = START_SCALE + (1f - START_SCALE) * p
