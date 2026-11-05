@@ -49,9 +49,8 @@ internal object InkBrushes {
     private const val STAMP_LOOP_MS = 1000L
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
-    private const val CALLIGRAPHY_NIB_RATIO = 0.25f
-    /** A flat nib held level: strokes going up and down are as wide as it is long, and strokes going across are as thin as it is thick. */
-    private const val CALLIGRAPHY_NIB_DEGREES = 0f
+    private const val CALLIGRAPHY_DEPTH = 0.12f
+    private const val CALLIGRAPHY_MIN_WIDTH = 0.1f
 
     private val pressurePen by lazy { StockBrushes.pressurePen(PressurePenVersion.V1) }
     /** The pressure pen, with its width and opacity wavering by a few percent along the line, as ink from a real pen does. */
@@ -73,15 +72,31 @@ internal object InkBrushes {
     }
     private val dashed by lazy { StockBrushes.dashedLine(DashedLineVersion.V1) }
     private val squareNib by lazy { familyOf(BrushTip.builder().setCornerRounding(0f).build()) }
+    /**
+     * A broad nib held level: its width across the line follows the line's direction, widest going straight up or
+     * down and thinnest going across, in between in proportion (half way at 45 degrees).
+     */
     private val calligraphyNib by lazy {
-        familyOf(
-            BrushTip.builder()
-                .setScaleY(CALLIGRAPHY_NIB_RATIO)
-                .setRotationDegrees(CALLIGRAPHY_NIB_DEGREES)
-                .setCornerRounding(0f)
-                .build(),
-        )
+        BrushFamily.builder()
+            .setCoat(
+                BrushCoat(
+                    BrushTip.builder()
+                        .setScaleX(CALLIGRAPHY_DEPTH)
+                        .setScaleY(1f)
+                        .setCornerRounding(0.3f)
+                        .addBehavior(aimedAtDirection())
+                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_MIN_WIDTH, 1f, ResponseNode(calligraphyWidth, SourceNode(SourceNode.Source.DIRECTION_IN_RADIANS, 0f, TWO_PI)))))
+                        .build(),
+                ),
+            )
+            .setInputModel(BrushFamily.InputModel.SlidingWindowModel())
+            .build()
     }
+
+    /** From the direction of travel, over a whole turn, to how wide the nib is: thin at 0 and 180 degrees, full at 90 and 270. */
+    private val calligraphyWidth = EasingFunction.Linear(
+        listOf(ImmutableVec(0f, 0f), ImmutableVec(0.25f, 1f), ImmutableVec(0.5f, 0f), ImmutableVec(0.75f, 1f), ImmutableVec(1f, 0f)),
+    )
 
     // ---- The creative brushes ----
     //
