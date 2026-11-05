@@ -65,34 +65,8 @@ def save_cells(cells, name, columns):
 
 
 def leaf_stamps():
-    """Up to eight separate, whole leaves cut out of the reference stroke, one per cell. Clumps of overlapping leaves are skipped."""
-    from scipy.spatial import ConvexHull
-
-    image = crop('brushes samples.jpg', (340, 2190, 1910, 2540))
-    alpha = clean(darkness_alpha(image), 0.22)
-    labels, count = ndimage.label(alpha > 0.35)
-    slices = ndimage.find_objects(labels)
-    found = []
-    for index in range(1, count + 1):
-        box = slices[index - 1]
-        if box[0].start == 0 or box[1].start == 0 or box[0].stop >= alpha.shape[0] or box[1].stop >= alpha.shape[1]:
-            continue
-        mask = ndimage.binary_fill_holes(labels[box] == index)
-        area = mask.sum()
-        if not 1800 < area < 9000:
-            continue
-        points = np.argwhere(mask)
-        solidity = area / ConvexHull(points).volume
-        if solidity < 0.86:
-            continue
-        found.append((area, alpha[box] * ndimage.binary_dilation(mask, iterations=1)))
-    found.sort(key=lambda item: -item[0])
-    step = max(1, len(found) // 8)
-    print(len(found), 'whole leaves found')
-    # The reference leaves are slightly see-through; the brush's own opacity sets how much shows, so firm them up.
-    leaves = [fit(leaf ** 0.45) for _, leaf in found[::step][:8]]
-    # Two of these are pairs of leaves that overlap in the reference, so they are left out.
-    return [leaf for i, leaf in enumerate(leaves) if i not in (1, 2)] + [maple_stamp()] + drawn_leaves()
+    """The leaf sheet: the owner's maple and generic leaves drawn here. The reference stroke's own leaves are not used, as they have no clear shape."""
+    return [maple_stamp()] + drawn_leaves()
 
 
 def maple_stamp():
@@ -152,6 +126,12 @@ def drawn_leaves():
         reach = 0.5 * size * notch * (0.96 + 0.04 * np.cos(r * np.pi * 10))
         points.append((cx + np.cos(angle) * reach, bottom + np.sin(angle) * reach))
     leaves.append(render(points, veins=False))
+    # Elm: an oval whose two sides differ, with a toothed edge.
+    leaves.append(render(profile(lambda t: 0.34 * body(t, 0.8) * (0.9 + 0.1 * saw(t * 11)), right=lambda t: 0.26 * body(t, 0.7) * (0.9 + 0.1 * saw(t * 11 + 0.3)))))
+    # Aspen: nearly round with a drawn-out tip.
+    leaves.append(render(profile(lambda t: 0.40 * np.sqrt(np.maximum(0.0, body(t, 0.55))) * (t / 0.18 if t < 0.18 else 1.0))))
+    # Beech: a smooth pointed oval.
+    leaves.append(render(profile(lambda t: 0.27 * body(t, 0.7))))
     return [fit(leaf) for leaf in leaves]
 
 
@@ -177,7 +157,7 @@ def oil_stamp():
 
 
 if __name__ == '__main__':
-    save_cells(leaf_stamps(), 'leaf-stamps.png', 4)
+    save_cells(leaf_stamps(), 'leaf-stamps.png', 3)
     save_cells([blot_stamp()], 'blot-stamp.png', 1)
     save_cells([grain_stamp()], 'grain-stamp.png', 1)
     # The slice keeps its own shape: wider than tall, so it is saved as it is, not fitted to a square.

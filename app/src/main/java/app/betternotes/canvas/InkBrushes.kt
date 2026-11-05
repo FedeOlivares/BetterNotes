@@ -83,6 +83,11 @@ internal object InkBrushes {
     private fun vary(target: TargetNode.Target, from: Float, to: Float, input: ValueNode) =
         BrushBehavior(TargetNode(target, from, to, input))
 
+    /** Near 0 for most of its input and rising to 1 at the top, so only now and then does anything happen. */
+    private val seldom = EasingFunction.Linear(
+        listOf(ImmutableVec(0f, 0f), ImmutableVec(0.72f, 0f), ImmutableVec(1f, 1f)),
+    )
+
     private val spindle = EasingFunction.Linear(
         listOf(ImmutableVec(0f, 0f), ImmutableVec(0.3f, 1f), ImmutableVec(0.7f, 1f), ImmutableVec(1f, 0f)),
     )
@@ -325,6 +330,10 @@ internal object InkBrushes {
                             addBehavior(vary(TargetNode.Target.PAINT_ANIMATION_PROGRESS_OFFSET, 0f, 1f, noise(80, 0.002f)))
                             addBehavior(aimedAtDirection())
                             addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, -0.9f, 0.9f, noise(14, 0.05f)))
+                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.9f, 1f, noise(92, 0.1f)))
+                        // Now and then a leaf is caught by the wind: turned further and seen narrower, as if edge on.
+                        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, 1.3f, ResponseNode(seldom, noise(90, 0.1f)))))
+                        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.WIDTH_MULTIPLIER, 1f, 0.45f, ResponseNode(seldom, noise(90, 0.1f)))))
                             addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.65f, 1.2f, noise(15, 0.06f)))
                             addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, noise(16, 0.06f)))
                         },
