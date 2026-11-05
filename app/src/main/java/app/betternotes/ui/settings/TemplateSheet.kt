@@ -1,5 +1,9 @@
 package app.betternotes.ui.settings
 
+import android.content.Context
+import androidx.compose.animation.animateContentSize
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -488,46 +492,73 @@ private fun ColumnScope.CustomLayouts(
     }
 }
 
-/** The pill at the corner: apply to the current page, or open it to apply to all of them. */
+private const val APPLY_PREFS = "template_sheet"
+private const val APPLY_DEFAULT_KEY = "apply_all_pages"
+
+/**
+ * One blue pill. It shows the way to apply that was used last (the first time, the current page), and the arrow
+ * grows the pill to show the other way underneath. Whichever the owner picks becomes the one on top next time.
+ */
 @Composable
 private fun ApplyButton(enabled: Boolean, modifier: Modifier = Modifier, onApply: (ApplyScope) -> Unit) {
     val colors = LocalSettingsColors.current
+    val preferences = LocalContext.current.getSharedPreferences(APPLY_PREFS, Context.MODE_PRIVATE)
+    var first by remember {
+        mutableStateOf(if (preferences.getBoolean(APPLY_DEFAULT_KEY, false)) ApplyScope.ALL_PAGES else ApplyScope.CURRENT_PAGE)
+    }
     var open by remember { mutableStateOf(false) }
-    val background = if (enabled) colors.accent else colors.sliderIdle
-    Box(modifier) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.height(66.dp).clip(CircleShape).background(background),
-        ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .height(66.dp)
-                    .clickable(enabled = enabled, role = Role.Button) { onApply(ApplyScope.CURRENT_PAGE) }
-                    .padding(start = 32.dp, end = 21.dp),
-            ) {
-                Text(stringResource(R.string.template_apply_current), color = colors.onAccent, fontSize = 19.5.sp)
-            }
+    val second = if (first == ApplyScope.CURRENT_PAGE) ApplyScope.ALL_PAGES else ApplyScope.CURRENT_PAGE
+    fun choose(scope: ApplyScope) {
+        first = scope
+        open = false
+        preferences.edit().putBoolean(APPLY_DEFAULT_KEY, scope == ApplyScope.ALL_PAGES).apply()
+        onApply(scope)
+    }
+
+    Column(
+        modifier
+            .animateContentSize()
+            .width(IntrinsicSize.Max)
+            .clip(RoundedCornerShape(33.dp))
+            .background(if (enabled) colors.accent else colors.sliderIdle),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(66.dp)) {
+            ApplyLabel(first, enabled, Modifier.weight(1f).padding(start = 32.dp, end = 21.dp)) { choose(first) }
             Box(Modifier.size(2.dp, 41.dp).background(colors.divider))
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .height(66.dp)
-                    .clickable(enabled = enabled, role = Role.Button) { open = true }
+                    .clickable(enabled = enabled, role = Role.Button) { open = !open }
                     .padding(start = 24.dp, end = 28.dp),
             ) {
-                Icon(SettingsIcons.Up, stringResource(R.string.template_apply_more), tint = colors.onAccent, modifier = Modifier.size(26.dp))
+                Icon(
+                    if (open) SettingsIcons.Down else SettingsIcons.Up,
+                    stringResource(R.string.template_apply_more),
+                    tint = colors.onAccent,
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
-        DropdownMenu(open, { open = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.template_apply_all), fontSize = 20.sp) },
-                onClick = {
-                    open = false
-                    onApply(ApplyScope.ALL_PAGES)
-                },
-            )
+        if (open) {
+            Box(Modifier.fillMaxWidth().height(2.dp).background(colors.divider))
+            ApplyLabel(second, enabled, Modifier.fillMaxWidth().padding(horizontal = 32.dp)) { choose(second) }
         }
+    }
+}
+
+@Composable
+private fun ApplyLabel(scope: ApplyScope, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = LocalSettingsColors.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier.height(66.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+    ) {
+        ShrinkText(
+            stringResource(if (scope == ApplyScope.CURRENT_PAGE) R.string.template_apply_current else R.string.template_apply_all),
+            colors.onAccent,
+            19.5.sp,
+        )
     }
 }
 
