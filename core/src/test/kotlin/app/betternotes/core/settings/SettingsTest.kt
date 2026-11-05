@@ -23,6 +23,9 @@ class SettingsTest {
         PageSize(300f, 400f),
         LengthUnit.INCH,
         listOf(LayoutElement.Table(1f, 2f, 100f, 50f, 2, 3, 0.5f, 0xFF112233.toInt())),
+        paper = 0xFF202020.toInt(),
+        base = app.betternotes.core.template.PageTemplate.Cornell(),
+        bookStyle = true,
     )
 
     private val changed = AppSettings(

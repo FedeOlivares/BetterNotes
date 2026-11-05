@@ -4,6 +4,7 @@ import app.betternotes.core.format.ByteReader
 import app.betternotes.core.format.ByteWriter
 import app.betternotes.core.format.WireEnum
 import app.betternotes.core.format.customLayout
+import app.betternotes.core.format.LAYOUT_FORMAT_VERSION
 import app.betternotes.core.format.decodeFile
 import app.betternotes.core.format.encodeFile
 import app.betternotes.core.format.pageSize
@@ -56,7 +57,7 @@ private val SCROLL_DIRECTIONS =
  * Actions are stored by name, because the enum will keep growing in the middle.
  */
 object SettingsCodec {
-    fun encode(settings: AppSettings): ByteArray = encodeFile(SETTINGS_MAGIC) {
+    fun encode(settings: AppSettings): ByteArray = encodeFile(SETTINGS_MAGIC, LAYOUT_FORMAT_VERSION) {
         section(SECTION_GESTURES) {
             long(settings.gestures.multiTapWindowMs)
             long(settings.gestures.tapMaxDurationMs)
@@ -117,7 +118,7 @@ object SettingsCodec {
         }
     }
 
-    fun decode(bytes: ByteArray): AppSettings = decodeFile(bytes, SETTINGS_MAGIC) {
+    fun decode(bytes: ByteArray): AppSettings = decodeFile(bytes, SETTINGS_MAGIC, LAYOUT_FORMAT_VERSION) {
         var settings = AppSettings()
         while (remaining > 0) {
             val tag = varint()
@@ -171,7 +172,8 @@ object SettingsCodec {
 }
 
 private inline fun ByteWriter.section(tag: Int, body: ByteWriter.() -> Unit) {
-    val section = ByteWriter(capacity = 256).apply(body).toByteArray()
+    val version = version
+    val section = ByteWriter(capacity = 256).apply { this.version = version }.apply(body).toByteArray()
     varint(tag)
     varint(section.size)
     bytes(section)

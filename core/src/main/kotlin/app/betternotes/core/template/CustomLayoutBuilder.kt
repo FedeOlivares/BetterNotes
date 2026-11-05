@@ -37,8 +37,22 @@ class CustomLayoutBuilder(
     /** The unit the builder is showing. Stored values stay in points, so switching loses nothing. */
     var unit: LengthUnit = LengthUnit.CM,
     elements: List<LayoutElement> = emptyList(),
+    /** The paper color of the layout. */
+    var paper: Int = PageBackground.DEFAULT_PAPER_COLOR,
+    /** The pattern or frame under the elements. */
+    base: PageTemplate = PageTemplate.Blank,
+    /** Whether every other page is mirrored. */
+    var bookStyle: Boolean = false,
 ) {
-    constructor(layout: CustomLayout) : this(layout.name, layout.size, layout.displayUnit, layout.elements)
+    constructor(layout: CustomLayout) : this(
+        layout.name, layout.size, layout.displayUnit, layout.elements, layout.paper, layout.base, layout.bookStyle,
+    )
+
+    var base: PageTemplate = base
+        set(value) {
+            require(value !is PageTemplate.Custom) { "A layout's base cannot be a custom layout" }
+            field = value
+        }
 
     var size = coerced(size.widthPt, size.heightPt)
         private set
@@ -94,7 +108,7 @@ class CustomLayoutBuilder(
         return -1
     }
 
-    fun build() = CustomLayout(name, size, unit, placed.toList())
+    fun build() = CustomLayout(name, size, unit, placed.toList(), paper, base, bookStyle)
 
     private fun distanceToSegment(x: Float, y: Float, line: LayoutElement.Line): Float {
         val dx = line.x1 - line.x0

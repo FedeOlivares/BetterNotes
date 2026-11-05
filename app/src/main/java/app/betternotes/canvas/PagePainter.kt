@@ -16,6 +16,7 @@ import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.TemplateSink
 import app.betternotes.core.template.draw
+import app.betternotes.core.template.isMirroredOn
 
 /** What a [PagePainter] paints from. */
 internal interface PaintSource {
@@ -110,9 +111,21 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
         val pattern = page.background.template
         if (!pattern.isTooDense(scale)) {
             template.canvas = canvas
+            val mirrored = size != null && pattern.isMirrored(page)
+            if (mirrored) {
+                canvas.save()
+                canvas.scale(-1f, 1f, size!!.widthPt / 2f, 0f)
+            }
             pattern.draw(size, region, template)
             template.flush()
+            if (mirrored) canvas.restore()
         }
+    }
+
+    /** True for the left-hand pages of a book-style custom layout. Looks the page up only when the layout asks for it. */
+    private fun PageTemplate.isMirrored(page: Page): Boolean {
+        val layout = (this as? PageTemplate.Custom)?.layout ?: return false
+        return layout.bookStyle && layout.isMirroredOn(source.pages.indexOfFirst { it.id == page.id })
     }
 
     /** Multiplying keeps the text under a highlight readable, as a marker on paper does. */

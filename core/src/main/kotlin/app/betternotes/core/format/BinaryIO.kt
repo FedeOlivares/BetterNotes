@@ -15,6 +15,13 @@ class UnsupportedVersionException(val version: Int) : IOException("Unsupported f
 internal const val FORMAT_VERSION = 1
 
 /**
+ * The document and settings files are at version 2, because they hold custom layouts: a layout gained a paper color,
+ * a base pattern and book style (2). Version 1 files still open, with the default paper, no pattern and no mirroring.
+ * The other files are still at [FORMAT_VERSION].
+ */
+internal const val LAYOUT_FORMAT_VERSION = 2
+
+/**
  * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).
  * Older pages still open, with the default tips and the pencil brush. The other files are still at [FORMAT_VERSION].
  */

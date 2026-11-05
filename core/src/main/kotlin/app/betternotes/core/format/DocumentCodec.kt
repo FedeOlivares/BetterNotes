@@ -44,7 +44,7 @@ internal val LENGTH_UNITS = WireEnum(LengthUnit.PT, LengthUnit.INCH, LengthUnit.
 
 /** The file describing a document and listing its pages in order. */
 object DocumentCodec {
-    fun encode(document: Document): ByteArray = encodeFile(DOCUMENT_MAGIC) {
+    fun encode(document: Document, version: Int = LAYOUT_FORMAT_VERSION): ByteArray = encodeFile(DOCUMENT_MAGIC, version) {
         long(document.id)
         string(document.title)
         DOCUMENT_KINDS.write(this, document.kind)
@@ -54,7 +54,7 @@ object DocumentCodec {
         document.pages.forEach { page(it) }
     }
 
-    fun decode(bytes: ByteArray): Document = decodeFile(bytes, DOCUMENT_MAGIC) {
+    fun decode(bytes: ByteArray): Document = decodeFile(bytes, DOCUMENT_MAGIC, LAYOUT_FORMAT_VERSION) {
         val id = long()
         val title = string()
         val kind = DOCUMENT_KINDS.read(this)
@@ -203,6 +203,12 @@ internal fun ByteWriter.customLayout(layout: CustomLayout) {
     LENGTH_UNITS.write(this, layout.displayUnit)
     varint(layout.elements.size)
     layout.elements.forEach { element(it) }
+    // Version 2 added the paper color, the pattern under the elements and book style.
+    if (version >= 2) {
+        int(layout.paper)
+        template(layout.base)
+        bool(layout.bookStyle)
+    }
 }
 
 internal fun ByteReader.customLayout(): CustomLayout {
@@ -210,7 +216,12 @@ internal fun ByteReader.customLayout(): CustomLayout {
     val size = pageSize()
     val unit = LENGTH_UNITS.read(this)
     val count = count(MIN_ELEMENT_BYTES)
-    return CustomLayout(name, size, unit, List(count) { element() })
+    val elements = List(count) { element() }
+    if (version < 2) return CustomLayout(name, size, unit, elements)
+    val paper = int()
+    val base = template()
+    if (base is PageTemplate.Custom) throw CorruptFileException("A layout's base is a custom layout")
+    return CustomLayout(name, size, unit, elements, paper, base, bool())
 }
 
 private fun ByteWriter.element(element: LayoutElement) {
