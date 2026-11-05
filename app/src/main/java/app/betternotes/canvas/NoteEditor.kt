@@ -21,6 +21,9 @@ import app.betternotes.core.model.StrokeItem
 import java.io.File
 import app.betternotes.core.search.TextMatch
 import app.betternotes.pdf.PdfPages
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
+import app.betternotes.core.geometry.PageSize
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -87,6 +90,31 @@ class NoteEditor(
                 false
             }
             main.post { done(if (copied) assetId else null) }
+        }
+    }
+
+    /** Copies a PDF into the assets and reads its page sizes, off the main thread. Null if it cannot be read. */
+    fun importPdf(resolver: ContentResolver, uri: Uri, done: (assetId: String, sizes: List<PageSize>?) -> Unit) {
+        if (closed) return
+        background.execute {
+            val assetId = UUID.randomUUID().toString()
+            val sizes = try {
+                val opened = resolver.openInputStream(uri) ?: throw IOException("Cannot open $uri")
+                val file = store.assetFile(assetId)
+                opened.use { input -> file.outputStream().use { input.copyTo(it) } }
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
+                    PdfRenderer(descriptor).use { renderer ->
+                        List(renderer.pageCount) { i -> renderer.openPage(i).use { PageSize(it.width.toFloat(), it.height.toFloat()) } }
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e(TAG, "Could not import a PDF", e)
+                null
+            } catch (e: SecurityException) {
+                null // an encrypted file
+            }
+            if (sizes == null) store.assetFile(assetId).delete()
+            main.post { done(assetId, sizes?.takeIf { it.isNotEmpty() }) }
         }
     }
 

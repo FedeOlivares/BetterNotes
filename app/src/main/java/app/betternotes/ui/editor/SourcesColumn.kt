@@ -238,7 +238,7 @@ private fun AddToNote(state: EditorState, sources: ImageSources, recorder: Recor
         AddOption(EditorIcons.Image, R.string.add_photos, R.string.add_photos_detail, done { sources.pickPhoto() }),
         AddOption(EditorIcons.Camera, R.string.add_take_photo, R.string.add_take_photo_detail, done { sources.takePhoto() }),
         AddOption(EditorIcons.Scan, R.string.add_scan, R.string.add_scan_detail, done { sources.scan() }),
-        AddOption(EditorIcons.Tray, R.string.add_file, R.string.add_file_detail, done { sources.pickFile() }),
+        AddOption(EditorIcons.Tray, R.string.add_file, R.string.add_file_detail, done { sources.pickDocument() }),
     )
     Box(
         Modifier

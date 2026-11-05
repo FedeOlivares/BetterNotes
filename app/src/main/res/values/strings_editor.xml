@@ -63,6 +63,9 @@
     <string name="recorder_stop">Stop</string>
     <string name="recorder_delete">Delete recording</string>
     <string name="recorder_item">New recording %1$d</string>
+    <string name="notice_pdf_failed">That PDF could not be added</string>
+    <string name="notice_pdf_unsupported">This note cannot take PDF pages</string>
+    <string name="notice_file_unsupported">That kind of file cannot be added</string>
     <string name="notice_audio_failed">That recording could not be read</string>
     <string name="pages_all">All pages</string>
     <string name="pages_add">Add a page</string>
@@ -170,7 +173,7 @@
     <string name="add_scan">Scan Documents</string>
     <string name="add_scan_detail">Scan papers and documents</string>
     <string name="add_file">File &amp; Doc</string>
-    <string name="add_file_detail">Pictures from your files</string>
+    <string name="add_file_detail">PDFs, MP3s and pictures from your files</string>
     <string name="info_color_list">Touch a color to use it. Drag the dots to put colors in order.</string>
     <string name="color_list_drag">Move color</string>
     <string name="brush_pencil">Pencil</string>

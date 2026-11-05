@@ -260,6 +260,17 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     fun importVideo(uri: Uri) = canvas.importVideo(uri) { say(R.string.notice_video_failed) }
 
+    /** A file from the picker: a PDF adds its pages, audio becomes a recording, a picture a picture. */
+    fun importDocument(uri: Uri) {
+        val type = canvas.context.contentResolver.getType(uri).orEmpty()
+        when {
+            type == "application/pdf" -> canvas.importPdfPages(uri, { say(R.string.notice_pdf_unsupported) }) { say(R.string.notice_pdf_failed) }
+            type.startsWith("audio/") -> importAudio(uri, place = true)
+            type.startsWith("image/") -> importImage(uri)
+            else -> say(R.string.notice_file_unsupported)
+        }
+    }
+
     fun importImage(uri: Uri) = canvas.importImage(uri, image) { say(R.string.notice_image_failed) }
 
     /** Pastes a picture or text from outside the app, or says there is nothing to paste. */
@@ -297,7 +308,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     fun assetFile(assetId: String) = canvas.assetFile(assetId)
 
-    fun importAudio(uri: Uri) = canvas.importAudio(uri) { say(R.string.notice_audio_failed) }
+    fun importAudio(uri: Uri, place: Boolean = false) = canvas.importAudio(uri, place) { say(R.string.notice_audio_failed) }
 
     fun deleteRecording(item: AudioItem) = canvas.deleteAudio(item)
 
