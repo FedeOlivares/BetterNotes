@@ -18,7 +18,6 @@ Fully offline. The only network use is the one-time ML Kit Digital Ink model dow
 - Time things on the `profile` build type, never debug.
 
 ## Hard rules
-- Never add Claude or AI attribution to git commits (no `Co-Authored-By`). All credit goes to the owner.
 - Never assume a refresh, touch or stylus rate (maximums: 144 / 360 / 240 Hz). Time by the clock and by event timestamps, not by counting frames or samples. Check the rate the app actually gets; HyperOS may limit it.
 - Verify performance on the real Pad 7. Report measured numbers, and say plainly what was not compiled, tested, run or measured.
 - UI must match Notewise. If a screen's reference screenshot is missing, ask the owner; do not invent it.
