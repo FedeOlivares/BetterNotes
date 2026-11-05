@@ -113,7 +113,7 @@ private fun RailButton(label: String, selected: Boolean, onClick: () -> Unit, ic
     ) {
         icon(tint)
         Spacer(Modifier.height(6.dp))
-        Text(label, color = tint, fontSize = 16.sp, maxLines = 1, textAlign = TextAlign.Center)
+        ShrinkText(label, tint, 16.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -211,7 +211,7 @@ private fun TemplateTiles(options: List<Pair<Int, PageTemplate>>, current: PageT
                     TemplatePreview(template, paper, PatternPage, Modifier.size(110.dp))
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(stringResource(label), color = if (selected) colors.accent else colors.text, fontSize = 16.sp, maxLines = 1)
+                ShrinkText(stringResource(label), if (selected) colors.accent else colors.text, 16.sp)
             }
         }
     }

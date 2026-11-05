@@ -59,7 +59,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import app.betternotes.R
 import app.betternotes.ui.theme.ReferenceScale
 import app.betternotes.ui.theme.OpenFrom
@@ -563,6 +565,25 @@ internal fun PlainSlider(fraction: Float, onChange: (Float) -> Unit, modifier: M
     }
 }
 
+/** Text that stays on one line: when it does not fit, the font shrinks to the largest size that does. */
+@Composable
+internal fun ShrinkText(text: String, color: Color, fontSize: TextUnit, modifier: Modifier = Modifier, textAlign: TextAlign? = null) {
+    var size by remember(text, fontSize) { mutableStateOf(fontSize) }
+    Text(
+        text,
+        color = color,
+        fontSize = size,
+        maxLines = 1,
+        softWrap = false,
+        textAlign = textAlign,
+        modifier = modifier,
+        onTextLayout = { if (it.didOverflowWidth && size.value > MIN_SHRUNK_SP) size = (size.value * SHRINK_STEP).sp },
+    )
+}
+
+private const val SHRINK_STEP = 0.93f
+private const val MIN_SHRUNK_SP = 8f
+
 /** A selectable pill such as Built-in and Custom. */
 @Composable
 internal fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
@@ -580,6 +601,6 @@ internal fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
             Icon(SettingsIcons.Check, null, tint = colors.chipSelectedText, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
         }
-        Text(label, color = if (selected) colors.chipSelectedText else colors.chipIdleText, fontSize = 19.5.sp)
+        ShrinkText(label, if (selected) colors.chipSelectedText else colors.chipIdleText, 19.5.sp)
     }
 }

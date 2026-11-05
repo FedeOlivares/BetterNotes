@@ -152,23 +152,22 @@ fun CustomLayoutSheet(
                     changed()
                 }
                 Spacer(Modifier.weight(1f))
-                val canSave = name.isNotBlank()
+                val fallbackName = stringResource(R.string.layout_title)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .height(52.dp)
                         .clip(RoundedCornerShape(26.dp))
-                        .background(if (canSave) colors.accent else colors.sliderIdle)
-                        .pointerInput(canSave) {
-                            if (!canSave) return@pointerInput
+                        .background(colors.chipSelected)
+                        .pointerInput(Unit) {
                             detectTapGestures {
-                                builder.name = name.trim()
+                                builder.name = name.trim().ifEmpty { fallbackName }
                                 onSave(builder.build())
                             }
                         }
                         .padding(horizontal = 32.dp),
                 ) {
-                    Text(stringResource(R.string.layout_confirm), color = colors.onAccent, fontSize = 19.5.sp)
+                    ShrinkText(stringResource(R.string.layout_confirm), Color.White, 19.5.sp)
                 }
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
