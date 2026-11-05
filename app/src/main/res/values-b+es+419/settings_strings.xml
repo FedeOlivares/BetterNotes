@@ -129,6 +129,7 @@
     <string name="layout_name">Nombre</string>
     <string name="layout_size">Tamaño de página</string>
     <string name="layout_add_line">Línea</string>
+    <string name="layout_thickness">Grosor</string>
     <string name="layout_add_highlighter">Resaltador</string>
     <string name="layout_discard">Descartar</string>
     <string name="layout_confirm">Confirmar</string>

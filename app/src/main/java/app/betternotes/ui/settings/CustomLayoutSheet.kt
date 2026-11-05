@@ -46,6 +46,10 @@ import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.CustomLayoutBuilder
 import app.betternotes.core.template.LayoutElement
 import app.betternotes.core.template.PageTemplate
+import app.betternotes.core.template.strokeColor
+import app.betternotes.core.template.strokeWidth
+import app.betternotes.core.template.withStrokeColor
+import app.betternotes.core.template.withStrokeWidth
 import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.abs
@@ -343,6 +347,12 @@ private fun TextBox(value: String, width: Dp, keyboard: KeyboardType, hint: Stri
 private fun ElementControls(element: LayoutElement, unit: LengthUnit, onChange: (LayoutElement) -> Unit, onRemove: () -> Unit) {
     val colors = LocalSettingsColors.current
     Column(Modifier.fillMaxWidth()) {
+        LineStyleRows(
+            element.strokeWidth,
+            element.strokeColor.takeIf { element !is LayoutElement.Sticky },
+            { onChange(element.withStrokeWidth(it)) },
+            { onChange(element.withStrokeColor(it)) },
+        )
         when (element) {
             is LayoutElement.Line -> Unit
             is LayoutElement.Sticky -> SizeRow(element.width, element.height, unit) { w, h -> onChange(element.copy(width = w, height = h)) }

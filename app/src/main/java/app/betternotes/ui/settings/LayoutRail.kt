@@ -30,7 +30,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.geometry.PageSize
+import app.betternotes.core.template.LINE_COLORS
 import app.betternotes.core.template.PAPER_COLORS
+import app.betternotes.core.template.lineColor
+import app.betternotes.core.template.lineWeight
+import app.betternotes.core.template.withLineColor
+import app.betternotes.core.template.withLineWeight
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.density
 import app.betternotes.core.template.kind
@@ -173,7 +178,8 @@ private val Frames: List<Pair<Int, PageTemplate>> = listOf(
 @Composable
 internal fun PatternPanel(base: PageTemplate, paper: Int, onPick: (PageTemplate) -> Unit) {
     RailPanel(stringResource(R.string.layout_pattern)) {
-        TemplateTiles(Patterns, base, paper, onPick)
+        // A new pattern keeps the line color the owner chose.
+        TemplateTiles(Patterns, base, paper) { picked -> onPick(base.lineColor?.let(picked::withLineColor) ?: picked) }
         val density = base.density
         if (density != null) {
             SettingRow(stringResource(R.string.layout_spacing)) {
@@ -182,6 +188,7 @@ internal fun PatternPanel(base: PageTemplate, paper: Int, onPick: (PageTemplate)
                 RoundIcon(SettingsIcons.Plus, 26.dp) { onPick(base.withDensity(density + 2f)) }
             }
         }
+        LineStyleRows(base.lineWeight, base.lineColor, { onPick(base.withLineWeight(it)) }, { onPick(base.withLineColor(it)) })
     }
 }
 
@@ -189,9 +196,46 @@ internal fun PatternPanel(base: PageTemplate, paper: Int, onPick: (PageTemplate)
 internal fun FramePanel(base: PageTemplate, paper: Int, onPick: (PageTemplate) -> Unit) {
     RailPanel(stringResource(R.string.layout_frame)) {
         // Tapping the frame that is on takes it off again.
-        TemplateTiles(Frames, base, paper) { onPick(if (it.kind == base.kind) PageTemplate.Blank else it) }
+        TemplateTiles(Frames, base, paper) { onPick(if (it.kind == base.kind) PageTemplate.Blank else base.lineColor?.let(it::withLineColor) ?: it) }
+        LineStyleRows(base.lineWeight, base.lineColor, { onPick(base.withLineWeight(it)) }, { onPick(base.withLineColor(it)) })
     }
 }
+
+private const val WIDTH_STEP = 0.25f
+
+/**
+ * Thickness and color for a set of lines: a stepper and a row of colors. Either is left out when it is null, as for
+ * a blank page or a sticky note.
+ */
+@Composable
+internal fun LineStyleRows(width: Float?, color: Int?, onWidth: (Float) -> Unit, onColor: (Int) -> Unit) {
+    val colors = LocalSettingsColors.current
+    if (width != null) {
+        SettingRow(stringResource(R.string.layout_thickness)) {
+            RoundIcon(SettingsIcons.Minus, 26.dp) { onWidth(width - WIDTH_STEP) }
+            ValuePill(formatWidth(width))
+            RoundIcon(SettingsIcons.Plus, 26.dp) { onWidth(width + WIDTH_STEP) }
+        }
+    }
+    if (color != null) {
+        val rgb = color and 0x00FFFFFF
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            for (choice in LINE_COLORS) {
+                val selected = (choice and 0x00FFFFFF) == rgb
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(choice))
+                        .border(if (selected) 3.dp else 1.dp, if (selected) colors.accent else colors.divider, CircleShape)
+                        .clickable(role = Role.RadioButton) { onColor(choice) },
+                )
+            }
+        }
+    }
+}
+
+private fun formatWidth(value: Float): String = if (value % 1f == 0f) value.toInt().toString() else "%.2f".format(value).trimEnd('0')
 
 @Composable
 private fun TemplateTiles(options: List<Pair<Int, PageTemplate>>, current: PageTemplate, paper: Int, onPick: (PageTemplate) -> Unit) {
