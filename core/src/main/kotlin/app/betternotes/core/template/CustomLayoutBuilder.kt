@@ -54,7 +54,10 @@ class CustomLayoutBuilder(
         set(value) {
             require(value !is PageTemplate.Custom) { "A layout's base cannot be a custom layout" }
             // Lines moved on one frame mean nothing on another.
-            if (value.kind != field.kind) frameLines = emptyList()
+            // Changing how far apart ruled lines are puts them back where the spacing says.
+            if (value.kind != field.kind || value is PageTemplate.Lined && value.spacing != (field as PageTemplate.Lined).spacing) {
+                frameLines = emptyList()
+            }
             field = value
         }
 
@@ -66,7 +69,7 @@ class CustomLayoutBuilder(
     fun moveFrameLine(index: Int, fraction: Float) {
         val lines = base.frameLines(size, frameLines)
         if (index !in lines.indices) return
-        frameLines = lines.mapIndexed { i, line -> if (i == index) base.clampFrameLine(lines, index, fraction) else line.fraction }
+        frameLines = lines.mapIndexed { i, line -> if (i == index) base.clampFrameLine(lines, index, fraction, size) else line.fraction }
     }
 
     var size = coerced(size.widthPt, size.heightPt)

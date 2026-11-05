@@ -216,6 +216,15 @@ fun CustomLayoutSheet(
                                 changed()
                             }
                         },
+                        onLineEnd = { index, end, x, y ->
+                            val line = builder.elements.getOrNull(index) as? LayoutElement.Line
+                            if (line != null) {
+                                val px = x.coerceIn(0f, builder.size.widthPt)
+                                val py = y.coerceIn(0f, builder.size.heightPt)
+                                builder.update(index, if (end == 0) line.copy(x0 = px, y0 = py) else line.copy(x1 = px, y1 = py))
+                                changed()
+                            }
+                        },
                         onFrameLine = { index, fraction ->
                             builder.moveFrameLine(index, fraction)
                             changed()

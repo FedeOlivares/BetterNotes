@@ -231,4 +231,23 @@ class TemplateDrawingTest {
         builder.base = PageTemplate.Legal()
         assertEquals(emptyList<Float>(), builder.frameLines)
     }
+
+    @Test
+    fun `moved rules start where the first sits and repeat at the gap to the second`() {
+        val layout = CustomLayout(
+            "L", page, LengthUnit.PT, emptyList(),
+            base = PageTemplate.Lined(spacing = 24f), frameLines = listOf(0.1f, 0.2f),
+        )
+        val ys = PageTemplate.Custom(layout).record().lines.map { it.y0 }
+        assertEquals(listOf(20f, 40f, 60f, 80f, 100f, 120f, 140f, 160f, 180f), ys)
+    }
+
+    @Test
+    fun `ruled lines keep their gap when a handle is dragged past the other`() {
+        val builder = CustomLayoutBuilder("L", page, LengthUnit.PT, base = PageTemplate.Lined(spacing = 20f))
+        builder.moveFrameLine(0, 0.9f)
+        assertEquals(0.18f, builder.frameLines[0], 0.0001f)
+        builder.base = PageTemplate.Lined(spacing = 30f)
+        assertEquals(emptyList<Float>(), builder.frameLines)
+    }
 }

@@ -70,6 +70,7 @@ internal fun LayoutCanvas(
     onDraw: (Float, Float, Float, Float) -> Unit,
     onDrag: (Float, Float) -> Unit,
     onFrameLine: (Int, Float) -> Unit,
+    onLineEnd: (index: Int, end: Int, x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalSettingsColors.current
@@ -86,6 +87,8 @@ internal fun LayoutCanvas(
     val onDrawNow by rememberUpdatedState(onDraw)
     val onDragNow by rememberUpdatedState(onDrag)
     val onFrameLineNow by rememberUpdatedState(onFrameLine)
+    val onLineEndNow by rememberUpdatedState(onLineEnd)
+    val selectedNow by rememberUpdatedState(selected)
     val shadow = colors.screen
 
     // Fits the page again when its size or the spread changes, or the screen does.
@@ -106,6 +109,22 @@ internal fun LayoutCanvas(
                     val first = view ?: return@awaitEachGesture
                     fun toPage(position: Offset) = Offset((position.x - first.x) / first.scale, (position.y - first.y) / first.scale)
                     val begin = toPage(down.position)
+                    // A grab on an end of the selected line moves that end, and nothing else.
+                    val ends = layoutNow.lineEnds(selectedNow)
+                    val endGrabbed = ends.indexOfFirst { point ->
+                        (Offset(first.x + point.x * first.scale, first.y + point.y * first.scale) - down.position).getDistance() <= HANDLE_GRAB_DP.dp.toPx()
+                    }
+                    if (endGrabbed >= 0) {
+                        down.consume()
+                        do {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val at = toPage(change.position)
+                            onLineEndNow(selectedNow, endGrabbed, at.x, at.y)
+                            change.consume()
+                        } while (event.changes.any { it.pressed })
+                        return@awaitEachGesture
+                    }
                     // A grab on a frame line's handle moves that line and nothing else.
                     val grabbed = layoutNow.frameHandles().indexOfFirst { handle ->
                         (Offset(first.x + handle.x * first.scale, first.y + handle.y * first.scale) - down.position).getDistance() <= HANDLE_GRAB_DP.dp.toPx()
@@ -185,6 +204,11 @@ internal fun LayoutCanvas(
             drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
             drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
         }
+        for (point in layout.lineEnds(selected)) {
+            val center = Offset(now.x + point.x * now.scale, now.y + point.y * now.scale)
+            drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
+            drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
+        }
         val index = selected
         if (index in layout.elements.indices) {
             val element = layout.elements[index]
@@ -245,4 +269,10 @@ private fun DrawScope.paintPaper(layout: CustomLayout, width: Float, height: Flo
 /** Where each movable line of the layout's frame has its handle, in points, in the order of [frameLines]. */
 private fun CustomLayout.frameHandles(): List<Offset> = base.frameLines(size, frameLines).map { line ->
     if (line.vertical) Offset(line.position(size), size.heightPt / 2f) else Offset(size.widthPt * HORIZONTAL_HANDLE_X, line.position(size))
+}
+
+/** The two ends of the line at [index], in points, or none if that element is not a line. */
+private fun CustomLayout.lineEnds(index: Int): List<Offset> {
+    val line = elements.getOrNull(index) as? LayoutElement.Line ?: return emptyList()
+    return listOf(Offset(line.x0, line.y0), Offset(line.x1, line.y1))
 }

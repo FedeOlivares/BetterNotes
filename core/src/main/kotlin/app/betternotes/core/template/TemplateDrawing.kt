@@ -42,7 +42,9 @@ fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink, frame
     if (area.width < 0f || area.height < 0f) return
     when (this) {
         PageTemplate.Blank -> Unit
-        is PageTemplate.Lined -> horizontalLines(area, page, spacing, lineWidth, color, sink)
+        is PageTemplate.Lined ->
+            if (page != null && frame.size == 2) ruledFrom(area, page, frameLines(page, frame), lineWidth, color, sink)
+            else horizontalLines(area, page, spacing, lineWidth, color, sink)
         is PageTemplate.Dotted -> dots(area, page, this, sink)
         is PageTemplate.Grid -> {
             horizontalLines(area, page, spacing, lineWidth, color, sink)
@@ -83,6 +85,20 @@ private fun endIndex(end: Float, spacing: Float, pageEnd: Float?): Int {
     val last = floor(end / spacing).toInt()
     val onFarEdge = pageEnd != null && last * spacing >= pageEnd
     return if (onFarEdge) last else last + 1
+}
+
+/** Ruling that starts at the first of [lines] and repeats at the gap to the second, down to the foot of the page. */
+private fun ruledFrom(area: Bounds, page: PageSize, lines: List<FrameLine>, width: Float, color: Int, sink: TemplateSink) {
+    val first = lines[0].position(page)
+    val spacing = lines[1].position(page) - first
+    if (spacing < PageTemplate.MIN_SPACING) return
+    var k = max(0, ceil((area.top - first) / spacing).toInt())
+    while (true) {
+        val y = first + k * spacing
+        if (y >= area.bottom || y >= page.heightPt) break
+        sink.line(area.left, y, area.right, y, width, color)
+        k++
+    }
 }
 
 private fun horizontalLines(area: Bounds, page: PageSize?, spacing: Float, width: Float, color: Int, sink: TemplateSink) {
