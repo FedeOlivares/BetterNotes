@@ -45,7 +45,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
+import kotlin.math.abs
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.draw.alpha
@@ -363,13 +367,19 @@ private fun RecordingRow(state: EditorState, recorder: RecorderState, item: Audi
             .onGloballyPositioned { origin = it.positionInWindow() }
             .clickable(role = Role.Button) { recorder.play(item) }
             .pointerInput(item.id) {
-                // Hold, then drag the recording onto the canvas.
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { at -> recorder.dragTo(item, origin.x + at.x, origin.y + at.y) },
-                    onDrag = { change, _ -> recorder.dragTo(item, origin.x + change.position.x, origin.y + change.position.y) },
-                    onDragEnd = { recorder.drop(item) },
-                    onDragCancel = { recorder.cancelDrag() },
-                )
+                // A sideways drag takes the recording out onto the canvas. An up-and-down one scrolls the list.
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val moved = awaitTouchSlopOrCancellation(down.id) { change, over ->
+                        if (abs(over.x) > abs(over.y)) change.consume()
+                    } ?: return@awaitEachGesture
+                    recorder.dragTo(item, origin.x + moved.position.x, origin.y + moved.position.y)
+                    val finished = drag(moved.id) { change ->
+                        change.consume()
+                        recorder.dragTo(item, origin.x + change.position.x, origin.y + change.position.y)
+                    }
+                    if (finished) recorder.drop(item) else recorder.cancelDrag()
+                }
             }
             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
     ) {
