@@ -20,6 +20,7 @@ import androidx.ink.brush.behavior.ResponseNode
 import androidx.ink.brush.behavior.SourceNode
 import androidx.ink.brush.behavior.TargetNode
 import androidx.ink.brush.behavior.ValueNode
+import androidx.ink.geometry.ImmutableVec
 import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.InkTool
@@ -79,20 +80,28 @@ internal object InkBrushes {
     private fun vary(target: TargetNode.Target, from: Float, to: Float, input: ValueNode) =
         BrushBehavior(TargetNode(target, from, to, input))
 
-    private fun oilBristles() = lanes(-0.46f, 0.46f, 0.115f) { lane, i ->
+    private val spindle = EasingFunction.Linear(
+        listOf(ImmutableVec(0f, 0f), ImmutableVec(0.3f, 1f), ImmutableVec(0.7f, 1f), ImmutableVec(1f, 0f)),
+    )
+
+    private fun oilBristles(bleed: Boolean) = lanes(-0.4f, 0.4f, 0.2f) { lane, i ->
         setCornerRounding(0.6f)
-        setScaleY(0.08f)
+        setScaleY(if (bleed) 0.2f else 0.08f)
+        addBehavior(aimedAtDirection())
         addBehavior(lane)
         addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.3f + 0.04f * i)))
-        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 0.8f, noise(50 + i, 0.2f)))
-        // Full width for most of each run, thinning to a point at its end, then a fresh start. Runs are staggered.
+        if (bleed) {
+            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.28f, ConstantNode(1f)))
+        } else {
+            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 0.8f, noise(50 + i, 0.2f)))
+        }
         val run = SourceNode(
             SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE,
             -OIL_RUN_STAGGER * i,
             OIL_RUN - OIL_RUN_STAGGER * i,
             OutOfRange.REPEAT,
         )
-        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 1f, 0.05f, ResponseNode(EasingFunction.Predefined.EASE_IN, run))))
+        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.03f, 1f, ResponseNode(spindle, run))))
     }
 
     private fun aimedAtDirection() = vary(
@@ -142,10 +151,11 @@ internal object InkBrushes {
                     }
                 },
             )
-            // Nine thin bristles, each 8% of the line width with the rest as gaps. Each wanders a little, so
-            // neighbours sometimes cross and the ink doubles up (80% each, about 96% where they meet), and each
-            // tapers off and starts again every 1.8 line widths. The ink allows ten layers, so there is no wash.
-            BrushKind.OIL -> brushFamily(*oilBristles())
+            // Five thin bristles, each with a faint bleed around it (the glow trick, smaller). Each bristle runs
+            // 1.8 line widths: it starts at a point, swells to full width, thins to a point and starts again,
+            // and it points along the direction of travel. Ten layers is the ink library's limit, so five
+            // bristles and five bleeds is what fits. The bleeds go first, so every bristle is above them.
+            BrushKind.OIL -> brushFamily(*oilBristles(bleed = true), *oilBristles(bleed = false))
             BrushKind.SPILL -> brushFamily(
                 *Array(2) { c ->
                     tip {
