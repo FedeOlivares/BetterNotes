@@ -221,6 +221,19 @@ class LibraryScreenTest {
     }
 
     @Test
+    fun togglingTheThemeAlternatesEveryTime() {
+        val library = LibraryPreferences.get(context)
+        compose.runOnUiThread { library.updateTheme(ThemeMode.DARK) }
+        val seen = mutableListOf<String?>()
+        repeat(4) {
+            compose.runOnUiThread { library.toggleTheme() }
+            seen += preferences().getString("theme", null)
+        }
+        compose.runOnUiThread { library.updateTheme(ThemeMode.DARK) }
+        assertEquals(listOf("LIGHT", "DARK", "LIGHT", "DARK"), seen)
+    }
+
+    @Test
     fun theTextTileOpensATypedNotebook() {
         val monitor: Instrumentation.ActivityMonitor =
             instrumentation.addMonitor(TextNoteActivity::class.java.name, null, true)

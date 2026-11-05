@@ -42,6 +42,9 @@ class LibraryPreferences private constructor(context: Context) {
         preferences.edit { putString(KEY_THEME, mode.name) }
     }
 
+    /** Reads the current theme, never a copy captured earlier, so repeated toggles alternate. */
+    fun toggleTheme() = updateTheme(if (theme == ThemeMode.DARK) ThemeMode.LIGHT else ThemeMode.DARK)
+
     fun updateSort(order: LibrarySort) {
         sort = order
         preferences.edit { putString(KEY_SORT, order.name) }

@@ -112,9 +112,7 @@ class MainActivity : ComponentActivity() {
                     EditorActions(
                         onBack = ::finish,
                         onZoomToRealSize = { canvas.zoomTo(1f) },
-                        onToggleTheme = {
-                            library.updateTheme(if (theme == ThemeMode.DARK) ThemeMode.LIGHT else ThemeMode.DARK)
-                        },
+                        onToggleTheme = library::toggleTheme,
                         onToggleScratchKind = {
                             showingCanvas = !showingCanvas
                             openScratch(showingCanvas)
