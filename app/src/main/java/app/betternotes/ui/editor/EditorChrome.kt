@@ -1,7 +1,11 @@
 package app.betternotes.ui.editor
 
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.Crossfade
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -157,8 +161,8 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
     }
 }
 
-/** How long a change of tool takes to show: the row fading and the selection circle growing, together. */
-internal const val TOOL_CHANGE_MS = 200
+/** How long a change of tool takes to show: the row turning into the next one and the selection circle growing, together. */
+internal const val TOOL_CHANGE_MS = 250
 
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
@@ -190,12 +194,16 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 }
                 RightPill(state, recorder, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
                 if (!state.viewOnly && (recorder.recording || !state.toolRowCollapsed)) {
-                    // The row of the tool in use fades into the next one's when the tool changes. Each row is built from the tool
-                    // it belongs to, so the one fading out keeps showing its own tool.
+                    // The row of the tool in use turns into the next one's when the tool changes: its box grows or shrinks to the new
+                    // row's size while one row gives way to the other. Each row is built from the tool it belongs to, so the one
+                    // leaving keeps showing its own tool.
                     Box(Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW)) {
-                        Crossfade(
+                        AnimatedContent(
                             targetState = if (recorder.recording) null else state.activeTool,
-                            animationSpec = tween(TOOL_CHANGE_MS),
+                            transitionSpec = {
+                                (fadeIn(tween(TOOL_CHANGE_MS)) togetherWith fadeOut(tween(TOOL_CHANGE_MS)))
+                                    .using(SizeTransform(clip = false) { _, _ -> tween(TOOL_CHANGE_MS) })
+                            },
                             label = "toolRow",
                         ) { tool ->
                             if (tool == null) RecordingControls(state, recorder, Modifier) else ToolRowFor(tool, state, sources)
