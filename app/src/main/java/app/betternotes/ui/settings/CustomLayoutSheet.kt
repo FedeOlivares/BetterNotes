@@ -112,14 +112,21 @@ fun CustomLayoutSheet(
         revision++
     }
 
-    BackHandler(onBack = onClose)
-    Column(modifier.fillMaxSize().background(colors.sheet)) {
+    var askDiscard by remember { mutableStateOf(false) }
+    // Leaving with nothing changed needs no question; otherwise ask before dropping the work.
+    fun discard() {
+        if (revision == 0 && name == (initial?.name ?: "")) onClose() else askDiscard = true
+    }
+
+    BackHandler(onBack = ::discard)
+    Box(modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(colors.sheet)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
         ) {
-            ChoiceChip(stringResource(R.string.layout_back), false, onClose)
+            ChoiceChip(stringResource(R.string.layout_discard), false, ::discard)
             TextBox(name, 260.dp, KeyboardType.Text) { name = it }
             for (unit in UNITS) {
                 ChoiceChip(unitName(unit), builder.unit == unit) {
@@ -165,7 +172,7 @@ fun CustomLayoutSheet(
                     }
                     .padding(horizontal = 32.dp),
             ) {
-                Text(stringResource(R.string.layout_save), color = colors.onAccent, fontSize = 19.5.sp)
+                Text(stringResource(R.string.layout_confirm), color = colors.onAccent, fontSize = 19.5.sp)
             }
         }
         Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -226,7 +233,28 @@ fun CustomLayoutSheet(
             }
         }
     }
+    if (askDiscard) {
+        Box(
+            Modifier.fillMaxSize().background(Color(0x99000000)).pointerInput(Unit) { detectTapGestures { } },
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier.width(420.dp).clip(RoundedCornerShape(24.dp)).background(colors.card).padding(28.dp),
+            ) {
+                Text(stringResource(R.string.layout_discard_title), color = colors.text, fontSize = 22.sp)
+                Text(stringResource(R.string.layout_discard_message), color = colors.text, fontSize = 19.5.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                    ChoiceChip(stringResource(R.string.layout_keep_editing), true) { askDiscard = false }
+                    ChoiceChip(stringResource(R.string.layout_discard), false, onClose)
+                }
+            }
+        }
+    }
+    }
 }
+
+
 
 @Composable
 private fun toolLabels() = listOf(

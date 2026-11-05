@@ -129,7 +129,11 @@
     <string name="layout_name">Name</string>
     <string name="layout_size">Page size</string>
     <string name="layout_add_line">Line</string>
-    <string name="layout_back">Back</string>
+    <string name="layout_discard">Discard</string>
+    <string name="layout_confirm">Confirm</string>
+    <string name="layout_discard_title">Discard changes?</string>
+    <string name="layout_discard_message">The changes to this template will be lost.</string>
+    <string name="layout_keep_editing">Keep editing</string>
     <string name="layout_tool_select">Select</string>
     <string name="layout_add_sticky">Sticky note</string>
     <string name="layout_add_box">Box</string>
@@ -141,7 +145,6 @@
     <string name="layout_element_size">Size</string>
     <string name="layout_remove_element">Remove this</string>
     <string name="layout_delete">Delete layout</string>
-    <string name="layout_save">Save</string>
     <string name="unit_px">px</string>
     <string name="unit_cm">cm</string>
     <string name="unit_inch">in</string>
