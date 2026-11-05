@@ -127,16 +127,18 @@ internal class ItemPainter(
             canvas.drawPath(path, line)
             canvas.restore()
         }
+        // The strip is drawn whole and then made as see-through as asked, so its stripes and marks do not show through each other.
+        val layer = canvas.saveLayerAlpha(-SHADOW_SOFTNESS, -SHADOW_SOFTNESS, width + SHADOW_SOFTNESS, height + SHADOW_SOFTNESS, alpha)
         if (item.fillColor == TapeOptions.WARNING_FILL) {
             paintWarningTape(canvas, width, height)
         } else {
             fill.color = item.fillColor
-            fill.alpha = fill.alpha * alpha / OPAQUE.toInt()
             canvas.drawPath(path, fill)
         }
         if (item.pattern != TapePattern.PLAIN) {
             canvas.withClip(path) { paintPattern(this, item.pattern, width, height) }
         }
+        canvas.restoreToCount(layer)
     }
 
     /** White marks over a strip: tiny dots, thin slanted lines, or two sets of lines crossing. */
