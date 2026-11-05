@@ -142,10 +142,12 @@ internal object EditorIcons {
     val Plus by lazy { line("plus", "M12 5v14 M5 12h14") }
     val Info by lazy { line("info", "M12 3a9 9 0 1 0 .01 0 M12 11v5.5 M12 7.6v.2") }
     val List by lazy { line("list", "M4 5.5h16 M4 10h16 M4 14.5h16 M4 19h16", width = 2.2f) }
-    val NaturalNib by lazy { line("natural", "M12.5 20L5 13l8-9 7 6.5-7.5 9.5z M5 13l-1.5 7.5L12.5 20") }
-    /** A felt-tip marker pointing down and left: a thick body, a band, and a chisel tip. */
-    val BallNib by lazy { line("ball", "M14 3l7 7-10 10-7-7z M4 13l-1 8 8-1 M9.5 7.5l7 7 M3 21l3.2-.9") }
-    val CalligraphyNib by lazy { line("calligraphy", "M14 3l7 7-4 3-6-6z M11 7l-6 2-2 12 12-2 2-6 M3 21l6.5-6.5 M11 13.5a1.5 1.5 0 1 0 .01 0") }
+    val NaturalNib by lazy { line("natural", "M4 20.2L13.6 3.8 20.2 10.2z M11.9 7.2l5.3 5.3 M4 20.2l2.6-.7") }
+    /** The ball tip: a flared barrel ending in a rounded tip, like the reference's, pointing down and left. */
+    val BallNib by lazy { line("ball", "M13.6 3.6l7.2 6.2-8.4 5.4 M13.6 3.6L7.6 11.4 M7.6 11.4l4.8 3.8 M7.6 11.4C3.8 12.4 2.8 16.4 5 18.8 7.2 21 10.8 18.6 12.4 15.2") }
+    val CalligraphyNib by lazy {
+        line("calligraphy", "M4.2 11.2l6.6-2.2 5.8 5.8-2.9 4.4H4.2z M4.2 11.2v7.8 M9.6 14l-5.2 5.2 M12 7.8L17.8 13.6A1.7 1.7 0 0 0 20.2 11.2L14.4 5.4A1.7 1.7 0 0 0 12 7.8z")
+    }
 
     private fun line(name: String, path: String, width: Float = STROKE_WIDTH) = ImageVector.Builder(
         name,
