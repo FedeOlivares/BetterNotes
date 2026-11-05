@@ -44,6 +44,8 @@ data class LassoOptions(
     val lockedToo: Boolean = false,
     val takeScreenshot: Boolean = false,
     val fullSelectionOnly: Boolean = false,
+    /** Selects anything with a part inside, not only what is mostly or wholly inside. */
+    val anyPortion: Boolean = false,
     // Recordings have no place on the page to select them at.
     val kinds: Set<ItemKind> = ALL_ITEM_KINDS - ItemKind.AUDIO,
 )

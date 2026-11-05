@@ -47,7 +47,8 @@ class Selection(
 /**
  * Selects what a closed lasso surrounds. [polygon] holds packed x,y pairs. A stroke is selected if
  * at least half of it is inside, so a slightly sloppy lasso still works. Anything else is selected
- * if its center is inside. With [fullOnly], all of the item must be inside. Only items of [kinds] count.
+ * if its center is inside. With [fullOnly], all of the item must be inside. With [anyPortion], an item is selected
+ * if any part of it is inside, even when the lasso only crosses it. Only items of [kinds] count.
  */
 fun selectWithLasso(
     pageId: Long,
@@ -55,12 +56,13 @@ fun selectWithLasso(
     polygon: FloatArray,
     kinds: Set<ItemKind> = ALL_ITEM_KINDS,
     fullOnly: Boolean = false,
+    anyPortion: Boolean = false,
 ): Selection {
     val indices = ArrayList<Int>()
     val items = ArrayList<PageItem>()
     if (polygon.size >= MIN_POLYGON_FLOATS) {
         content.forEachIntersecting(polygonBounds(polygon)) { index, item ->
-            if (item.kind in kinds && item.isCaughtBy(polygon, fullOnly)) {
+            if (item.kind in kinds && item.isCaughtBy(polygon, fullOnly, anyPortion)) {
                 indices += index
                 items += item
             }
@@ -85,7 +87,8 @@ private fun polygonBounds(polygon: FloatArray): Bounds {
     return Bounds(left, top, right, bottom)
 }
 
-private fun PageItem.isCaughtBy(polygon: FloatArray, fullOnly: Boolean): Boolean {
+private fun PageItem.isCaughtBy(polygon: FloatArray, fullOnly: Boolean, anyPortion: Boolean): Boolean {
+    if (anyPortion && !fullOnly) return touches(polygon)
     if (this !is StrokeItem) {
         if (!fullOnly) return polygonContains(polygon, bounds.centerX, bounds.centerY)
         return polygonContains(polygon, bounds.left, bounds.top) && polygonContains(polygon, bounds.right, bounds.top) &&
@@ -146,4 +149,56 @@ fun resizeTransform(
 private fun axisScale(sign: Int, size: Float, dragged: Float, minSize: Float): Float {
     if (sign == 0 || size <= 0f) return 1f
     return max(dragged * sign, minSize) / size
+}
+
+/** Whether any part of the item is inside the polygon: a stroke's line or an item's box crossing or lying in it. */
+private fun PageItem.touches(polygon: FloatArray): Boolean {
+    if (this !is StrokeItem) return polygonTouchesBox(polygon, bounds)
+    if (points.size == 0) return false
+    val step = max(1, points.size / MAX_STROKE_SAMPLES)
+    var previous = 0
+    if (polygonContains(polygon, points.x(0), points.y(0))) return true
+    var i = step
+    while (true) {
+        val index = minOf(i, points.size - 1)
+        if (polygonContains(polygon, points.x(index), points.y(index))) return true
+        if (polygonEdgeCrosses(polygon, points.x(previous), points.y(previous), points.x(index), points.y(index))) return true
+        if (index == points.size - 1) return false
+        previous = index
+        i += step
+    }
+}
+
+private fun polygonTouchesBox(polygon: FloatArray, box: Bounds): Boolean {
+    val corners = floatArrayOf(box.left, box.top, box.right, box.top, box.right, box.bottom, box.left, box.bottom)
+    for (i in corners.indices step 2) if (polygonContains(polygon, corners[i], corners[i + 1])) return true
+    for (i in polygon.indices step 2) {
+        if (polygon[i] in box.left..box.right && polygon[i + 1] in box.top..box.bottom) return true
+    }
+    for (i in corners.indices step 2) {
+        val next = (i + 2) % corners.size
+        if (polygonEdgeCrosses(polygon, corners[i], corners[i + 1], corners[next], corners[next + 1])) return true
+    }
+    return false
+}
+
+/** Whether the segment from (ax, ay) to (bx, by) crosses any edge of the closed polygon. */
+private fun polygonEdgeCrosses(polygon: FloatArray, ax: Float, ay: Float, bx: Float, by: Float): Boolean {
+    var j = polygon.size - 2
+    var i = 0
+    while (i < polygon.size) {
+        if (segmentsCross(ax, ay, bx, by, polygon[j], polygon[j + 1], polygon[i], polygon[i + 1])) return true
+        j = i
+        i += 2
+    }
+    return false
+}
+
+private fun segmentsCross(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float, dx: Float, dy: Float): Boolean {
+    fun side(px: Float, py: Float, qx: Float, qy: Float, rx: Float, ry: Float) = (qx - px) * (ry - py) - (qy - py) * (rx - px)
+    val d1 = side(cx, cy, dx, dy, ax, ay)
+    val d2 = side(cx, cy, dx, dy, bx, by)
+    val d3 = side(ax, ay, bx, by, cx, cy)
+    val d4 = side(ax, ay, bx, by, dx, dy)
+    return (d1 > 0f) != (d2 > 0f) && (d3 > 0f) != (d4 > 0f)
 }

@@ -110,6 +110,7 @@
     <string name="panel_select_locked">Select locked objects</string>
     <string name="panel_take_screenshot">Take screenshot</string>
     <string name="panel_full_selection">Full selection only</string>
+    <string name="panel_any_portion">Select anything touched</string>
     <string name="panel_select_following">Select the following</string>
     <string name="panel_thickness">Thickness</string>
     <string name="panel_thinner">Thinner</string>
@@ -131,6 +132,7 @@
 
     <string name="info_not_built_setting">Saved, but it does nothing yet.</string>
     <string name="info_full_selection">Only selects items that are completely inside the selection.</string>
+    <string name="info_any_portion">Selects any item with a part inside the selection, even one the lasso only crosses.</string>
     <string name="info_hold_shape">Keep the pen still at the end of a stroke to turn it into a straight line.</string>
     <string name="info_scribble">Saved, but it does nothing yet.</string>
     <string name="info_circle">Saved, but it does nothing yet.</string>

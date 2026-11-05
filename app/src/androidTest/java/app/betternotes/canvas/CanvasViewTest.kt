@@ -633,6 +633,45 @@ class CanvasViewTest {
         assertEquals(1, pageContent().size)
     }
 
+    /** Draws a circle round a stroke with circle to lasso and touches it, as the editor does, then lets the lasso tool take over. */
+    private fun lassoFromCircle(): () -> Int {
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), circleToLasso = true) }
+        var dropped = 0
+        onMain {
+            canvas.onLassoRequested = { canvas.tool = CanvasTool.Lasso(false, emptySet(), false) }
+            canvas.onSelectionDropped = { dropped++ }
+        }
+        stylusStroke(worldToScreen(190f, 200f), worldToScreen(210f, 200f))
+        waitUntil { pageContent().size == 1 }
+        val circle = (0..60).map { i ->
+            val angle = 2.0 * Math.PI * 1.05 * i / 60
+            worldToScreen((200 + 60 * Math.cos(angle)).toFloat(), (200 + 60 * Math.sin(angle)).toFloat())
+        }
+        stylusPath(circle)
+        waitUntil { pageContent().size == 2 }
+        val onLine = worldToScreen(260f, 200f)
+        stylusStroke(onLine, onLine.first to onLine.second + 1f)
+        waitUntil { onMain { canvas.hasSelection } }
+        return { dropped }
+    }
+
+    @Test
+    fun theToolIsGivenBackWhenAnOutsideTouchEndsTheSelectionMadeFromACircle() {
+        val dropped = lassoFromCircle()
+        assertEquals(0, onMain { dropped() })
+        // A touch well away from the selection picks up nothing.
+        val away = worldToScreen(450f, 650f)
+        stylusStroke(away, away.first + 3f to away.second + 3f)
+        waitUntil { onMain { dropped() } == 1 }
+    }
+
+    @Test
+    fun theToolIsGivenBackWhenTheSelectionMadeFromACircleIsDeleted() {
+        val dropped = lassoFromCircle()
+        onMain { canvas.deleteSelection() }
+        waitUntil { onMain { dropped() } == 1 }
+    }
+
     // ---- Helpers ----
 
     private fun stylusPath(points: List<Pair<Float, Float>>) {

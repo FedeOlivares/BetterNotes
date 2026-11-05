@@ -252,7 +252,12 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
         }
         LabeledRow(R.string.panel_full_selection, info = { notices.say(R.string.info_full_selection) }) {
             PanelSwitch(options.fullSelectionOnly, stringResource(R.string.panel_full_selection)) { on ->
-                state.updateLasso { it.copy(fullSelectionOnly = on) }
+                state.updateLasso { it.copy(fullSelectionOnly = on, anyPortion = it.anyPortion && !on) }
+            }
+        }
+        LabeledRow(R.string.panel_any_portion, info = { notices.say(R.string.info_any_portion) }) {
+            PanelSwitch(options.anyPortion, stringResource(R.string.panel_any_portion)) { on ->
+                state.updateLasso { it.copy(anyPortion = on, fullSelectionOnly = it.fullSelectionOnly && !on) }
             }
         }
         LabeledRow(R.string.panel_select_following) {}

@@ -115,7 +115,7 @@ sealed interface CanvasTool {
     data object Laser : CanvasTool
 
     /** Selects items and moves or resizes the selection. */
-    data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean) : CanvasTool
+    data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean, val anyPortion: Boolean = false) : CanvasTool
 
     /** Drags out a new shape. */
     data class Shape(val options: ShapeOptions) : CanvasTool
@@ -1091,7 +1091,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 syncChanges()
                 return
             }
-            lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly)
+            lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly, tool.anyPortion)
             syncChanges()
         } else if (tool is CanvasTool.Shape) {
             shapePointer = pointerId

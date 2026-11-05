@@ -437,7 +437,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.tool = when {
             current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs, current.scribbleToErase, current.circleToLasso, current.stabilization)
             activeTool == ActiveTool.LASER -> CanvasTool.Laser
-            activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly)
+            activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly, lasso.anyPortion)
             activeTool == ActiveTool.SHAPE -> CanvasTool.Shape(shape)
             activeTool == ActiveTool.STICKY -> CanvasTool.Sticky(note)
             activeTool == ActiveTool.TEXT -> CanvasTool.Text(note)
