@@ -40,6 +40,7 @@ internal object CanvasBenchmark {
     private const val SAMPLES_PER_STROKE = 40
     private const val ROWS = 40
     private const val PDF_PAGES = 6
+    private const val INKED_PAGES = 12
     private const val SCENARIO_FRAMES = 700
 
     /** Writes a one-page A4 note holding [strokeCount] handwriting-sized strokes. */
@@ -55,13 +56,13 @@ internal object CanvasBenchmark {
      * A PDF of [PDF_PAGES] pages, text and vector art, with ink of every costly kind over it: the stamped
      * brushes, plain pens and shapes. It is the load a heavy study document puts on the screen.
      */
-    fun writeHeavyDocument(context: Context, root: File): DocumentStore {
+    fun writeHeavyDocument(context: Context, root: File, realPdf: File? = null, withInk: Boolean = true): DocumentStore {
         root.deleteRecursively()
         root.mkdirs()
-        val pdfFile = File(root, "heavy.pdf")
-        writePdf(pdfFile)
+        val pdfFile = realPdf ?: File(root, "heavy.pdf").also(::writePdf)
         val imported = PdfImporter.import(context.contentResolver, Uri.fromFile(pdfFile), File(root, "documents")) as PdfImportResult.Imported
-        for ((index, page) in imported.document.pages.withIndex()) {
+        if (!withInk) return imported.store
+        for ((index, page) in imported.document.pages.take(INKED_PAGES).withIndex()) {
             val size = page.size ?: continue
             imported.store.writePage(page.id, heavyInk(size.widthPt, size.heightPt, Random(index)))
         }
@@ -150,9 +151,11 @@ internal object CanvasBenchmark {
             "pan_zoom_400" to { frame -> pan(canvas, frame) },
             "pan_zoom_1500" to { frame -> pan(canvas, frame) },
             "pan_zoom_30" to { frame -> pan(canvas, frame) },
+            "scroll_100" to { _ -> canvas.onTransform(0f, -SCROLL_PX_PER_FRAME, 1f, 0f, 0f) },
+            "scroll_back_200" to { _ -> canvas.onTransform(0f, SCROLL_PX_PER_FRAME, 1f, 0f, 0f) },
             "lasso_move_100" to { frame -> canvas.benchmarkDrag(frame) },
         )
-        val zooms = listOf(1f, 1f, 1f, 4f, 15f, 0.3f, 1f)
+        val zooms = listOf(1f, 1f, 1f, 4f, 15f, 0.3f, 1f, 2f, 1f)
         runScenario(canvas, probe, scenarios, zooms, 0, onDone)
     }
 
@@ -192,6 +195,9 @@ internal object CanvasBenchmark {
     }
 
     private const val SETTLE_FRAMES = 30
+
+    /** About a page every two seconds at real size, a brisk steady scroll through a document. */
+    private const val SCROLL_PX_PER_FRAME = 16f
 
     /** Steady scrolling down the page and back, at about the speed of a flick. */
     private fun pan(canvas: CanvasView, frame: Int) {

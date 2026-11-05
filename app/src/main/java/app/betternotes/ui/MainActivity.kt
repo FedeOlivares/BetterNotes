@@ -262,7 +262,9 @@ class MainActivity : ComponentActivity() {
 
     private fun runHeavyBenchmark() {
         val perf = probe ?: return
-        val store = CanvasBenchmark.writeHeavyDocument(this, File(cacheDir, "benchmark-heavy"))
+        val realPdf = intent.getStringExtra(EXTRA_BENCHMARK_PDF)?.let(::File)
+        val withInk = intent.getBooleanExtra(EXTRA_BENCHMARK_INK, true)
+        val store = CanvasBenchmark.writeHeavyDocument(this, File(cacheDir, "benchmark-heavy"), realPdf, withInk)
         show(NoteEditor(store, DocumentSession.open(store)))
         canvas.post { CanvasBenchmark.run(canvas, perf) { finish() } }
     }
@@ -346,6 +348,10 @@ class MainActivity : ComponentActivity() {
 
         /** Debug and profile builds only: run the scripted benchmark on a PDF covered in every kind of ink. */
         private const val EXTRA_BENCHMARK_HEAVY = "benchmark_heavy"
+
+        /** With [EXTRA_BENCHMARK_HEAVY]: a PDF on the device to use instead of a generated one, and whether to cover it in ink. */
+        private const val EXTRA_BENCHMARK_PDF = "benchmark_pdf"
+        private const val EXTRA_BENCHMARK_INK = "benchmark_ink"
     }
 }
 

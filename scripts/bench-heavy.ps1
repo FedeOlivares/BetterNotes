@@ -1,6 +1,7 @@
 # Runs the heavy benchmark (PDF plus every brush) on a connected device and prints the numbers.
-# Usage: .\scripts\bench-heavy.ps1 [-Serial <serial>] [-Skip build]
-param([string]$Serial = 'f9ea56c5', [switch]$NoBuild)
+# Usage: .\scripts\bench-heavy.ps1 [-Serial <serial>] [-NoBuild] [-Pdf <path on the PC>] [-NoInk]
+# Installs a separate app (app.betternotes.profile). -Pdf copies the file to that app's folder on the device.
+param([string]$Serial = 'f9ea56c5', [switch]$NoBuild, [string]$Pdf = '', [switch]$NoInk)
 $ErrorActionPreference = 'Stop'
 if (-not $env:JAVA_HOME) { $env:JAVA_HOME = 'D:\Android\Android Studio\jbr' }
 $root = Split-Path -Parent $PSScriptRoot
@@ -13,7 +14,15 @@ if (-not $NoBuild) {
 & $adb -s $Serial install -r (Join-Path $root 'app\build\outputs\apk\profile\app-profile.apk') | Out-Null
 & $adb -s $Serial shell am force-stop $package
 & $adb -s $Serial logcat -c
-& $adb -s $Serial shell am start -n "$package/app.betternotes.ui.MainActivity" --ez benchmark_heavy true | Out-Null
+$extras = @('--ez', 'benchmark_heavy', 'true')
+if ($NoInk) { $extras += @('--ez', 'benchmark_ink', 'false') }
+if ($Pdf) {
+    $onDevice = "/sdcard/Android/data/$package/files/bench.pdf"
+    & $adb -s $Serial shell mkdir -p "/sdcard/Android/data/$package/files"
+    & $adb -s $Serial push $Pdf $onDevice | Out-Null
+    $extras += @('--es', 'benchmark_pdf', $onDevice)
+}
+& $adb -s $Serial shell am start -n "$package/app.betternotes.ui.MainActivity" @extras | Out-Null
 do {
     Start-Sleep -Seconds 3
     $done = & $adb -s $Serial logcat -d -s BetterNotesPerf:I AndroidRuntime:E | Select-String -Pattern 'benchmark finished|FATAL EXCEPTION'
