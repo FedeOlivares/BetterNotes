@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 
 /** How long any menu or panel takes to open. */
-const val OPEN_MS = 70
+const val OPEN_MS = 80
 
 private const val START_SCALE = 0.3f
 
