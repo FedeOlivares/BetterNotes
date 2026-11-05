@@ -205,8 +205,8 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
 internal const val TOOL_CHANGE_MS = 250
 
 /** The second bar resizes within this long after the tool changes, and its icons then come in within the next [ICONS_IN_MS]. */
-private const val BAR_RESIZE_MS = 100
-private const val ICONS_IN_MS = 50
+private const val BAR_RESIZE_MS = 80
+private const val ICONS_IN_MS = 30
 
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
