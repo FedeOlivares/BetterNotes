@@ -305,9 +305,9 @@ private fun CenterPill(
         ToolbarIcon(EditorIcons.Undo, stringResource(R.string.editor_undo), enabled = state.canUndo, onClick = state::undo)
         ToolbarIcon(EditorIcons.Redo, stringResource(R.string.editor_redo), enabled = state.canRedo, onClick = state::redo)
         ToolbarIcon(
-            EditorIcons.FingerMode,
+            // The icon shows the mode in use, so there is no highlight: a hand with arrows scrolls, a hand drawing a line draws.
+            if (state.fingerDraws) EditorIcons.FingerDraw else EditorIcons.FingerMode,
             stringResource(R.string.editor_finger_mode),
-            selected = state.fingerDraws,
             onClick = state::toggleFingerDraw,
         )
         PillDivider()

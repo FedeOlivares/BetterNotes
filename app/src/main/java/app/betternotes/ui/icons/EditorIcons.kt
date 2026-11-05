@@ -36,6 +36,15 @@ internal object EditorIcons {
                 "M5 10V3 M3 5l2-2 2 2 M3 8l2 2 2-2",
         )
     }
+    /** The finger drawing a line: the same hand as [FingerMode], with a wavy stroke where the arrows were. */
+    val FingerDraw by lazy {
+        line(
+            "finger-draw",
+            "M11 11V6a1.5 1.5 0 0 1 3 0v6l4.2.9a2 2 0 0 1 1.6 2.3l-.6 3.4a2.5 2.5 0 0 1-2.5 2.1h-3.6" +
+                "a3 3 0 0 1-2.3-1.1L7 16a1.4 1.4 0 0 1 2.1-1.8L11 16z " +
+                "M2.5 7c1.2-3 2.4-3 3.3 0s2.1 3 3.2 0",
+        )
+    }
     val Pen by lazy { line("pen", "M4 20l1.2-4.6L16.6 4a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z") }
     val Pencil by lazy {
         line("pencil", "M12 11.5L18.2 4a1.8 1.8 0 0 1 2.6 2.6L13.5 13 M12 11.5l1.5 1.5c.4 3-2.4 6.5-9.5 7 1.6-1.6 2-3.2 2.2-4.6.3-2.3 3.2-4.6 5.8-3.9z")
