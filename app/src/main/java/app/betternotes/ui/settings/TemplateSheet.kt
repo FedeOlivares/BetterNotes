@@ -137,7 +137,10 @@ fun TemplateSheet(
                 Spacer(Modifier.height(18.dp))
 
                 if (customTab) {
-                    CustomLayouts(customLayouts, template, paper, onSelect = { template = PageTemplate.Custom(it) }, onEdit = onEditLayout, onNew = onNewLayout)
+                    CustomLayouts(customLayouts, template, paper, onSelect = {
+                        template = PageTemplate.Custom(it)
+                        paper = it.paper
+                    }, onEdit = onEditLayout, onNew = onNewLayout)
                 } else {
                     for (group in TemplateGroup.entries) {
                         GroupHeader(group, selected = template.kind in group.kinds, collapsed = group in collapsed) {
@@ -429,7 +432,7 @@ private fun ColumnScope.CustomLayouts(
                         .then(if (isSelected) Modifier.border(3.dp, colors.accent, shape) else Modifier)
                         .clickable(role = Role.RadioButton, onClickLabel = layout.name) { onSelect(layout) },
                 ) {
-                    TemplatePreview(PageTemplate.Custom(layout), paper, layout.size, Modifier.fillMaxSize())
+                    TemplatePreview(PageTemplate.Custom(layout), layout.paper, layout.size, Modifier.fillMaxSize())
                 }
                 Spacer(Modifier.height(16.dp))
                 Text(

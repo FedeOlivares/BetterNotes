@@ -191,4 +191,22 @@ class TemplateDrawingTest {
         assertTrue(vertical > 0)
         assertEquals(vertical * 11, horizontal)
     }
+
+    @Test
+    fun `a custom layout draws its base pattern under its elements`() {
+        val layout = CustomLayout(
+            "L", page, LengthUnit.PT,
+            listOf(LayoutElement.Line(1f, 1f, 2f, 2f, 1f, 0)),
+            base = PageTemplate.Lined(spacing = 50f),
+        )
+        val lines = PageTemplate.Custom(layout).record().lines
+        assertEquals(listOf(50f, 100f, 150f, 1f), lines.map { it.y0 })
+    }
+
+    @Test
+    fun `book style mirrors every second page`() {
+        val book = CustomLayout("L", page, LengthUnit.PT, emptyList(), bookStyle = true)
+        assertEquals(listOf(false, true, false, true), (0..3).map { book.isMirroredOn(it) })
+        assertFalse(book.copy(bookStyle = false).isMirroredOn(1))
+    }
 }

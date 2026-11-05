@@ -1,24 +1,21 @@
 package app.betternotes.ui.settings
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -34,16 +31,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
@@ -52,7 +46,8 @@ import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.CustomLayoutBuilder
 import app.betternotes.core.template.LayoutElement
 import app.betternotes.core.template.PageTemplate
-import app.betternotes.core.template.bounds
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -63,7 +58,7 @@ private const val MIN_ELEMENT_PT = 12f
 private const val TAP_TOLERANCE_PT = 12f
 private val UNITS = listOf(LengthUnit.PX, LengthUnit.CM, LengthUnit.INCH)
 
-private enum class LayoutTool { SELECT, LINE, BOX, STICKY, TABLE, RULED }
+internal enum class LayoutTool { SELECT, LINE, BOX, STICKY, TABLE, RULED }
 
 private const val STICKY_COLOR = 0xFFFFE680.toInt()
 
@@ -87,9 +82,12 @@ private fun LayoutTool.draw(x0: Float, y0: Float, x1: Float, y1: Float): LayoutE
 }
 
 /**
- * A full-screen canvas for building a custom template: pick a tool, drag on the page to draw a line, box,
- * sticky note, table or ruled block, then select, move or adjust it. No Notewise screenshot of this screen
- * exists, so it follows the template picker's look rather than matching a reference.
+ * A canvas editor for a custom layout, inside a frame of the menus' dark grey. The top of the frame carries the
+ * measurements with Discard in one corner and Confirm in the other. The left carries the layout options: book
+ * style, background color, pattern, Cornell and legal frames, and the elements to draw. The page is painted by the
+ * note's own template code and moves like a note: two fingers pinch and pan. The note's canvas view itself is not
+ * used, because a layout saves patterns, lines and boxes, not ink. No Notewise screenshot of this screen exists,
+ * so it follows the menus' look rather than matching a reference.
  */
 @Composable
 fun CustomLayoutSheet(
@@ -105,6 +103,7 @@ fun CustomLayoutSheet(
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tool by remember { mutableStateOf(LayoutTool.SELECT) }
+    var panel by remember { mutableStateOf<LayoutPanel?>(null) }
     var name by remember { mutableStateOf(builder.name) }
     var widthText by remember { mutableStateOf(format(builder.width)) }
     var heightText by remember { mutableStateOf(format(builder.height)) }
@@ -118,81 +117,80 @@ fun CustomLayoutSheet(
         if (revision == 0 && name == (initial?.name ?: "")) onClose() else askDiscard = true
     }
 
-    BackHandler(onBack = ::discard)
+    BackHandler {
+        if (panel != null) panel = null else discard()
+    }
+    // Reads the revision so that the page redraws after the builder changes.
+    val layout = remember(revision) { builder.build() }
     Box(modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().background(colors.sheet)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-        ) {
-            ChoiceChip(stringResource(R.string.layout_discard), false, ::discard)
-            TextBox(name, 260.dp, KeyboardType.Text) { name = it }
-            for (unit in UNITS) {
-                ChoiceChip(unitName(unit), builder.unit == unit) {
-                    builder.unit = unit
-                    widthText = format(builder.width)
-                    heightText = format(builder.height)
+        Column(Modifier.fillMaxSize().background(colors.menu)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.fillMaxWidth().height(84.dp).padding(horizontal = 16.dp),
+            ) {
+                ChoiceChip(stringResource(R.string.layout_discard), false, ::discard)
+                Spacer(Modifier.width(10.dp))
+                TextBox(name, 260.dp, KeyboardType.Text, stringResource(R.string.layout_name)) { name = it }
+                for (unit in UNITS) {
+                    ChoiceChip(unitName(unit), builder.unit == unit) {
+                        builder.unit = unit
+                        widthText = format(builder.width)
+                        heightText = format(builder.height)
+                        changed()
+                    }
+                }
+                TextBox(widthText, 90.dp, KeyboardType.Decimal) {
+                    widthText = it
+                    it.toFloatOrNull()?.let { value -> builder.setSize(value, builder.height) }
                     changed()
                 }
-            }
-            TextBox(widthText, 90.dp, KeyboardType.Decimal) {
-                widthText = it
-                it.toFloatOrNull()?.let { value -> builder.setSize(value, builder.height) }
-                changed()
-            }
-            Text("x", color = colors.text, fontSize = 19.5.sp)
-            TextBox(heightText, 90.dp, KeyboardType.Decimal) {
-                heightText = it
-                it.toFloatOrNull()?.let { value -> builder.setSize(builder.width, value) }
-                changed()
-            }
-            Spacer(Modifier.weight(1f))
-            if (initial != null) {
-                Text(
-                    stringResource(R.string.layout_delete),
-                    color = colors.danger,
-                    fontSize = 19.5.sp,
-                    modifier = Modifier.padding(12.dp).pointerInput(Unit) { detectTapGestures { onDelete(initial.name) } },
-                )
-            }
-            val canSave = name.isNotBlank()
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .height(52.dp)
-                    .clip(RoundedCornerShape(26.dp))
-                    .background(if (canSave) colors.accent else colors.sliderIdle)
-                    .pointerInput(canSave) {
-                        if (!canSave) return@pointerInput
-                        detectTapGestures {
-                            builder.name = name.trim()
-                            onSave(builder.build())
+                Text("x", color = colors.text, fontSize = 19.5.sp)
+                TextBox(heightText, 90.dp, KeyboardType.Decimal) {
+                    heightText = it
+                    it.toFloatOrNull()?.let { value -> builder.setSize(builder.width, value) }
+                    changed()
+                }
+                Spacer(Modifier.weight(1f))
+                val canSave = name.isNotBlank()
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(if (canSave) colors.accent else colors.sliderIdle)
+                        .pointerInput(canSave) {
+                            if (!canSave) return@pointerInput
+                            detectTapGestures {
+                                builder.name = name.trim()
+                                onSave(builder.build())
+                            }
                         }
-                    }
-                    .padding(horizontal = 32.dp),
-            ) {
-                Text(stringResource(R.string.layout_confirm), color = colors.onAccent, fontSize = 19.5.sp)
-            }
-        }
-        Row(Modifier.weight(1f).fillMaxWidth()) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 8.dp).width(150.dp),
-            ) {
-                for ((entry, label) in toolLabels()) {
-                    ChoiceChip(label, tool == entry) { tool = entry }
+                        .padding(horizontal = 32.dp),
+                ) {
+                    Text(stringResource(R.string.layout_confirm), color = colors.onAccent, fontSize = 19.5.sp)
                 }
             }
-            Column(Modifier.weight(1f).fillMaxHeight().padding(end = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                // Reads the revision so that the page redraws after the builder changes.
-                val preview = remember(revision) { builder.build() }
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    LayoutPreview(
-                        preview,
+            Row(Modifier.weight(1f).fillMaxWidth()) {
+                LayoutRail(
+                    paper = layout.paper,
+                    bookStyle = layout.bookStyle,
+                    open = panel,
+                    onToggleBook = {
+                        builder.bookStyle = !builder.bookStyle
+                        changed()
+                    },
+                    onOpen = { panel = if (panel == it) null else it },
+                    onDelete = initial?.let { { onDelete(it.name) } },
+                    modifier = Modifier.fillMaxHeight(),
+                )
+                Box(Modifier.weight(1f).fillMaxHeight().background(colors.screen)) {
+                    LayoutCanvas(
+                        layout,
                         selected,
                         drawing = tool != LayoutTool.SELECT,
                         onTap = { x, y ->
+                            panel = null
                             selected = if (tool == LayoutTool.SELECT) builder.elementAt(x, y, TAP_TOLERANCE_PT) else -1
                             changed()
                         },
@@ -217,44 +215,78 @@ fun CustomLayoutSheet(
                             }
                         },
                     )
+                    if (selected in builder.elements.indices) {
+                        Column(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(16.dp)
+                                .widthIn(max = 560.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(colors.sheet)
+                                .heightIn(max = 260.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 24.dp),
+                        ) {
+                            ElementControls(builder.elements[selected], builder.unit, onChange = {
+                                builder.update(selected, it)
+                                changed()
+                            }, onRemove = {
+                                builder.remove(selected)
+                                selected = -1
+                                changed()
+                            })
+                        }
+                    }
+                    panel?.let { open ->
+                        Box(Modifier.padding(16.dp)) {
+                            when (open) {
+                                LayoutPanel.BACKGROUND -> BackgroundPanel(layout.paper) {
+                                    builder.paper = it
+                                    changed()
+                                }
+                                LayoutPanel.PATTERN -> PatternPanel(layout.base, layout.paper) {
+                                    builder.base = it
+                                    changed()
+                                }
+                                LayoutPanel.FRAME -> FramePanel(layout.base, layout.paper) {
+                                    builder.base = it
+                                    changed()
+                                }
+                                LayoutPanel.ELEMENTS -> ElementsPanel(toolLabels(), tool) {
+                                    tool = it
+                                    panel = null
+                                }
+                            }
+                        }
+                    }
                 }
-                if (selected in builder.elements.indices) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).heightIn(max = 220.dp)) {
-                        ElementControls(builder.elements[selected], builder.unit, onChange = {
-                            builder.update(selected, it)
-                            changed()
-                        }, onRemove = {
-                            builder.remove(selected)
-                            selected = -1
-                            changed()
-                        })
+            }
+        }
+        if (askDiscard) {
+            Box(
+                Modifier.fillMaxSize().background(Color(0x99000000)).pointerInput(Unit) { detectTapGestures { } },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    modifier = Modifier
+                        .opensFrom(OpenFrom.Center)
+                        .width(420.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(colors.card)
+                        .padding(28.dp),
+                ) {
+                    Text(stringResource(R.string.layout_discard_title), color = colors.text, fontSize = 22.sp)
+                    Text(stringResource(R.string.layout_discard_message), color = colors.text, fontSize = 19.5.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                        ChoiceChip(stringResource(R.string.layout_keep_editing), true) { askDiscard = false }
+                        ChoiceChip(stringResource(R.string.layout_discard), false, onClose)
                     }
                 }
             }
         }
     }
-    if (askDiscard) {
-        Box(
-            Modifier.fillMaxSize().background(Color(0x99000000)).pointerInput(Unit) { detectTapGestures { } },
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier.width(420.dp).clip(RoundedCornerShape(24.dp)).background(colors.card).padding(28.dp),
-            ) {
-                Text(stringResource(R.string.layout_discard_title), color = colors.text, fontSize = 22.sp)
-                Text(stringResource(R.string.layout_discard_message), color = colors.text, fontSize = 19.5.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                    ChoiceChip(stringResource(R.string.layout_keep_editing), true) { askDiscard = false }
-                    ChoiceChip(stringResource(R.string.layout_discard), false, onClose)
-                }
-            }
-        }
-    }
-    }
 }
-
-
 
 @Composable
 private fun toolLabels() = listOf(
@@ -276,7 +308,7 @@ private fun unitName(unit: LengthUnit) = stringResource(
 )
 
 @Composable
-private fun TextBox(value: String, width: androidx.compose.ui.unit.Dp, keyboard: KeyboardType, onChange: (String) -> Unit) {
+private fun TextBox(value: String, width: Dp, keyboard: KeyboardType, hint: String? = null, onChange: (String) -> Unit) {
     val colors = LocalSettingsColors.current
     BasicTextField(
         value,
@@ -290,86 +322,11 @@ private fun TextBox(value: String, width: androidx.compose.ui.unit.Dp, keyboard:
             .clip(RoundedCornerShape(10.dp))
             .background(colors.card)
             .padding(horizontal = 14.dp, vertical = 10.dp),
+        decorationBox = { field ->
+            if (value.isEmpty() && hint != null) Text(hint, color = colors.secondary, fontSize = 19.5.sp)
+            field()
+        },
     )
-}
-
-/**
- * Draws the layout on a sheet of paper, with the selected element in the accent color. With [drawing] off a
- * drag moves the element under the finger, with it on a drag draws a new element from where it began to
- * where it ended.
- */
-@Composable
-private fun LayoutPreview(
-    layout: CustomLayout,
-    selected: Int,
-    drawing: Boolean,
-    onTap: (Float, Float) -> Unit,
-    onPress: (Float, Float) -> Unit,
-    onDraw: (Float, Float, Float, Float) -> Unit,
-    onDrag: (Float, Float) -> Unit,
-) {
-    val colors = LocalSettingsColors.current
-    val ratio = layout.size.widthPt / layout.size.heightPt
-    var start by remember { mutableStateOf(Offset.Zero) }
-    var end by remember { mutableStateOf<Offset?>(null) }
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val fitted = if (maxWidth / maxHeight > ratio) maxHeight * ratio else maxWidth
-        Canvas(
-            Modifier
-                .width(fitted)
-                .aspectRatio(ratio)
-                .background(Color.White)
-                .pointerInput(layout.size) {
-                    detectTapGestures { offset ->
-                        val factor = layout.size.widthPt / size.width
-                        onTap(offset.x * factor, offset.y * factor)
-                    }
-                }
-                .pointerInput(layout.size, drawing) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            val factor = layout.size.widthPt / size.width
-                            start = offset
-                            end = offset
-                            if (!drawing) onPress(offset.x * factor, offset.y * factor)
-                        },
-                        onDragEnd = {
-                            val factor = layout.size.widthPt / size.width
-                            val last = end
-                            if (drawing && last != null) onDraw(start.x * factor, start.y * factor, last.x * factor, last.y * factor)
-                            end = null
-                        },
-                        onDragCancel = { end = null },
-                    ) { change, drag ->
-                        change.consume()
-                        val factor = layout.size.widthPt / size.width
-                        if (drawing) end = change.position else onDrag(drag.x * factor, drag.y * factor)
-                    }
-                },
-        ) {
-            val factor = min(size.width / layout.size.widthPt, size.height / layout.size.heightPt)
-            scale(factor, factor, Offset.Zero) {
-                TemplatePainter.paint(this, PageTemplate.Custom(layout), layout.size)
-            }
-            if (selected in layout.elements.indices) {
-                val box = layout.elements[selected].bounds
-                drawRect(
-                    colors.accent,
-                    Offset(box.left * factor, box.top * factor),
-                    Size(box.width * factor, box.height * factor),
-                    style = Stroke(2.dp.toPx()),
-                )
-            }
-            end?.takeIf { drawing }?.let {
-                drawRect(
-                    colors.accent,
-                    Offset(min(start.x, it.x), min(start.y, it.y)),
-                    Size(abs(it.x - start.x), abs(it.y - start.y)),
-                    style = Stroke(1.dp.toPx()),
-                )
-            }
-        }
-    }
 }
 
 @Composable

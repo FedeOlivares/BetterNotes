@@ -407,7 +407,20 @@ class CodecTest {
     @Test
     fun `document format version 1 bytes do not change`() {
         val document = everyTemplateDocument()
-        assertArrayEquals(GOLDEN_DOCUMENT.decodeBase64(), DocumentCodec.encode(document))
+        assertArrayEquals(GOLDEN_DOCUMENT.decodeBase64(), DocumentCodec.encode(document, version = 1))
+    }
+
+    @Test
+    fun `a version 1 layout opens with plain paper and a version 2 one keeps its look`() {
+        val plain = CustomLayout("L", PageSize(100f, 100f), LengthUnit.CM, listOf(LayoutElement.Sticky(1f, 2f, 3f, 4f, 5)))
+        val styled = plain.copy(paper = 0x12345678, base = PageTemplate.Legal(), bookStyle = true)
+        fun roundTrip(layout: CustomLayout, version: Int): CustomLayout {
+            val page = Page(1, PageSize(100f, 200f), PageBackground(0, PageTemplate.Custom(layout)))
+            val back = DocumentCodec.decode(DocumentCodec.encode(Document(1, "t", DocumentKind.NOTE, 0, 0, listOf(page)), version))
+            return (back.pages[0].background.template as PageTemplate.Custom).layout
+        }
+        assertEquals(plain, roundTrip(styled, 1).copy(elements = plain.elements, name = "L", size = plain.size))
+        assertEquals(styled, roundTrip(styled, 2))
     }
 
     private fun String.decodeBase64() = Base64.getDecoder().decode(this)

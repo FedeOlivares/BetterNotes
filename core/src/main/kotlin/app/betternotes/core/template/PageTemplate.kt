@@ -166,7 +166,18 @@ data class CustomLayout(
     val size: PageSize,
     val displayUnit: LengthUnit,
     val elements: List<LayoutElement>,
-)
+    /** The paper color the layout brings when it is picked. */
+    val paper: Int = PageBackground.DEFAULT_PAPER_COLOR,
+    /** The pattern or frame printed under [elements]. Never another custom layout. */
+    val base: PageTemplate = PageTemplate.Blank,
+    /** Every other page is the mirror image, as in a bound book: the first page is as drawn, the second is flipped. */
+    val bookStyle: Boolean = false,
+) {
+    init { require(base !is PageTemplate.Custom) { "A layout's base cannot be a custom layout" } }
+}
+
+/** True when the page at [pageIndex] (from 0) is drawn as the mirror image of the layout, as the left-hand page of a book. */
+fun CustomLayout.isMirroredOn(pageIndex: Int): Boolean = bookStyle && pageIndex % 2 == 1
 
 sealed interface LayoutElement {
     data class Line(

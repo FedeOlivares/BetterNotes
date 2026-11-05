@@ -63,7 +63,10 @@ fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink) {
         is PageTemplate.GuitarTab ->
             page?.let { staves(it, GUITAR_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
         is PageTemplate.GuitarScore -> page?.let { guitarScore(it, this, sink) }
-        is PageTemplate.Custom -> if (page != null) layout.elements.forEach { it.draw(sink) }
+        is PageTemplate.Custom -> if (page != null) {
+            layout.base.draw(page, region, sink)
+            layout.elements.forEach { it.draw(sink) }
+        }
     }
 }
 
