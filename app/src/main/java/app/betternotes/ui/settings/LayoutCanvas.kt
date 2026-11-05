@@ -42,7 +42,10 @@ private const val HANDLE_RADIUS_DP = 12
 private const val HANDLE_GRAB_DP = 32
 
 /** Where a horizontal frame line's handle sits across the page, so it stays clear of the vertical lines. */
-private const val HORIZONTAL_HANDLE_X = 0.85f
+private const val HORIZONTAL_HANDLE_X = 0.8f
+
+/** The ruling's own handles sit further out, so they never cover the frame's. */
+private const val RULING_HANDLE_X = 0.93f
 
 /** Space between the two pages of a book-style spread, as a fraction of a page's width. */
 private const val SPREAD_GAP = 0.04f
@@ -126,9 +129,10 @@ internal fun LayoutCanvas(
                         return@awaitEachGesture
                     }
                     // A grab on a frame line's handle moves that line and nothing else.
-                    val grabbed = layoutNow.frameHandles().indexOfFirst { handle ->
-                        (Offset(first.x + handle.x * first.scale, first.y + handle.y * first.scale) - down.position).getDistance() <= HANDLE_GRAB_DP.dp.toPx()
-                    }
+                    // The nearest one wins, since a frame's lines and its ruling can sit close together.
+                    val handles = layoutNow.frameHandles()
+                    val distances = handles.map { (Offset(first.x + it.x * first.scale, first.y + it.y * first.scale) - down.position).getDistance() }
+                    val grabbed = distances.indices.minByOrNull { distances[it] }?.takeIf { distances[it] <= HANDLE_GRAB_DP.dp.toPx() } ?: -1
                     if (grabbed >= 0) {
                         val line = layoutNow.base.frameLines(layoutNow.size, layoutNow.frameLines)[grabbed]
                         down.consume()
@@ -268,7 +272,7 @@ private fun DrawScope.paintPaper(layout: CustomLayout, width: Float, height: Flo
 
 /** Where each movable line of the layout's frame has its handle, in points, in the order of [frameLines]. */
 private fun CustomLayout.frameHandles(): List<Offset> = base.frameLines(size, frameLines).map { line ->
-    if (line.vertical) Offset(line.position(size), size.heightPt / 2f) else Offset(size.widthPt * HORIZONTAL_HANDLE_X, line.position(size))
+    if (line.vertical) Offset(line.position(size), size.heightPt / 2f) else Offset(size.widthPt * if (line.ruling) RULING_HANDLE_X else HORIZONTAL_HANDLE_X, line.position(size))
 }
 
 /** The two ends of the line at [index], in points, or none if that element is not a line. */

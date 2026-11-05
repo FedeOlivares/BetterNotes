@@ -51,10 +51,10 @@ fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink, frame
             verticalLines(area, page, spacing, lineWidth, color, sink)
         }
         is PageTemplate.Hexagonal -> hexagons(area, this, sink)
-        is PageTemplate.Cornell -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = false, frameLines(it, frame), sink) }
-        is PageTemplate.CornellRuled -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = true, frameLines(it, frame), sink) }
+        is PageTemplate.Cornell -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = false, frameLines(it, frame), frame.size >= 5, sink) }
+        is PageTemplate.CornellRuled -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = true, frameLines(it, frame), frame.size >= 5, sink) }
         is PageTemplate.Engineering -> page?.let { engineering(it, this, sink) }
-        is PageTemplate.Legal -> page?.let { legal(it, this, frameLines(it, frame), sink) }
+        is PageTemplate.Legal -> page?.let { legal(it, this, frameLines(it, frame), frame.size >= 3, sink) }
         is PageTemplate.MusicScore ->
             page?.let { staves(it, MUSIC_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
         is PageTemplate.GuitarTab ->
@@ -153,7 +153,7 @@ private fun hexagons(area: Bounds, t: PageTemplate.Hexagonal, sink: TemplateSink
     }
 }
 
-private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ruledCue: Boolean, lines: List<FrameLine>, sink: TemplateSink) {
+private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ruledCue: Boolean, lines: List<FrameLine>, movedRuling: Boolean, sink: TemplateSink) {
     val titleBottom = lines[0].position(page)
     val summaryTop = lines[1].position(page)
     val cueRight = lines[2].position(page)
@@ -162,10 +162,14 @@ private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ru
     sink.line(0f, summaryTop, page.widthPt, summaryTop, width * 2f, frame)
     sink.line(cueRight, titleBottom, cueRight, summaryTop, width * 2f, frame)
     val ruleStart = if (ruledCue) 0f else cueRight
-    var y = titleBottom + spacing
+    // The ruling follows the owner's first two rules once they have moved them, and the plain spacing until then.
+    val first = if (movedRuling) lines[3].position(page) else titleBottom + spacing
+    val step = if (movedRuling) lines[4].position(page) - first else spacing
+    if (step < PageTemplate.MIN_SPACING) return
+    var y = first
     while (y < summaryTop) {
         sink.line(ruleStart, y, page.widthPt, y, width, color)
-        y += spacing
+        y += step
     }
 }
 
@@ -216,12 +220,14 @@ private fun guitarScore(page: PageSize, t: PageTemplate.GuitarScore, sink: Templ
     }
 }
 
-private fun legal(page: PageSize, t: PageTemplate.Legal, lines: List<FrameLine>, sink: TemplateSink) {
+private fun legal(page: PageSize, t: PageTemplate.Legal, lines: List<FrameLine>, movedRuling: Boolean, sink: TemplateSink) {
     val margin = lines[1].position(page)
     var y = lines[0].position(page)
+    val step = if (movedRuling) lines[2].position(page) - y else t.spacing
+    if (step < PageTemplate.MIN_SPACING) return
     while (y < page.heightPt) {
         sink.line(0f, y, page.widthPt, y, t.lineWidth, t.color)
-        y += t.spacing
+        y += step
     }
     for (x in floatArrayOf(margin, margin + LEGAL_MARGIN_GAP_PT)) {
         sink.line(x, 0f, x, page.heightPt, t.lineWidth, t.marginColor)

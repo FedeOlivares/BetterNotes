@@ -225,7 +225,7 @@ class TemplateDrawingTest {
     fun `a builder keeps frame lines apart and drops them with the frame`() {
         val builder = CustomLayoutBuilder("L", page, LengthUnit.PT, base = PageTemplate.Cornell())
         builder.moveFrameLine(0, 0.9f)
-        assertEquals(0.76f, builder.frameLines[0], 0.0001f)
+        assertEquals(0.52f, builder.frameLines[0], 0.0001f)
         builder.moveFrameLine(2, 5f)
         assertEquals(0.98f, builder.frameLines[2], 0.0001f)
         builder.base = PageTemplate.Legal()
@@ -249,5 +249,36 @@ class TemplateDrawingTest {
         assertEquals(0.18f, builder.frameLines[0], 0.0001f)
         builder.base = PageTemplate.Lined(spacing = 30f)
         assertEquals(emptyList<Float>(), builder.frameLines)
+    }
+
+    @Test
+    fun `cornell ruling follows its two moved rules and the title band takes it along`() {
+        val layout = CustomLayout(
+            "L", page, LengthUnit.PT, emptyList(),
+            base = PageTemplate.Cornell(), frameLines = listOf(0.1f, 0.5f, 0.3f, 0.2f, 0.3f),
+        )
+        val ys = PageTemplate.Custom(layout).record().lines.filter { it.y0 == it.y1 }.map { Math.round(it.y0) }
+        assertEquals(listOf(20, 100, 40, 60, 80), ys)
+        val builder = CustomLayoutBuilder("L", page, LengthUnit.PT, base = PageTemplate.Cornell(), frameLines = layout.frameLines)
+        builder.moveFrameLine(0, 0.15f)
+        assertEquals(listOf(0.15f, 0.5f, 0.3f, 0.25f, 0.35f), builder.frameLines.map { Math.round(it * 100f) / 100f })
+    }
+
+    @Test
+    fun `legal ruling starts at the head and takes its gap from the second rule`() {
+        val layout = CustomLayout(
+            "L", page, LengthUnit.PT, emptyList(),
+            base = PageTemplate.Legal(), frameLines = listOf(0.1f, 0.2f, 0.2f),
+        )
+        val ys = PageTemplate.Custom(layout).record().lines.filter { it.y0 == it.y1 }.map { Math.round(it.y0) }
+        assertEquals(listOf(20, 40, 60, 80, 100, 120, 140, 160, 180), ys)
+    }
+
+    @Test
+    fun `an old layout with only the frame lines gets default rules`() {
+        val lines = PageTemplate.Cornell().frameLines(page, listOf(0.1f, 0.7f, 0.4f))
+        assertEquals(5, lines.size)
+        assertEquals(0.1f, lines[0].fraction)
+        assertEquals(0.1f + 24f / 200f, lines[3].fraction, 0.0001f)
     }
 }
