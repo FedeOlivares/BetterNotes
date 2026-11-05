@@ -471,9 +471,9 @@ private fun Header(
             modifier = Modifier.offset(y = 206.dp),
         )
         Row(Modifier.align(Alignment.TopEnd).offset(y = 62.dp), verticalAlignment = Alignment.CenterVertically) {
-            SettingsButton(onSettings)
-            Spacer(Modifier.width(12.dp))
             SearchControl(query, onQuery, Modifier)
+            Spacer(Modifier.width(12.dp))
+            SettingsButton(onSettings)
         }
         FilterRow(shelf, query != null, onShelf, library, Modifier.offset(y = 257.dp))
         OptionsMenu(
