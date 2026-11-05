@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -12,9 +14,25 @@ android {
         // API 35 gives PdfRenderer text extraction. Unverified: the Pad 7 must run Android 15+ to install this.
         minSdk = 35
         targetSdk = 37
-        versionCode = 110
-        versionName = "1.1"
+        versionCode = 120
+        versionName = "1.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    // The release key lives outside the repo; keystore.properties (git-ignored) holds its path and passwords.
+    val keystoreProps = Properties().apply {
+        val f = rootProject.file("keystore.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -23,11 +41,21 @@ android {
             buildConfigField("boolean", "DEV_CHECKS", "true")
         }
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             buildConfigField("boolean", "PERF_TOOLS", "false")
             buildConfigField("boolean", "DEV_CHECKS", "false")
+        }
+        // Only for restoring a backup onto a fresh install: the release key, but debuggable so `run-as` can write the
+        // app's data. Install it, restore, then install the real release over it (same key, data is kept).
+        create("restore") {
+            initWith(getByName("release"))
+            matchingFallbacks += "release"
+            isDebuggable = true
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
         // Runs like a release, so its timings mean something, but can be installed and measured.
         create("profile") {

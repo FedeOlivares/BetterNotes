@@ -13,3 +13,6 @@ captures/
 
 # Owner screenshots of Notewise: they contain personal notes and a profile photo. Never commit them.
 reference/
+
+# Release signing: the keystore lives outside the repo; this file holds its path and passwords.
+keystore.properties
