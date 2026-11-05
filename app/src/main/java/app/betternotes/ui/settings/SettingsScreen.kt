@@ -192,8 +192,6 @@ private fun GeneralCard() {
     val context = LocalContext.current
     val preferences = remember { LibraryPreferences.get(context) }
     var askingName by remember { mutableStateOf(false) }
-    val darkLabel = stringResource(R.string.library_theme_dark)
-    val lightLabel = stringResource(R.string.library_theme_light)
     SettingsCard {
         CardTitle(stringResource(R.string.library_general))
         DropdownRow(
@@ -202,12 +200,9 @@ private fun GeneralCard() {
             AppLanguage.entries,
             { it.nativeName },
         ) { it.apply(context) }
-        DropdownRow(
-            stringResource(R.string.library_theme),
-            preferences.theme,
-            ThemeMode.entries,
-            { if (it == ThemeMode.DARK) darkLabel else lightLabel },
-        ) { preferences.updateTheme(it) }
+        ToggleRow(stringResource(R.string.library_dark_mode), preferences.theme == ThemeMode.DARK) { dark ->
+            preferences.updateTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
+        }
         LinkRow(stringResource(R.string.library_change_name), preferences.userName) { askingName = true }
     }
     if (askingName) {

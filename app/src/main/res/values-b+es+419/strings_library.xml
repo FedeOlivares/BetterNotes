@@ -34,9 +34,7 @@
     <string name="library_sort_modified">Última modificación</string>
     <string name="library_sort_name">Nombre</string>
     <string name="library_settings">Ajustes</string>
-    <string name="library_theme">Tema</string>
-    <string name="library_theme_dark">Oscuro</string>
-    <string name="library_theme_light">Claro</string>
+    <string name="library_dark_mode">Modo oscuro</string>
     <string name="library_language">Idioma</string>
     <string name="library_general">General</string>
     <string name="library_empty_bin">Vaciar la papelera</string>

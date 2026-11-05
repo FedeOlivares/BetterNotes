@@ -32,9 +32,7 @@
     <string name="library_sort_modified">Last modified</string>
     <string name="library_sort_name">Name</string>
     <string name="library_settings">Settings</string>
-    <string name="library_theme">Theme</string>
-    <string name="library_theme_dark">Dark</string>
-    <string name="library_theme_light">Light</string>
+    <string name="library_dark_mode">Dark mode</string>
     <string name="library_language">Language</string>
     <string name="library_general">General</string>
     <string name="library_empty_bin">Empty bin</string>
