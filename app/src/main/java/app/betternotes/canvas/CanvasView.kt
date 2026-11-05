@@ -27,7 +27,9 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import androidx.input.motionprediction.MotionEventPredictor
+import app.betternotes.core.edit.BatchEdit
 import app.betternotes.core.edit.InsertPage
+import app.betternotes.core.model.PageSource
 import app.betternotes.core.edit.Edit
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.edit.MovePage
@@ -1510,6 +1512,28 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val like = open.document.pages.getOrNull(after) ?: return
         open.perform(InsertPage(after + 1, Page(IdSource.Random.next(), like.size, like.background)))
         syncChanges()
+    }
+
+    /** Adds the pages of a PDF behind the last page, as one undoable step. */
+    fun importPdfPages(uri: Uri, unsupported: () -> Unit, failed: () -> Unit) {
+        val open = editor ?: return
+        if (!canAddPages) return unsupported()
+        open.importPdf(context.contentResolver, uri) { assetId, sizes ->
+            if (sizes == null) {
+                failed()
+            } else if (editor === open) {
+                val end = open.document.pages.size
+                open.perform(
+                    BatchEdit(
+                        sizes.mapIndexed { i, size ->
+                            InsertPage(end + i, Page(IdSource.Random.next(), size, source = PageSource.PdfPage(assetId, i)))
+                        },
+                    ),
+                )
+                syncChanges()
+                goToPage(end)
+            }
+        }
     }
 
     fun deletePage(index: Int) {

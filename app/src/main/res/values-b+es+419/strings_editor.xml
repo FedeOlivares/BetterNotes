@@ -64,6 +64,9 @@
     <string name="recorder_stop">Detener</string>
     <string name="recorder_delete">Eliminar la grabación</string>
     <string name="recorder_item">Nueva grabación %1$d</string>
+    <string name="notice_pdf_failed">No se pudo agregar ese PDF</string>
+    <string name="notice_pdf_unsupported">Esta nota no admite páginas PDF</string>
+    <string name="notice_file_unsupported">No se puede agregar ese tipo de archivo</string>
     <string name="notice_audio_failed">No se pudo leer esa grabación</string>
     <string name="pages_all">Todas las páginas</string>
     <string name="pages_add">Agregar una página</string>
@@ -171,7 +174,7 @@
     <string name="add_scan">Escanear documentos</string>
     <string name="add_scan_detail">Escanea papeles y documentos</string>
     <string name="add_file">Archivo y documento</string>
-    <string name="add_file_detail">Imágenes de tus archivos</string>
+    <string name="add_file_detail">PDF, MP3 e imágenes de tus archivos</string>
     <string name="info_color_list">Toca un color para usarlo. Arrastra los puntos para ordenar los colores.</string>
     <string name="color_list_drag">Mover color</string>
     <string name="brush_pencil">Lápiz</string>
