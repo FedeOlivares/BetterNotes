@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -469,14 +470,17 @@ private fun Header(
             maxLines = 1,
             modifier = Modifier.offset(y = 206.dp),
         )
-        SearchControl(query, onQuery, Modifier.align(Alignment.TopEnd).offset(y = 62.dp))
+        Row(Modifier.align(Alignment.TopEnd).offset(y = 62.dp), verticalAlignment = Alignment.CenterVertically) {
+            SettingsButton(onSettings)
+            Spacer(Modifier.width(12.dp))
+            SearchControl(query, onQuery, Modifier)
+        }
         FilterRow(shelf, query != null, onShelf, library, Modifier.offset(y = 257.dp))
         OptionsMenu(
             shelf,
             preferences,
             onEmptyBin,
             onSelect,
-            onSettings,
             Modifier.align(Alignment.TopEnd).offset(x = (-11).dp, y = 257.dp),
         )
     }
@@ -499,6 +503,21 @@ private fun greeting(name: String?, nowMs: Long): String {
         },
     )
     return if (name == null) timeOfDay else stringResource(R.string.library_greeting_named, timeOfDay, name)
+}
+
+/** Settings sits beside search, in the same round style. */
+@Composable
+private fun SettingsButton(onClick: () -> Unit) {
+    val colors = LocalAppColors.current
+    Box(
+        Modifier
+            .size(66.dp)
+            .clip(CircleShape)
+            .background(colors.surface)
+            .border(1.5.dp, colors.border, CircleShape),
+    ) {
+        IconButton(LibraryIcons.Settings, stringResource(R.string.library_settings), colors.title, 66.dp, onClick)
+    }
 }
 
 /** The reference's pill held search and the account's photo. With no account, only search is left. */
@@ -653,7 +672,6 @@ private fun OptionsMenu(
     preferences: LibraryPreferences,
     onEmptyBin: () -> Unit,
     onSelect: () -> Unit,
-    onSettings: () -> Unit,
     modifier: Modifier,
 ) {
     val colors = LocalAppColors.current
@@ -706,11 +724,10 @@ private fun OptionsMenu(
                 height = 64.dp,
                 onClick = choose { preferences.updateSort(if (byName) LibrarySort.MODIFIED else LibrarySort.NAME) },
             )
-            OptionDivider()
             if (shelf == LibraryView.Bin) {
+                OptionDivider()
                 OptionRow(LibraryIcons.Bin, stringResource(R.string.library_empty_bin), onClick = choose(onEmptyBin))
             }
-            OptionRow(LibraryIcons.Settings, stringResource(R.string.library_settings), onClick = choose(onSettings))
         } } }
     }
 }
