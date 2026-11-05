@@ -45,26 +45,29 @@ import kotlin.math.roundToInt
 @Composable
 internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifier) {
     Pill(modifier) {
-        options.widths.forEachIndexed { slot, width ->
-            ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot, thickness = 0) } }) {
-                WidthGlyph(width)
-                if (options.thickness == 0 && slot == options.selectedWidth) SelectedDot()
+        // The row holds more than fits beside the other pills, so it scrolls, as the pen's row does. The warning tape is last.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState())) {
+            options.widths.forEachIndexed { slot, width ->
+                ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot, thickness = 0) } }) {
+                    WidthGlyph(width)
+                    if (options.thickness == 0 && slot == options.selectedWidth) SelectedDot()
+                }
             }
-        }
-        PillDivider()
-        options.colors.forEachIndexed { slot, color ->
-            ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
-                ColorDot(color or OPAQUE, diameter = 24.dp)
-                if (slot == options.selectedColor) SelectedDot()
+            PillDivider()
+            options.colors.forEachIndexed { slot, color ->
+                ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
+                    ColorDot(color or OPAQUE, diameter = 24.dp)
+                    if (slot == options.selectedColor) SelectedDot()
+                }
             }
-        }
-        ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = options.colors.size) } }) {
-            WarningSwatch()
-            if (options.selectedColor >= options.colors.size) SelectedDot()
-        }
-        PillDivider()
-        ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
-            state.panelOpen = !state.panelOpen
+            ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = options.colors.size) } }) {
+                WarningSwatch()
+                if (options.selectedColor >= options.colors.size) SelectedDot()
+            }
+            PillDivider()
+            ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
+                state.panelOpen = !state.panelOpen
+            }
         }
     }
 }
