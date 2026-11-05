@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.withMatrix
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import app.betternotes.canvas.BrushTextures
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
@@ -122,7 +123,7 @@ private fun BrushRow(kind: BrushKind, color: Int, screenDpi: Float, selected: Bo
 /** A short stroke of the brush, drawn by the same renderer as the page, in white so that it shows on the panel. */
 @Composable
 private fun BrushSample(kind: BrushKind, screenDpi: Float, modifier: Modifier) {
-    val renderer = remember { CanvasStrokeRenderer.create() }
+    val renderer = remember { CanvasStrokeRenderer.create(BrushTextures) }
     val matrix = remember { Matrix() }
     val pxPerPt = screenDpi / POINTS_PER_INCH
     val stroke = remember(kind) { sampleLine(InkStyle(tool = app.betternotes.core.model.InkTool.PENCIL, color = 0xFFE6E7EA.toInt(), width = SAMPLE_WIDTH, brush = kind)) }

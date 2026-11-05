@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import androidx.core.graphics.withMatrix
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import app.betternotes.canvas.BrushTextures
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
@@ -61,7 +62,7 @@ internal class LassoController(
     private var param: ShapeParam? = null
     private val polygon = ArrayList<Float>()
 
-    private val renderer = CanvasStrokeRenderer.create()
+    private val renderer = CanvasStrokeRenderer.create(BrushTextures)
     private val itemPainter = ItemPainter({ editor?.imageOrLoad(it) }) { canvas, stroke ->
         editor?.strokes?.get(stroke)?.let { renderer.draw(canvas, it, strokeToScreen) }
     }

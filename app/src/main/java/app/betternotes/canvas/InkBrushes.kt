@@ -4,6 +4,7 @@ import androidx.ink.brush.Brush
 import androidx.ink.brush.BrushBehavior
 import androidx.ink.brush.BrushCoat
 import androidx.ink.brush.BrushFamily
+import androidx.ink.brush.BrushPaint
 import androidx.ink.brush.BrushTip
 import androidx.ink.brush.ExperimentalInkCustomBrushApi
 import androidx.ink.brush.StockBrushes
@@ -35,7 +36,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * Safe from any thread, since pages are meshed in the background.
  */
-@OptIn(ExperimentalInkCustomBrushApi::class)
+@OptIn(ExperimentalInkCustomBrushApi::class, androidx.ink.brush.ExperimentalInkAnimationApi::class)
 internal object InkBrushes {
     /**
      * The smallest distance the mesh resolves, in points: about 0.2 px at 1500% on the Pad 7. At 0.01 pt
@@ -44,6 +45,8 @@ internal object InkBrushes {
     private const val EPSILON_PT = 0.003f
 
     private const val TWO_PI = 6.2831855f
+    private const val STAMP_LOOP_MS = 1000L
+    private const val PENCIL_GRAIN_PT = 5f
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
     private const val CALLIGRAPHY_NIB_RATIO = 0.25f
@@ -84,13 +87,14 @@ internal object InkBrushes {
         listOf(ImmutableVec(0f, 0f), ImmutableVec(0.3f, 1f), ImmutableVec(0.7f, 1f), ImmutableVec(1f, 0f)),
     )
 
-    private fun oilBleed() = tip {
-        setCornerRounding(0.6f)
-        setScaleY(1.05f)
-        addBehavior(aimedAtDirection())
-        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.22f, ConstantNode(1f)))
-        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1f, ResponseNode(spindle, oilRun(0)))))
-    }
+    private fun oilBleed() = faint(
+        tip {
+            setCornerRounding(0.6f)
+            setScaleY(1.05f)
+            addBehavior(aimedAtDirection())
+        },
+        0.22f,
+    )
 
     /** The run of bristle [i]: between 1.6 and 1.8 line widths long, so they do not all end together. */
     private fun oilRunLength(i: Int) = OIL_RUN - 0.05f * ((i * 3) % 5)
@@ -137,35 +141,58 @@ internal object InkBrushes {
         }
     }
 
+    private fun painted(tip: BrushTip, layer: BrushPaint.TextureLayer) = BrushCoat(tip, BrushPaint(listOf(layer)))
+
+    private fun paintedFamily(vararg coats: BrushCoat) = BrushFamily.builder()
+        .setCoats(coats.toList())
+        .setInputModel(BrushFamily.InputModel.SlidingWindowModel())
+        .build()
+
+    /** A picture tiled over the stroke, fixed to the page so that it does not slide as the pen moves. */
+    private fun tiled(
+        id: String,
+        size: Float,
+        unit: BrushPaint.TextureLayer.SizeUnit = BrushPaint.TextureLayer.SizeUnit.STROKE_COORDINATES,
+        degrees: Float = 0f,
+    ) = BrushPaint.TilingTexture(
+        id, size, size, 0f, 0f, degrees,
+        unit,
+        BrushPaint.TilingTexture.Origin.STROKE_SPACE_ORIGIN,
+        BrushPaint.TextureLayer.Wrap.REPEAT,
+        BrushPaint.TextureLayer.Wrap.REPEAT,
+        BrushPaint.TextureLayer.BlendMode.MODULATE,
+    )
+
+    /** A picture stamped once for each particle. A sheet of several shows one at random, chosen by the stroke's behaviours. */
+    private fun stamped(id: String, frames: Int = 1, columns: Int = 1, rows: Int = 1) = BrushPaint.StampingTexture(
+        id, BrushPaint.TextureLayer.BlendMode.MODULATE, frames, rows, columns, STAMP_LOOP_MS, BrushPaint.AnimationRepeatMode.RESTART,
+    )
+
+    /** A coat drawn at a fixed fraction of the stroke's opacity. The paint does this, so no behaviour is involved. */
+    private fun faint(tip: BrushTip, opacity: Float) =
+        BrushCoat(tip, BrushPaint(emptyList(), listOf(BrushPaint.ColorFunction.OpacityMultiplier(opacity))))
+
     private fun tip(build: BrushTip.Builder.() -> Unit) = BrushTip.builder().apply(build).build()
 
     private val creative = ConcurrentHashMap<BrushKind, BrushFamily>()
 
     private fun creativeFamily(kind: BrushKind): BrushFamily = creative.getOrPut(kind) {
         when (kind) {
-            // Graphite: a faint soft body with a cloud of tiny grains over it.
-            BrushKind.PENCIL -> brushFamily(
-                tip {
-                    setCornerRounding(1f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 0.45f, noise(1, 0.3f)))
-                },
-                *Array(2) { c ->
+            // Graphite: a soft round line with a speckled grain over it that stays fixed to the page.
+            BrushKind.PENCIL -> paintedFamily(
+                painted(
                     tip {
                         setCornerRounding(1f)
-                        setScaleX(0.04f)
-                        setScaleY(0.04f)
-                        setParticleGapDistanceScale(0.05f)
-                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.5f, 0.5f, noise(50 + c, 0.004f)))
-                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.5f, 0.5f, noise(52 + c, 0.004f)))
-                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 0.9f, noise(54 + c, 0.01f)))
-                    }
-                },
+                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.55f, 0.8f, noise(1, 0.3f)))
+                    },
+                    tiled(BrushTextures.GRAIN, PENCIL_GRAIN_PT),
+                ),
             )
             // Nine thin bristles on one faint bleed that spans the line (the glow trick, smaller). Each bristle runs
             // 1.8 line widths: it starts at a point, swells to full width, thins to a point and starts again, and
             // it points along the direction of travel. Ten layers is the ink library's limit, so the bleed is one
             // layer under all the bristles, not one per bristle.
-            BrushKind.OIL -> brushFamily(oilBleed(), *oilBristles())
+            BrushKind.OIL -> paintedFamily(oilBleed(), *oilBristles().map { BrushCoat(it) }.toTypedArray())
             BrushKind.SPILL -> brushFamily(
                 *Array(2) { c ->
                     tip {
@@ -180,21 +207,19 @@ internal object InkBrushes {
                     }
                 },
             )
-            // Wet washes: big translucent blobs that overlap into darker patches.
-            BrushKind.WATERCOLOR -> brushFamily(
-                // Two rotated, slightly different blobs per stamp, so the union has a ragged edge.
+            // Wet washes: a wide stroke of mottled pigment, two patterns laid over each other so the
+            // heavy patches deepen where they meet.
+            BrushKind.WATERCOLOR -> paintedFamily(
                 *Array(2) { c ->
-                    tip {
-                        setCornerRounding(0.6f + 0.2f * c)
-                        setScaleX(0.9f - 0.08f * c)
-                        setScaleY(0.9f)
-                        setParticleGapDistanceScale(0.25f)
-                        addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(62 + c, 0.2f)))
-                        addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.25f, noise(9 + c, 0.15f)))
-                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(60 + c, 0.1f)))
-                        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -0.25f, 0.25f, noise(66 + c, 0.1f)))
-                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.08f, 0.2f, noise(10 + c, 0.2f)))
-                    }
+                    painted(
+                        tip {
+                            setCornerRounding(1f)
+                            setScaleX(1.7f)
+                            setScaleY(1.7f)
+                            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.35f, 0.6f, noise(10 + c, 0.4f)))
+                        },
+                        tiled(BrushTextures.WASH, 2.6f - 0.7f * c, BrushPaint.TextureLayer.SizeUnit.BRUSH_SIZE, 37f * c),
+                    )
                 },
             )
             BrushKind.COMICS -> brushFamily(
@@ -252,19 +277,16 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.2f, noise(13, 0.1f)))
                 },
             )
-            // Small leaves: pointed ovals at random angles.
-            BrushKind.LEAVES -> brushFamily(
-                tip {
-                    setCornerRounding(0.5f)
-                    setPinch(0.85f)
-                    setScaleX(0.5f)
-                    setScaleY(0.28f)
-                    setParticleGapDistanceScale(0.9f)
-                    addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(14, 0.03f)))
-                    addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.3f, noise(15, 0.06f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_X_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, noise(16, 0.05f)))
-                    addBehavior(vary(TargetNode.Target.POSITION_OFFSET_Y_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, noise(22, 0.05f)))
-                },
+            // Tree leaves: oak, maple, birch, ginkgo, willow, linden, elm and aspen, as a pattern the stroke reveals.
+            BrushKind.LEAVES -> paintedFamily(
+                painted(
+                    tip {
+                        setCornerRounding(1f)
+                        setScaleX(3.2f)
+                        setScaleY(3.2f)
+                    },
+                    tiled(BrushTextures.LEAVES, 4.4f, BrushPaint.TextureLayer.SizeUnit.BRUSH_SIZE),
+                ),
             )
             BrushKind.CROSS -> brushFamily(
                 tip {
@@ -278,17 +300,12 @@ internal object InkBrushes {
                 },
             )
             // Layers from a wide faint halo down to the core, so the colour fades into the glow.
-            BrushKind.GLOW -> brushFamily(
-                *Array(6) { i ->
-                    tip {
-                        setCornerRounding(1f)
-                        val scale = 3f - 0.4f * i
-                        setScaleX(scale)
-                        setScaleY(scale)
-                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.16f, ConstantNode(1f)))
-                    }
+            BrushKind.GLOW -> paintedFamily(
+                *Array(9) { i ->
+                    val scale = 3f - 0.27f * i
+                    faint(tip { setCornerRounding(1f); setScaleX(scale); setScaleY(scale) }, 0.1f)
                 },
-                tip { setCornerRounding(1f) },
+                BrushCoat(tip { setCornerRounding(1f) }),
             )
         }
     }

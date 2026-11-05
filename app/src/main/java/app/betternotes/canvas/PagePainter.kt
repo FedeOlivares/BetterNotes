@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import androidx.core.graphics.withTranslation
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import app.betternotes.canvas.BrushTextures
 import androidx.ink.strokes.Stroke
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.layout.DocumentLayout
@@ -53,7 +54,7 @@ internal interface PaintSource {
  * which must be the one its [PaintSource] expects.
  */
 internal class PagePainter(private val source: PaintSource) {
-    private val renderer = CanvasStrokeRenderer.create()
+    private val renderer = CanvasStrokeRenderer.create(BrushTextures)
     private val paper = Paint()
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()

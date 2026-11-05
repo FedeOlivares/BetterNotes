@@ -15,6 +15,7 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.withRotation
 import androidx.core.graphics.withTranslation
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import app.betternotes.canvas.BrushTextures
 import app.betternotes.canvas.CanvasTemplateSink
 import app.betternotes.canvas.toInkStroke
 import app.betternotes.core.format.DocumentStore
@@ -183,7 +184,7 @@ internal object ThumbnailRenderer {
 
     /** Only ink, pictures and typed text for now. New item types need adding here as well as in the canvas's painter. */
     private fun drawItems(canvas: Canvas, store: DocumentStore, items: List<PageItem>, scale: Float) {
-        val renderer = CanvasStrokeRenderer.create()
+        val renderer = CanvasStrokeRenderer.create(BrushTextures)
         val strokeToBitmap = Matrix().apply { setScale(scale, scale) }
         for (item in items) {
             when (item) {

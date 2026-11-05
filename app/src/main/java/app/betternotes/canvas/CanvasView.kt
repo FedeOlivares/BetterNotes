@@ -449,7 +449,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var stylusButtonState = 0
 
     private val tiles = TileLayerView(context, viewport, ::paintTile, backdropColor)
-    private val wet = InProgressStrokesView(context)
+    private val wet = InProgressStrokesView(context).apply { textureBitmapStore = BrushTextures }
     private val overlay = CanvasOverlayView(context, viewport)
     private val loupe = LoupeView(context).apply {
         visibility = GONE

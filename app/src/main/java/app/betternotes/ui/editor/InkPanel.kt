@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.withMatrix
 import androidx.ink.brush.InputToolType
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import app.betternotes.canvas.BrushTextures
 import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import app.betternotes.R
@@ -344,7 +345,7 @@ private fun androidx.compose.foundation.layout.RowScope.PenTypeCard(
 @Composable
 private fun StrokePreview(style: InkStyle, screenDpi: Float) {
     val colors = LocalEditorColors.current
-    val renderer = remember { CanvasStrokeRenderer.create() }
+    val renderer = remember { CanvasStrokeRenderer.create(BrushTextures) }
     val matrix = remember { Matrix() }
     val pxPerPt = screenDpi / POINTS_PER_INCH
     val stroke = remember(style) { sampleStroke(style) }
