@@ -927,19 +927,25 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             MotionEvent.ACTION_UP -> {
                 val tapped = fingerTapPossible && event.eventTime - event.downTime <= FINGER_TAP_MS
                 fingerTapPossible = false
-                if (tapped) selectCircleAt(event.x, event.y)
+                if (tapped) fingerTapped(event.x, event.y)
             }
             MotionEvent.ACTION_CANCEL -> fingerTapPossible = false
         }
     }
 
-    private fun selectCircleAt(x: Float, y: Float) {
-        val current = tool as? CanvasTool.Ink ?: return
-        if (!current.circleToLasso || lastLoop == null) return
+    /** What a finger tap does that only the pen could before: touch a circle drawn for circle to lasso, or a button of a lasso selection. */
+    private fun fingerTapped(x: Float, y: Float) {
         val editor = editor ?: return
         val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
         if (index < 0) return
-        selectLoopAt(index, editor.document.pages[index].id, pageX(x, index), pageY(y, index), byFinger = true)
+        val pageId = editor.document.pages[index].id
+        when (val current = tool) {
+            is CanvasTool.Ink -> if (current.circleToLasso && lastLoop != null) {
+                selectLoopAt(index, pageId, pageX(x, index), pageY(y, index), byFinger = true)
+            }
+            is CanvasTool.Lasso -> if (lasso.pressButton(index, pageX(x, index), pageY(y, index), FINGER_BUTTON_REACH_DP)) syncChanges()
+            else -> Unit
+        }
     }
 
     private fun pointerDown(event: MotionEvent, index: Int) {
@@ -2440,6 +2446,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val SCRIBBLE_REACH_PT = 2f
         const val LOOP_TAP_REACH_DP = 14f
         const val FINGER_LOOP_REACH_DP = 28f
+        const val FINGER_BUTTON_REACH_DP = 30f
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
 

@@ -118,10 +118,9 @@ class FingerSettingsTest {
         val r = recognizer(config)
         r.twoFingerTap(0)
         r.twoFingerTap(500)
-        r.onDeadline(700)
-        assertEquals("still waiting for a third tap", emptyList<String>(), events)
-        r.onDeadline(1200)
-        assertEquals(listOf("undo"), events)
+        assertEquals("undo does not wait", listOf("undo"), events)
+        r.twoFingerTap(1000)
+        assertEquals("a third tap within the window still counts", listOf("undo", "redo", "redo"), events)
     }
 
     @Test

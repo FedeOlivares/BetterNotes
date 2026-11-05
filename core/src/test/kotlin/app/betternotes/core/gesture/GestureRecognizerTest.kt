@@ -92,32 +92,25 @@ class GestureRecognizerTest {
     }
 
     @Test
-    fun `double tap undoes, but only after the triple tap window`() {
+    fun `double tap undoes at once, without waiting for a third tap`() {
         twoFingerTap()
         now += 50
         twoFingerTap()
-        assertEquals("must wait for a possible third tap", emptyList<String>(), events)
-        val deadline = recognizer.nextDeadlineMs
-        assertEquals(now + 300, deadline)
-
-        recognizer.onDeadline(deadline - 1)
-        assertEquals(emptyList<String>(), events)
-
-        recognizer.onDeadline(deadline)
         assertEquals(listOf("undo"), events)
-        assertEquals(GestureRecognizer.NO_DEADLINE, recognizer.nextDeadlineMs)
+        drive(now + 10_000)
+        assertEquals("nothing more happens", listOf("undo"), events)
     }
 
     @Test
-    fun `triple tap redoes at once and never undoes`() {
+    fun `triple tap takes back the second tap's undo and redoes`() {
         twoFingerTap()
         now += 50
         twoFingerTap()
         now += 50
         twoFingerTap()
-        assertEquals(listOf("redo"), events)
+        assertEquals(listOf("undo", "redo", "redo"), events)
         drive(now + 10_000)
-        assertEquals(listOf("redo"), events)
+        assertEquals(listOf("undo", "redo", "redo"), events)
     }
 
     @Test
@@ -126,9 +119,7 @@ class GestureRecognizerTest {
         twoFingerTap()
         now += 700
         twoFingerTap()
-        assertEquals(now + 800, recognizer.nextDeadlineMs)
-        recognizer.onDeadline(now + 800)
-        assertEquals(listOf("undo"), events)
+        assertEquals("a slow second tap still undoes at once", listOf("undo"), events)
     }
 
     @Test
@@ -167,7 +158,7 @@ class GestureRecognizerTest {
         twoFingerTap()
         now += 20
         fingerDown(1, 0f, 0f)
-        assertEquals("could still be the third tap", emptyList<String>(), events)
+        assertEquals(listOf("undo"), events)
         now += 5
         move(1, 100f)
         assertEquals("undo", events.first())
@@ -521,7 +512,7 @@ class GestureRecognizerTest {
         fingerDown(1)
         assertEquals(emptyList<String>(), events)
         move(1, 100f)
-        assertEquals(listOf("undo", "start 1 FINGER"), events)
+        assertEquals("the undo came with the second tap", listOf("start 1 FINGER"), events)
     }
 
     @Test
@@ -561,13 +552,11 @@ class GestureRecognizerTest {
     }
 
     @Test
-    fun `changing mode abandons the stroke in progress and any pending undo`() {
+    fun `changing mode abandons the stroke in progress`() {
         stylusDown()
         recognizer.mode = InputMode.VIEW_ONLY
         assertEquals(listOf("start 9 STYLUS", "cancel 9"), events)
         recognizer.mode = InputMode.STYLUS_DRAW
-        twoFingerTap()
-        now += 50
         twoFingerTap()
         recognizer.mode = InputMode.FINGER_DRAW
         assertEquals(GestureRecognizer.NO_DEADLINE, recognizer.nextDeadlineMs)

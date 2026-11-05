@@ -22,7 +22,7 @@ enum class OneFingerAction { IGNORED, SCROLL }
 enum class TwoFingerAction { IGNORED, ZOOM_AND_PAN, SCROLL }
 
 data class GestureConfig(
-    /** Longest gap between one two-finger tap lifting and the next one landing. Undo waits this long. */
+    /** Longest gap between one two-finger tap lifting and the next one landing. Undo does not wait for it. */
     val multiTapWindowMs: Long = 300,
     /** Longest a two-finger tap may stay down. */
     val tapMaxDurationMs: Long = 250,
@@ -36,7 +36,7 @@ data class GestureConfig(
     val twoFingers: TwoFingerAction = TwoFingerAction.ZOOM_AND_PAN,
     /** Off, two taps do nothing. A third still redoes, if that is on. */
     val undoTaps: Boolean = true,
-    /** Off, nothing can follow the second tap, so undo need not wait. */
+    /** Off, a third tap does nothing. */
     val redoTaps: Boolean = true,
     /** One finger tapping twice calls [GestureListener.onZoomTap], except where a finger draws. */
     val zoomTaps: Boolean = false,
@@ -118,6 +118,9 @@ class GestureRecognizer(
 
     // Taps already completed in this sequence.
     private var tapCount = 0
+
+    // Whether the second tap of this sequence has already undone a step.
+    private var undoneAtSecondTap = false
     private var lastTapUpMs = 0L
 
     // The last one-finger tap, which a second could turn into a zoom.
@@ -288,9 +291,17 @@ class GestureRecognizer(
         singleTapUpMs = NO_SINGLE_TAP
         if (tapCount == REDO_TAPS) {
             tapCount = 0
-            if (config.redoTaps && mode != InputMode.VIEW_ONLY) listener.onRedo()
-        } else if (tapCount == UNDO_TAPS && !config.redoTaps) {
-            endTapSequence()
+            if (config.redoTaps && mode != InputMode.VIEW_ONLY) {
+                // The second tap already undid a step. Redo that, then redo the step the three taps meant.
+                if (undoneAtSecondTap) listener.onRedo()
+                listener.onRedo()
+            }
+            undoneAtSecondTap = false
+        } else if (tapCount == UNDO_TAPS) {
+            // Undo at once, without waiting to see whether a third tap follows.
+            undoneAtSecondTap = config.undoTaps && mode != InputMode.VIEW_ONLY
+            if (undoneAtSecondTap) listener.onUndo()
+            if (!config.redoTaps) endTapSequence()
         }
     }
 
@@ -324,9 +335,8 @@ class GestureRecognizer(
     }
 
     private fun endTapSequence() {
-        val isUndo = tapCount == UNDO_TAPS
         tapCount = 0
-        if (isUndo && config.undoTaps && mode != InputMode.VIEW_ONLY) listener.onUndo()
+        undoneAtSecondTap = false
     }
 
     private fun endNavigation() {

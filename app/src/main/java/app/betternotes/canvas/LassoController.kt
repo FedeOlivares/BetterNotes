@@ -283,10 +283,10 @@ internal class LassoController(
      * A press on the selection's delete or copy button, in page coordinates. Returns true if it was one,
      * and the button's action is done.
      */
-    fun pressButton(pageIndex: Int, x: Float, y: Float): Boolean {
+    fun pressButton(pageIndex: Int, x: Float, y: Float, reachDp: Float = BUTTON_RADIUS_DP): Boolean {
         val box = selection?.bounds ?: return false
         if (pageIndex != this.pageIndex) return false
-        val reach = BUTTON_RADIUS_DP * density / viewport.pxPerPt
+        val reach = reachDp * density / viewport.pxPerPt
         val delete = buttonCenter(box, 0)
         val copy = buttonCenter(box, 1)
         when {
