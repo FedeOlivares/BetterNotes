@@ -219,7 +219,7 @@ internal object InkBrushes {
                     painted(
                         tip {
                             setCornerRounding(0f)
-                            setScaleX(2.8f)
+                            setScaleX(2.24f)
                             setScaleY(2.4f)
                             setParticleGapDistanceScale(0.35f)
                             addBehavior(aimedAtDirection())
