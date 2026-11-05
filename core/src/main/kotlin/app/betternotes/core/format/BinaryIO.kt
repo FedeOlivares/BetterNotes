@@ -16,10 +16,10 @@ internal const val FORMAT_VERSION = 1
 
 /**
  * The document and settings files are at version 2, because they hold custom layouts: a layout gained a paper color,
- * a base pattern and book style (2). Version 1 files still open, with the default paper, no pattern and no mirroring.
+ * a base pattern and book style (2), and the positions of a frame's movable lines (3). Older files still open, with the defaults.
  * The other files are still at [FORMAT_VERSION].
  */
-internal const val LAYOUT_FORMAT_VERSION = 2
+internal const val LAYOUT_FORMAT_VERSION = 3
 
 /**
  * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).

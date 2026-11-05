@@ -31,12 +31,18 @@ import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.LayoutElement
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.bounds
+import app.betternotes.core.template.frameLines
 import kotlin.math.abs
 import kotlin.math.min
 
 private const val FIT_FRACTION = 0.9f
 private const val MIN_ZOOM = 0.4f
 private const val MAX_ZOOM = 8f
+private const val HANDLE_RADIUS_DP = 12
+private const val HANDLE_GRAB_DP = 32
+
+/** Where a horizontal frame line's handle sits across the page, so it stays clear of the vertical lines. */
+private const val HORIZONTAL_HANDLE_X = 0.85f
 
 /** Space between the two pages of a book-style spread, as a fraction of a page's width. */
 private const val SPREAD_GAP = 0.04f
@@ -63,6 +69,7 @@ internal fun LayoutCanvas(
     onPress: (Float, Float) -> Unit,
     onDraw: (Float, Float, Float, Float) -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onFrameLine: (Int, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalSettingsColors.current
@@ -78,6 +85,7 @@ internal fun LayoutCanvas(
     val onPressNow by rememberUpdatedState(onPress)
     val onDrawNow by rememberUpdatedState(onDraw)
     val onDragNow by rememberUpdatedState(onDrag)
+    val onFrameLineNow by rememberUpdatedState(onFrameLine)
     val shadow = colors.screen
 
     // Fits the page again when its size or the spread changes, or the screen does.
@@ -98,6 +106,22 @@ internal fun LayoutCanvas(
                     val first = view ?: return@awaitEachGesture
                     fun toPage(position: Offset) = Offset((position.x - first.x) / first.scale, (position.y - first.y) / first.scale)
                     val begin = toPage(down.position)
+                    // A grab on a frame line's handle moves that line and nothing else.
+                    val grabbed = layoutNow.frameHandles().indexOfFirst { handle ->
+                        (Offset(first.x + handle.x * first.scale, first.y + handle.y * first.scale) - down.position).getDistance() <= HANDLE_GRAB_DP.dp.toPx()
+                    }
+                    if (grabbed >= 0) {
+                        val line = layoutNow.base.frameLines(layoutNow.size, layoutNow.frameLines)[grabbed]
+                        down.consume()
+                        do {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            val at = toPage(change.position)
+                            onFrameLineNow(grabbed, if (line.vertical) at.x / layoutNow.size.widthPt else at.y / layoutNow.size.heightPt)
+                            change.consume()
+                        } while (event.changes.any { it.pressed })
+                        return@awaitEachGesture
+                    }
                     if (!drawingNow) onPressNow(begin.x, begin.y)
                     var multi = false
                     var moved = false
@@ -156,6 +180,11 @@ internal fun LayoutCanvas(
             translate(now.x - gap, now.y) { paintPage(layout, width, height, now.scale, mirrored = true, shadow) }
         }
         translate(now.x, now.y) { paintPage(layout, width, height, now.scale, mirrored = false, shadow) }
+        for (handle in layout.frameHandles()) {
+            val center = Offset(now.x + handle.x * now.scale, now.y + handle.y * now.scale)
+            drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
+            drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
+        }
         val index = selected
         if (index in layout.elements.indices) {
             val element = layout.elements[index]
@@ -211,4 +240,9 @@ private fun DrawScope.paintPaper(layout: CustomLayout, width: Float, height: Flo
     scale(factor, factor, Offset.Zero) {
         TemplatePainter.paint(this, PageTemplate.Custom(layout), layout.size, minLine = 1f / factor)
     }
+}
+
+/** Where each movable line of the layout's frame has its handle, in points, in the order of [frameLines]. */
+private fun CustomLayout.frameHandles(): List<Offset> = base.frameLines(size, frameLines).map { line ->
+    if (line.vertical) Offset(line.position(size), size.heightPt / 2f) else Offset(size.widthPt * HORIZONTAL_HANDLE_X, line.position(size))
 }

@@ -212,6 +212,10 @@ fun CustomLayoutSheet(
                                 changed()
                             }
                         },
+                        onFrameLine = { index, fraction ->
+                            builder.moveFrameLine(index, fraction)
+                            changed()
+                        },
                         onPress = { x, y ->
                             val hit = builder.elementAt(x, y, TAP_TOLERANCE_PT)
                             if (hit >= 0 && hit != selected) {

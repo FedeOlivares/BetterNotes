@@ -17,11 +17,6 @@ interface TemplateSink {
     fun dot(x: Float, y: Float, radius: Float, color: Int)
 }
 
-private const val CORNELL_TITLE_FRACTION = 0.08f
-private const val CORNELL_CUE_FRACTION = 0.3f
-private const val CORNELL_SUMMARY_FRACTION = 0.2f
-private const val LEGAL_HEAD_PT = 72f
-private const val LEGAL_MARGIN_PT = 90f
 private const val LEGAL_MARGIN_GAP_PT = 3f
 private const val STAFF_SIDE_MARGIN_PT = 36f
 private const val STAFF_TOP_MARGIN_PT = 36f
@@ -42,7 +37,7 @@ private fun shade(argb: Int): Int {
  * [page] is null on an infinite canvas, where only templates with [PageTemplate.tiles] draw
  * anything. Those align to the world origin, so the pattern stays put while the canvas scrolls.
  */
-fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink) {
+fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink, frame: List<Float> = emptyList()) {
     val area = if (page == null) region else clipToPage(region, page)
     if (area.width < 0f || area.height < 0f) return
     when (this) {
@@ -54,17 +49,17 @@ fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink) {
             verticalLines(area, page, spacing, lineWidth, color, sink)
         }
         is PageTemplate.Hexagonal -> hexagons(area, this, sink)
-        is PageTemplate.Cornell -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = false, sink) }
-        is PageTemplate.CornellRuled -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = true, sink) }
+        is PageTemplate.Cornell -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = false, frameLines(it, frame), sink) }
+        is PageTemplate.CornellRuled -> page?.let { cornell(it, spacing, lineWidth, color, ruledCue = true, frameLines(it, frame), sink) }
         is PageTemplate.Engineering -> page?.let { engineering(it, this, sink) }
-        is PageTemplate.Legal -> page?.let { legal(it, this, sink) }
+        is PageTemplate.Legal -> page?.let { legal(it, this, frameLines(it, frame), sink) }
         is PageTemplate.MusicScore ->
             page?.let { staves(it, MUSIC_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
         is PageTemplate.GuitarTab ->
             page?.let { staves(it, GUITAR_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
         is PageTemplate.GuitarScore -> page?.let { guitarScore(it, this, sink) }
         is PageTemplate.Custom -> if (page != null) {
-            layout.base.draw(page, region, sink)
+            layout.base.draw(page, region, sink, layout.frameLines)
             layout.elements.forEach { it.draw(sink) }
         }
     }
@@ -142,10 +137,10 @@ private fun hexagons(area: Bounds, t: PageTemplate.Hexagonal, sink: TemplateSink
     }
 }
 
-private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ruledCue: Boolean, sink: TemplateSink) {
-    val titleBottom = page.heightPt * CORNELL_TITLE_FRACTION
-    val summaryTop = page.heightPt * (1f - CORNELL_SUMMARY_FRACTION)
-    val cueRight = page.widthPt * CORNELL_CUE_FRACTION
+private fun cornell(page: PageSize, spacing: Float, width: Float, color: Int, ruledCue: Boolean, lines: List<FrameLine>, sink: TemplateSink) {
+    val titleBottom = lines[0].position(page)
+    val summaryTop = lines[1].position(page)
+    val cueRight = lines[2].position(page)
     val frame = darker(color)
     sink.line(0f, titleBottom, page.widthPt, titleBottom, width * 2f, frame)
     sink.line(0f, summaryTop, page.widthPt, summaryTop, width * 2f, frame)
@@ -205,13 +200,14 @@ private fun guitarScore(page: PageSize, t: PageTemplate.GuitarScore, sink: Templ
     }
 }
 
-private fun legal(page: PageSize, t: PageTemplate.Legal, sink: TemplateSink) {
-    var y = LEGAL_HEAD_PT
+private fun legal(page: PageSize, t: PageTemplate.Legal, lines: List<FrameLine>, sink: TemplateSink) {
+    val margin = lines[1].position(page)
+    var y = lines[0].position(page)
     while (y < page.heightPt) {
         sink.line(0f, y, page.widthPt, y, t.lineWidth, t.color)
         y += t.spacing
     }
-    for (x in floatArrayOf(LEGAL_MARGIN_PT, LEGAL_MARGIN_PT + LEGAL_MARGIN_GAP_PT)) {
+    for (x in floatArrayOf(margin, margin + LEGAL_MARGIN_GAP_PT)) {
         sink.line(x, 0f, x, page.heightPt, t.lineWidth, t.marginColor)
     }
 }

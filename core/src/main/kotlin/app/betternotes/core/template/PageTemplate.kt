@@ -172,6 +172,8 @@ data class CustomLayout(
     val base: PageTemplate = PageTemplate.Blank,
     /** Every other page is the mirror image, as in a bound book: the first page is as drawn, the second is flipped. */
     val bookStyle: Boolean = false,
+    /** Where the owner put each movable line of a Cornell or legal [base], as fractions (see [frameLines]). Empty for the defaults. */
+    val frameLines: List<Float> = emptyList(),
 ) {
     init { require(base !is PageTemplate.Custom) { "A layout's base cannot be a custom layout" } }
 }

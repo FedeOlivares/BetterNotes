@@ -43,16 +43,31 @@ class CustomLayoutBuilder(
     base: PageTemplate = PageTemplate.Blank,
     /** Whether every other page is mirrored. */
     var bookStyle: Boolean = false,
+    /** Fractions for the movable lines of the base; empty for the defaults. */
+    frameLines: List<Float> = emptyList(),
 ) {
     constructor(layout: CustomLayout) : this(
-        layout.name, layout.size, layout.displayUnit, layout.elements, layout.paper, layout.base, layout.bookStyle,
+        layout.name, layout.size, layout.displayUnit, layout.elements, layout.paper, layout.base, layout.bookStyle, layout.frameLines,
     )
 
     var base: PageTemplate = base
         set(value) {
             require(value !is PageTemplate.Custom) { "A layout's base cannot be a custom layout" }
+            // Lines moved on one frame mean nothing on another.
+            if (value.kind != field.kind) frameLines = emptyList()
             field = value
         }
+
+    /** The owner's positions for the movable lines of [base], or empty for the defaults. */
+    var frameLines: List<Float> = frameLines
+        private set
+
+    /** Moves line [index] of the frame to [fraction] of the page, kept clear of the page's edge and the other lines. */
+    fun moveFrameLine(index: Int, fraction: Float) {
+        val lines = base.frameLines(size, frameLines)
+        if (index !in lines.indices) return
+        frameLines = lines.mapIndexed { i, line -> if (i == index) base.clampFrameLine(lines, index, fraction) else line.fraction }
+    }
 
     var size = coerced(size.widthPt, size.heightPt)
         private set
@@ -108,7 +123,7 @@ class CustomLayoutBuilder(
         return -1
     }
 
-    fun build() = CustomLayout(name, size, unit, placed.toList(), paper, base, bookStyle)
+    fun build() = CustomLayout(name, size, unit, placed.toList(), paper, base, bookStyle, frameLines)
 
     private fun distanceToSegment(x: Float, y: Float, line: LayoutElement.Line): Float {
         val dx = line.x1 - line.x0

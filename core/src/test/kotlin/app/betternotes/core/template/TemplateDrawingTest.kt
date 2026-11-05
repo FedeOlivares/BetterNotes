@@ -209,4 +209,26 @@ class TemplateDrawingTest {
         assertEquals(listOf(false, true, false, true), (0..3).map { book.isMirroredOn(it) })
         assertFalse(book.copy(bookStyle = false).isMirroredOn(1))
     }
+
+    @Test
+    fun `moved frame lines are drawn where the layout puts them`() {
+        val layout = CustomLayout(
+            "L", page, LengthUnit.PT, emptyList(),
+            base = PageTemplate.Cornell(spacing = 1000f), frameLines = listOf(0.25f, 0.5f, 0.4f),
+        )
+        val lines = PageTemplate.Custom(layout).record().lines
+        assertEquals(listOf(50f, 100f), lines.filter { it.y0 == it.y1 }.map { it.y0 })
+        assertEquals(40f, lines.single { it.x0 == it.x1 }.x0)
+    }
+
+    @Test
+    fun `a builder keeps frame lines apart and drops them with the frame`() {
+        val builder = CustomLayoutBuilder("L", page, LengthUnit.PT, base = PageTemplate.Cornell())
+        builder.moveFrameLine(0, 0.9f)
+        assertEquals(0.76f, builder.frameLines[0], 0.0001f)
+        builder.moveFrameLine(2, 5f)
+        assertEquals(0.98f, builder.frameLines[2], 0.0001f)
+        builder.base = PageTemplate.Legal()
+        assertEquals(emptyList<Float>(), builder.frameLines)
+    }
 }

@@ -421,6 +421,9 @@ class CodecTest {
         }
         assertEquals(plain, roundTrip(styled, 1).copy(elements = plain.elements, name = "L", size = plain.size))
         assertEquals(styled, roundTrip(styled, 2))
+        val moved = styled.copy(base = PageTemplate.Cornell(), frameLines = listOf(0.1f, 0.7f, 0.4f))
+        assertEquals(moved, roundTrip(moved, 3))
+        assertEquals(emptyList<Float>(), roundTrip(moved, 2).frameLines)
     }
 
     private fun String.decodeBase64() = Base64.getDecoder().decode(this)

@@ -209,6 +209,11 @@ internal fun ByteWriter.customLayout(layout: CustomLayout) {
         template(layout.base)
         bool(layout.bookStyle)
     }
+    // Version 3 added where a Cornell or legal frame's lines sit.
+    if (version >= 3) {
+        varint(layout.frameLines.size)
+        layout.frameLines.forEach { float(it) }
+    }
 }
 
 internal fun ByteReader.customLayout(): CustomLayout {
@@ -221,7 +226,9 @@ internal fun ByteReader.customLayout(): CustomLayout {
     val paper = int()
     val base = template()
     if (base is PageTemplate.Custom) throw CorruptFileException("A layout's base is a custom layout")
-    return CustomLayout(name, size, unit, elements, paper, base, bool())
+    val bookStyle = bool()
+    if (version < 3) return CustomLayout(name, size, unit, elements, paper, base, bookStyle)
+    return CustomLayout(name, size, unit, elements, paper, base, bookStyle, List(count(4)) { float() })
 }
 
 private fun ByteWriter.element(element: LayoutElement) {
