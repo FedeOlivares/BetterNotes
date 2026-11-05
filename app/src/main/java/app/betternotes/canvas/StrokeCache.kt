@@ -62,16 +62,26 @@ internal class InkRenderer {
     private val renderer = CanvasStrokeRenderer.create(BrushTextures)
     private val scratch = RenderNode("ink-warm")
 
-    fun draw(canvas: Canvas, stroke: Stroke, matrix: Matrix) = synchronized(this) { renderer.draw(canvas, stroke, matrix) }
+    /** When a tile or the lasso last drew. [warm] stays out of their way, since a lock would not favor them. */
+    @Volatile
+    private var lastDrawNanos = 0L
+
+    fun draw(canvas: Canvas, stroke: Stroke, matrix: Matrix) {
+        lastDrawNanos = System.nanoTime()
+        synchronized(this) { renderer.draw(canvas, stroke, matrix) }
+    }
 
     /** Like [draw], but a canvas that cannot stamp gets the plain look-alike. See [InkBrushes.draw]. */
-    fun drawOrStandIn(canvas: Canvas, stroke: Stroke, matrix: Matrix) =
+    fun drawOrStandIn(canvas: Canvas, stroke: Stroke, matrix: Matrix) {
+        lastDrawNanos = System.nanoTime()
         synchronized(this) { InkBrushes.draw(renderer, canvas, stroke, matrix) }
+    }
 
     /** Builds the stroke's mesh by drawing it where nobody sees. Safe from any thread. */
     fun warm(strokes: Collection<Stroke>) {
         for (stroke in strokes) {
-            // One stroke per lock, so the main thread never waits for more than one mesh.
+            while (System.nanoTime() - lastDrawNanos < DRAWING_QUIET_NANOS) Thread.sleep(1)
+            // One stroke per lock, so drawing never waits for more than one mesh.
             synchronized(this) {
                 val canvas = scratch.beginRecording(1, 1)
                 try {
@@ -86,6 +96,9 @@ internal class InkRenderer {
 
     private companion object {
         val IDENTITY = Matrix()
+
+        /** Drawing that paused this recently is probably still under way. */
+        const val DRAWING_QUIET_NANOS = 3_000_000L
     }
 }
 

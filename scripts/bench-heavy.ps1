@@ -2,7 +2,7 @@
 # Usage: .\scripts\bench-heavy.ps1 [-Serial <serial>] [-NoBuild] [-Pdf <path on the PC>] [-NoInk]
 # Installs a separate app (app.betternotes.profile). -Pdf copies the file to that app's folder on the device.
 param([string]$Serial = 'f9ea56c5', [switch]$NoBuild, [string]$Pdf = '', [switch]$NoInk)
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Continue' # adb writes progress to stderr
 if (-not $env:JAVA_HOME) { $env:JAVA_HOME = 'D:\Android\Android Studio\jbr' }
 $root = Split-Path -Parent $PSScriptRoot
 $adb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
@@ -18,7 +18,11 @@ $extras = @('--ez', 'benchmark_heavy', 'true')
 if ($NoInk) { $extras += @('--ez', 'benchmark_ink', 'false') }
 if ($Pdf) {
     $onDevice = "/sdcard/Android/data/$package/files/bench.pdf"
-    & $adb -s $Serial shell mkdir -p "/sdcard/Android/data/$package/files"
+    # The app must make its own folder, or it cannot read what is put there.
+    & $adb -s $Serial shell rm -rf "/sdcard/Android/data/$package"
+    & $adb -s $Serial shell am start -n "$package/app.betternotes.ui.MainActivity" --ez benchmark_heavy true | Out-Null
+    Start-Sleep -Seconds 1
+    & $adb -s $Serial shell am force-stop $package
     & $adb -s $Serial push $Pdf $onDevice | Out-Null
     $extras += @('--es', 'benchmark_pdf', $onDevice)
 }

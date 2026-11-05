@@ -11,3 +11,11 @@ After step 1 (shared ink renderer, meshes built in the background before a page'
 pan_zoom_100  tile_record p99 18.5 -> 3.5 ms, max 22.8 -> 4.4; frame_total p99 47.7 -> 25.4, max 73.5 -> 27.4
 After step 2 (lasso move drawn as a cached picture, 420 items with stamped brushes, 100% zoom):
 lasso_move  frame_total p50 44.0 -> 11.9 ms, p95 53.8 -> 12.3, gpu p50 15.7 -> 5.9 (was 22 fps, now 120)
+
+Owner's real PDF (Tablitas quirurgica, 11 MB), final code, Pad 7, frame_total p99 / max in ms.
+No ink:   scroll_100 14.7 / 15.9   pan_100 13.8 / 30.5   pinch 21.5 / 31.0   pan_30 14.3 / 16.3   PDF tile render avg 1-7, max 30
+With ink on the first 12 pages (~420 strokes each), before and after keeping the background mesh work out of drawing's way:
+pan_100 tile_record max 80.1 -> 6.8; frame max 165.8 -> 33.0
+pan_30  tile_record max 219.2 -> 10.4; frame p99 140 -> 82, max 359 -> 165
+scroll_100 frame p99 51.5 -> 40.5, max 98 -> 109 (no real change at the max)
+Remaining: frames right after a zoom settles, 100-210 ms, mostly GPU drawing of new tiles. Lasso move frame_total p50 12-20 ms; the single 3 s frame at its start is the benchmark loading page 1 synchronously after scrolling away, not something a real selection does.

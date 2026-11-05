@@ -60,7 +60,10 @@ internal object CanvasBenchmark {
         root.deleteRecursively()
         root.mkdirs()
         val pdfFile = realPdf ?: File(root, "heavy.pdf").also(::writePdf)
-        val imported = PdfImporter.import(context.contentResolver, Uri.fromFile(pdfFile), File(root, "documents")) as PdfImportResult.Imported
+        File(root, "documents").mkdirs()
+        val result = PdfImporter.import(context.contentResolver, Uri.fromFile(pdfFile), File(root, "documents"))
+        val imported = result as? PdfImportResult.Imported
+            ?: error("Could not import $pdfFile: " + ((result as? PdfImportResult.Failed)?.cause ?: result))
         if (!withInk) return imported.store
         for ((index, page) in imported.document.pages.take(INKED_PAGES).withIndex()) {
             val size = page.size ?: continue

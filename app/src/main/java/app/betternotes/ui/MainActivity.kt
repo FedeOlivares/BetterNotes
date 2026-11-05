@@ -262,6 +262,7 @@ class MainActivity : ComponentActivity() {
 
     private fun runHeavyBenchmark() {
         val perf = probe ?: return
+        getExternalFilesDir(null) // Makes the folder the script pushes a PDF into, with this app as its owner.
         val realPdf = intent.getStringExtra(EXTRA_BENCHMARK_PDF)?.let(::File)
         val withInk = intent.getBooleanExtra(EXTRA_BENCHMARK_INK, true)
         val store = CanvasBenchmark.writeHeavyDocument(this, File(cacheDir, "benchmark-heavy"), realPdf, withInk)

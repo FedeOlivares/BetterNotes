@@ -2405,12 +2405,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val editor = editor ?: return
             val pageId = editor.document.pages[0].id
             val content = editor.content(pageId)
+            if (content.size == 0) return
             benchmarkBox = content.toList().map { it.bounds }.reduce(Bounds::union)
             layout?.moveToPage(viewport, 0, width, height, pageMarginPx)
             settlePan()
             lasso.select(0, Selection(pageId, IntArray(content.size) { it }, content.toList()))
             lasso.start(0, benchmarkBox.centerX, benchmarkBox.centerY, rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
         }
+        if (!lasso.hasSelection) return
         lasso.move(benchmarkBox.centerX + 60f * sin(step * 0.04f), benchmarkBox.centerY + 40f * sin(step * 0.03f))
     }
 
