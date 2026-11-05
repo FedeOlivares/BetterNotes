@@ -43,6 +43,8 @@ import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.gesture.PointerKind
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.layout.ScrollDirection
+import app.betternotes.audio.Waveforms
+import app.betternotes.core.model.AudioBar
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.IdSource
@@ -606,6 +608,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(loupe, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         overlay.extraDraw = { canvas ->
+            drawAudioBars(canvas)
             lasso.draw(canvas)
             shapes.draw(canvas)
             drawLoupeBox(canvas)
@@ -1020,6 +1023,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         drawPageIndex = index
         endTextEdit()
         strokeStickyId = null
+        if (kind != PointerKind.STYLUS_ERASER && pressAudio(pointerId, index, page.id, pageX(x, index), pageY(y, index))) return
         if (kind != PointerKind.STYLUS_ERASER && handlePlacement(index, pageX(x, index), pageY(y, index))) return
 
         val tool = tool
@@ -1073,6 +1077,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             overlay.laserMove(x, y)
             return
         }
+        if (pointerId == audioPointer) {
+            seekAudio(pageX(x, audioPage))
+            return
+        }
         if (pointerId == lassoPointer) {
             lasso.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
             return
@@ -1085,6 +1093,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawEnd(pointerId: Int) {
+        if (pointerId == audioPointer) {
+            audioPointer = -1
+            return
+        }
         if (pointerId == loupeBoxPointer) {
             loupeBoxPointer = -1
             return
@@ -1127,6 +1139,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDrawCancel(pointerId: Int) {
+        if (pointerId == audioPointer) {
+            audioPointer = -1
+            return
+        }
         if (pointerId == loupeBoxPointer) {
             loupeBoxPointer = -1
             return
@@ -1528,6 +1544,127 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         } finally {
             retriever.release()
         }
+    }
+
+    // ---- Recordings on the page ----
+
+    /** Plays and stops the recordings on the page; set by the editor. */
+    internal var audio: AudioPlayback? = null
+
+    private val audioBars = AudioBarPainter()
+    private var audioPointer = -1
+    private var audioPage = 0
+    private var audioItem: AudioItem? = null
+
+    private fun drawAudioBars(canvas: Canvas) {
+        val open = editor ?: return
+        val layout = layout ?: return
+        val playback = audio
+        val scale = viewport.pxPerPt
+        val view = viewport.visibleWorld(width, height)
+        var playing = false
+        layout.forEachPageIn(view) { index ->
+            val page = open.document.pages.getOrNull(index) ?: return@forEachPageIn
+            val content = open.loadedPageOrNull(page.id) ?: return@forEachPageIn
+            val ox = layout.originX(index)
+            val oy = layout.originY(index)
+            val region = Bounds(view.left - ox, view.top - oy, view.right - ox, view.bottom - oy)
+            content.forEachIntersecting(region) { _, item ->
+                if (item is AudioItem && AudioBar.isPlaced(item.frame)) {
+                    val isPlaying = playback?.isPlaying(item.id) == true
+                    playing = playing || isPlaying
+                    val wave = Waveforms.get(item.assetId)
+                    if (wave == null && AudioBar.isOpen(item.frame)) {
+                        open.assetFile(item.assetId)?.let { file -> Waveforms.request(item.assetId, file) { overlay.postInvalidate() } }
+                    }
+                    audioBars.draw(
+                        canvas,
+                        item,
+                        viewport.toScreenX(ox + item.frame.left),
+                        viewport.toScreenY(oy + item.frame.top),
+                        scale,
+                        isPlaying,
+                        if (isPlaying) playback?.fraction(item.id) ?: 0f else 0f,
+                        wave,
+                    )
+                }
+            }
+        }
+        if (playing) overlay.postInvalidateOnAnimation()
+    }
+
+    /** A pen touch on a recording's bar. Returns true if it was on one and has been dealt with. */
+    private fun pressAudio(pointerId: Int, pageIndex: Int, pageId: Long, x: Float, y: Float): Boolean {
+        if (tool is CanvasTool.Eraser || tool is CanvasTool.Lasso) return false
+        val (at, item) = topItemOfType<AudioItem>(pageId, x, y) ?: return false
+        if (!AudioBar.isPlaced(item.frame)) return false
+        val playback = audio ?: return false
+        when (AudioBar.zoneAt(item.frame, x, y) ?: return false) {
+            AudioBar.Zone.PLAY -> {
+                // Pressing play on a collapsed bar opens it.
+                if (!AudioBar.isOpen(item.frame)) replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, true)))
+                playback.toggle(item)
+            }
+            AudioBar.Zone.COLLAPSE -> replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, false)))
+            AudioBar.Zone.EXPAND -> replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, true)))
+            AudioBar.Zone.WAVE -> {
+                audioPointer = pointerId
+                audioPage = pageIndex
+                audioItem = item
+                playback.seek(item, AudioBar.fractionAt(item.frame, x))
+            }
+        }
+        overlay.invalidate()
+        return true
+    }
+
+    private fun seekAudio(x: Float) {
+        val item = audioItem ?: return
+        audio?.seek(item, AudioBar.fractionAt(item.frame, x))
+        overlay.invalidate()
+    }
+
+    private fun replaceAudio(pageId: Long, index: Int, item: AudioItem) {
+        val open = editor ?: return
+        open.perform(ItemsEdit.replace(pageId, open.content(pageId), intArrayOf(index), listOf(item)))
+        syncChanges()
+    }
+
+    /**
+     * Puts a recording on the page under a point of the view, open and centred there. It moves if it was
+     * already placed. Returns false if the point is not over a page.
+     */
+    fun placeAudio(id: Long, screenX: Float, screenY: Float): Boolean {
+        val open = editor ?: return false
+        val layout = layout ?: return false
+        val target = layout.pageIndexAt(viewport.toWorldX(screenX), viewport.toWorldY(screenY))
+        if (target < 0) return false
+        val targetPage = open.document.pages[target]
+        var fromPage = 0L
+        var at = -1
+        var item: AudioItem? = null
+        for (page in open.document.pages) {
+            val content = open.content(page.id)
+            for (i in 0 until content.size) {
+                val candidate = content[i]
+                if (candidate.id == id && candidate is AudioItem) {
+                    fromPage = page.id
+                    at = i
+                    item = candidate
+                }
+            }
+        }
+        val found = item ?: return false
+        val wasCollapsed = AudioBar.isPlaced(found.frame) && !AudioBar.isOpen(found.frame)
+        val moved = found.copy(frame = AudioBar.centeredAt(pageX(screenX, target), pageY(screenY, target), open = !wasCollapsed))
+        if (fromPage == targetPage.id) {
+            replaceAudio(fromPage, at, moved)
+        } else {
+            open.perform(ItemsEdit.remove(fromPage, open.content(fromPage), intArrayOf(at)))
+            open.perform(ItemsEdit.addOnTop(targetPage.id, open.content(targetPage.id), moved))
+            syncChanges()
+        }
+        return true
     }
 
     fun deleteAudio(item: AudioItem) {
@@ -1965,7 +2102,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         tiles.invalidate()
         onViewMoved()
-        if (lasso.hasSelection || overlay.ruler != null) overlay.invalidate()
+        overlay.invalidate()
     }
 
     override fun onTransformEnd() {
@@ -2056,6 +2193,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Brings the screen up to date with whatever has changed on the pages. */
     private fun syncChanges() {
         val editor = editor ?: return
+        overlay.invalidate()
         if (editor.document.version != layoutVersion) {
             rebuildLayout()
             return

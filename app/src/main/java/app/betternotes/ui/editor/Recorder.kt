@@ -36,12 +36,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -50,10 +57,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.betternotes.R
+import app.betternotes.canvas.AudioPlayback
 import app.betternotes.canvas.CanvasView
 import app.betternotes.core.model.AudioItem
 import app.betternotes.ui.icons.EditorIcons
@@ -65,7 +79,7 @@ import java.util.UUID
 
 /** Records and plays the document's voice recordings. Main thread only. */
 @Stable
-internal class RecorderState(private val context: Context, private val canvas: CanvasView) {
+internal class RecorderState(private val context: Context, private val canvas: CanvasView) : AudioPlayback {
     var menuOpen by mutableStateOf(false)
     var recording by mutableStateOf(false)
         private set
@@ -75,6 +89,53 @@ internal class RecorderState(private val context: Context, private val canvas: C
         private set
     var playingId by mutableStateOf<Long?>(null)
         private set
+
+    /** The recording being dragged out of the menu, and where the pen is, in window pixels. */
+    var dragging by mutableStateOf<AudioItem?>(null)
+        private set
+    var dragX by mutableFloatStateOf(0f)
+        private set
+    var dragY by mutableFloatStateOf(0f)
+        private set
+
+    init {
+        canvas.audio = this
+    }
+
+    fun dragTo(item: AudioItem, windowX: Float, windowY: Float) {
+        dragging = item
+        dragX = windowX
+        dragY = windowY
+    }
+
+    /** Ends a drag from the menu, putting the recording on the canvas if it was let go over a page. */
+    fun drop(item: AudioItem) {
+        dragging = null
+        val at = IntArray(2)
+        canvas.getLocationInWindow(at)
+        if (canvas.placeAudio(item.id, dragX - at[0], dragY - at[1])) menuOpen = false
+    }
+
+    fun cancelDrag() {
+        dragging = null
+    }
+
+    override fun isPlaying(id: Long) = playingId == id
+
+    override fun fraction(id: Long): Float {
+        val active = player ?: return 0f
+        if (playingId != id) return 0f
+        val length = active.duration
+        return if (length > 0) (active.currentPosition.toFloat() / length).coerceIn(0f, 1f) else 0f
+    }
+
+    override fun toggle(item: AudioItem) = play(item)
+
+    override fun seek(item: AudioItem, fraction: Float) {
+        if (playingId != item.id) play(item)
+        val active = player ?: return
+        if (playingId == item.id) active.seekTo((active.duration * fraction).toInt())
+    }
 
     private var recorder: MediaRecorder? = null
     private var player: MediaPlayer? = null
@@ -217,6 +278,7 @@ internal fun RecorderMenu(state: EditorState, recorder: RecorderState, modifier:
             .shadow(12.dp, PanelShape, clip = false)
             .clip(PanelShape)
             .background(colors.panel)
+            .alpha(if (recorder.dragging != null) 0.25f else 1f)
             .verticalScroll(rememberScrollState())
             .padding(vertical = 8.dp),
     ) {
@@ -236,6 +298,33 @@ internal fun RecorderMenu(state: EditorState, recorder: RecorderState, modifier:
         }
         recordings.forEachIndexed { index, item ->
             RecordingRow(state, recorder, item, index + 1)
+        }
+    }
+    recorder.dragging?.let { DraggedRecording(recorder.dragX, recorder.dragY) }
+}
+
+/** What follows the pen while a recording is dragged out of the menu: the bar it will become. */
+@Composable
+private fun DraggedRecording(x: Float, y: Float) {
+    val colors = LocalEditorColors.current
+    Popup(popupPositionProvider = object : PopupPositionProvider {
+        override fun calculatePosition(anchorBounds: IntRect, windowSize: IntSize, layoutDirection: LayoutDirection, popupContentSize: IntSize) =
+            IntOffset((x - popupContentSize.width / 2f).toInt(), (y - popupContentSize.height / 2f).toInt())
+    }) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .shadow(8.dp, CircleShape)
+                .clip(CircleShape)
+                .background(Color.White)
+                .padding(4.dp),
+        ) {
+            Box(Modifier.size(28.dp).clip(CircleShape).background(Color(0xFF3B6FF5)), contentAlignment = Alignment.Center) {
+                Icon(EditorIcons.Play, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            }
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.width(90.dp).height(3.dp).clip(CircleShape).background(colors.label))
+            Spacer(Modifier.width(10.dp))
         }
     }
 }
@@ -266,11 +355,22 @@ private fun RecordingRow(state: EditorState, recorder: RecorderState, item: Audi
         val modified = file?.lastModified() ?: 0L
         "${DateFormat.getMediumDateFormat(context).format(modified)}, ${DateFormat.getTimeFormat(context).format(modified)}"
     }
+    var origin by remember { mutableStateOf(Offset.Zero) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
+            .onGloballyPositioned { origin = it.positionInWindow() }
             .clickable(role = Role.Button) { recorder.play(item) }
+            .pointerInput(item.id) {
+                // Hold, then drag the recording onto the canvas.
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { at -> recorder.dragTo(item, origin.x + at.x, origin.y + at.y) },
+                    onDrag = { change, _ -> recorder.dragTo(item, origin.x + change.position.x, origin.y + change.position.y) },
+                    onDragEnd = { recorder.drop(item) },
+                    onDragCancel = { recorder.cancelDrag() },
+                )
+            }
             .padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
     ) {
         Icon(

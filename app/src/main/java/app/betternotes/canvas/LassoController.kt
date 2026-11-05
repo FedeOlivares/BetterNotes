@@ -606,8 +606,8 @@ internal class LassoController(
         const val HANDLE_FILL = 0xFFFFFFFF.toInt()
         const val MARQUEE_WIDTH_DP = 1.2f
         const val DASH_DP = 3f
-        const val ANTS_MS = 450L
-        const val ANT_SPEED_DP_PER_MS = 0.04f
+        const val ANTS_MS = 540L
+        const val ANT_SPEED_DP_PER_MS = 0.032f
         const val SELECTION_WIDTH_DP = 1f
         const val GUIDE_COLOR = 0xFFE5408F.toInt()
         const val SNAP_REACH_DP = 6f

@@ -549,6 +549,37 @@ class CanvasViewTest {
         assertEquals(1, pageContent().size)
     }
 
+    @Test
+    fun aRecordingDroppedOnThePageBecomesABarThatPlaysAndFolds() {
+        onMain { canvas.addAudio("sound", 4000L) }
+        val id = onMain { canvas.recordings().single().id }
+        val played = mutableListOf<Long>()
+        onMain {
+            canvas.audio = object : AudioPlayback {
+                override fun isPlaying(id: Long) = false
+                override fun fraction(id: Long) = 0f
+                override fun toggle(item: app.betternotes.core.model.AudioItem) { played += item.id }
+                override fun seek(item: app.betternotes.core.model.AudioItem, fraction: Float) = Unit
+            }
+        }
+        val drop = worldToScreen(300f, 300f)
+        assertTrue(onMain { canvas.placeAudio(id, drop.first, drop.second) })
+        fun bar() = pageContent().let { content ->
+            (0 until content.size).map { content[it] }.filterIsInstance<app.betternotes.core.model.AudioItem>().single()
+        }
+        val open = onMain { bar().frame }
+        assertTrue(app.betternotes.core.model.AudioBar.isOpen(open))
+        // A touch on the play button plays it and draws no ink.
+        val play = worldToScreen(open.left + 8f, open.centerY)
+        stylusStroke(play, play.first to play.second + 1f)
+        waitUntil { played.isNotEmpty() }
+        assertEquals(1, onMain { pageContent().size })
+        // A touch on the corner folds it down to the button and its arrow.
+        val corner = worldToScreen(open.left + open.width - 3f, open.top + 3f)
+        stylusStroke(corner, corner.first to corner.second + 1f)
+        waitUntil { !app.betternotes.core.model.AudioBar.isOpen(onMain { bar().frame }) }
+    }
+
     // ---- Helpers ----
 
     private fun stylusPath(points: List<Pair<Float, Float>>) {
