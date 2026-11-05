@@ -411,6 +411,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.laserColor = color
     }
 
+    fun scrubTo(fraction: Float, last: Boolean) = canvas.scrollToFraction(fraction, last)
+
     fun goToPageNumber(number: Int) = canvas.goToPage(number - 1)
 
     fun previousPage() = canvas.goToPage(canvas.currentPage - 1)
