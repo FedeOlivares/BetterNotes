@@ -129,6 +129,13 @@
     <string name="layout_name">Nombre</string>
     <string name="layout_size">Tamaño de página</string>
     <string name="layout_add_line">Línea</string>
+    <string name="layout_discard">Descartar</string>
+    <string name="layout_confirm">Confirmar</string>
+    <string name="layout_discard_title">¿Descartar los cambios?</string>
+    <string name="layout_discard_message">Se perderán los cambios de esta plantilla.</string>
+    <string name="layout_keep_editing">Seguir editando</string>
+    <string name="layout_tool_select">Seleccionar</string>
+    <string name="layout_add_sticky">Nota adhesiva</string>
     <string name="layout_add_box">Recuadro</string>
     <string name="layout_add_table">Tabla</string>
     <string name="layout_add_ruled">Renglones</string>
@@ -138,7 +145,6 @@
     <string name="layout_element_size">Tamaño</string>
     <string name="layout_remove_element">Quitar este</string>
     <string name="layout_delete">Eliminar diseño</string>
-    <string name="layout_save">Guardar</string>
     <string name="unit_px">px</string>
     <string name="unit_cm">cm</string>
     <string name="unit_inch">pulg</string>

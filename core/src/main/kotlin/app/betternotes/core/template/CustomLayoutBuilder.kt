@@ -14,6 +14,7 @@ val LayoutElement.bounds: Bounds
         is LayoutElement.Rectangle -> Bounds.ofSize(x, y, width, height)
         is LayoutElement.Table -> Bounds.ofSize(x, y, width, height)
         is LayoutElement.Ruled -> Bounds.ofSize(x, y, width, height)
+        is LayoutElement.Sticky -> Bounds.ofSize(x, y, width, height)
     }
 
 fun LayoutElement.translated(dx: Float, dy: Float): LayoutElement = when (this) {
@@ -21,6 +22,7 @@ fun LayoutElement.translated(dx: Float, dy: Float): LayoutElement = when (this) 
     is LayoutElement.Rectangle -> copy(x = x + dx, y = y + dy)
     is LayoutElement.Table -> copy(x = x + dx, y = y + dy)
     is LayoutElement.Ruled -> copy(x = x + dx, y = y + dy)
+    is LayoutElement.Sticky -> copy(x = x + dx, y = y + dy)
 }
 
 /**

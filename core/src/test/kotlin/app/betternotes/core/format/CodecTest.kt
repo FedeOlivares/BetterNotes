@@ -116,6 +116,17 @@ class CodecTest {
         ),
     )
 
+    @Test
+    fun `a sticky note in a custom layout survives a round trip`() {
+        val layout = CustomLayout("S", PageSize(100f, 100f), LengthUnit.CM, listOf(LayoutElement.Sticky(1f, 2f, 3f, 4f, 5)))
+        val document = Document(
+            id = 1, title = "t", kind = DocumentKind.NOTE, createdAtMs = 0, modifiedAtMs = 0,
+            pages = listOf(Page(1, PageSize(100f, 200f), PageBackground(0, PageTemplate.Custom(layout)))),
+        )
+        val back = DocumentCodec.decode(DocumentCodec.encode(document))
+        assertEquals(layout, (back.pages[0].background.template as PageTemplate.Custom).layout)
+    }
+
     private fun everyTemplateDocument() = Document(
         id = 99,
         title = "Apuntes ñ",

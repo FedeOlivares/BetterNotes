@@ -29,6 +29,12 @@ private const val MUSIC_STAFF_LINES = 5
 private const val GUITAR_STAFF_LINES = 6
 private const val ENGINEERING_MARGIN_PT = 18f
 private const val STRUCTURE_SHADE = 55
+private const val STICKY_EDGE_PT = 0.75f
+
+private fun shade(argb: Int): Int {
+    fun part(shift: Int) = ((argb shr shift and 0xFF) * 3 / 4) shl shift
+    return (argb and 0xFF000000.toInt()) or part(16) or part(8) or part(0)
+}
 
 /**
  * Emits the part of this template inside [region].
@@ -250,6 +256,11 @@ private fun LayoutElement.draw(sink: TemplateSink) {
                 sink.line(x, lineY, x + width, lineY, lineWidth, color)
                 lineY += spacing
             }
+        }
+        is LayoutElement.Sticky -> {
+            // The sink has no fill, so a line as thick as the note, with butt ends, is the fill.
+            sink.line(x, y + height / 2, x + width, y + height / 2, height, color)
+            rectangle(x, y, width, height, STICKY_EDGE_PT, shade(color), sink)
         }
     }
 }
