@@ -28,6 +28,7 @@ import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.canvas.TapeLook
 import app.betternotes.core.tools.TapeOptions
 
 /** The tools the strip can put in the pen's hand so far. */
@@ -47,7 +48,7 @@ internal enum class ActiveTool(val ink: InkTool?) {
     EMOJI(null),
 }
 
-private val ActiveTool.hasPanel get() = ink != null || this != ActiveTool.TAPE
+private val ActiveTool.hasPanel get() = true
 
 /** What the color wheel's result is for. */
 internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, LASER }
@@ -244,6 +245,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     fun updateImage(change: (ImageOptions) -> ImageOptions) {
         image = change(image)
     }
+
+    fun selectionTape(): TapeLook? = canvas.selectedTape()
+
+    fun adjustSelectionTape(thickness: Float?, opacity: Float?) = canvas.adjustSelectedTape(thickness, opacity)
+
+    fun finishAdjustSelectionTape() = canvas.finishAdjustSelectedTape()
 
     fun updateTape(change: (TapeOptions) -> TapeOptions) {
         tape = change(tape)

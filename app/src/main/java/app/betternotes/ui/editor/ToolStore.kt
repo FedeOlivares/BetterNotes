@@ -204,6 +204,8 @@ internal class ToolStore(context: Context) {
             selectedWidth = json.getInt("selectedWidth"),
             colors = json.getJSONArray("colors").ints(),
             selectedColor = json.getInt("selectedColor"),
+            thickness = json.optInt("thickness", 0),
+            opacity = json.optDouble("opacity", 1.0).toFloat(),
         )
     }
 
@@ -213,6 +215,8 @@ internal class ToolStore(context: Context) {
             put("selectedWidth", options.selectedWidth)
             put("colors", JSONArray(options.colors))
             put("selectedColor", options.selectedColor)
+            put("thickness", options.thickness)
+            put("opacity", options.opacity.toDouble())
         }
         prefs.edit { putString(KEY_TAPE, json.toString()) }
     }

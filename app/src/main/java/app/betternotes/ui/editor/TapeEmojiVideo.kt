@@ -5,6 +5,7 @@ import android.widget.VideoView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -42,9 +43,9 @@ import kotlin.math.roundToInt
 internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifier) {
     Pill(modifier) {
         options.widths.forEachIndexed { slot, width ->
-            ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot) } }) {
+            ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot, thickness = 0) } }) {
                 WidthGlyph(width)
-                if (slot == options.selectedWidth) SelectedDot()
+                if (options.thickness == 0 && slot == options.selectedWidth) SelectedDot()
             }
         }
         PillDivider()
@@ -58,7 +59,52 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
             WarningSwatch()
             if (options.selectedColor >= options.colors.size) SelectedDot()
         }
+        PillDivider()
+        ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
+            state.panelOpen = !state.panelOpen
+        }
     }
+}
+
+/** The tape's thickness and opacity, for the next strip laid down. */
+@Composable
+internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modifier) {
+    PanelSheet(stringResource(R.string.tool_tape), onClose = { state.panelOpen = false }, modifier = modifier) {
+        TapeLookSliders(
+            thickness = options.width.toFloat(),
+            opacity = options.opacity,
+            onThickness = { value -> state.updateTape { it.copy(thickness = value.roundToInt()) } },
+            onOpacity = { value -> state.updateTape { it.copy(opacity = value) } },
+            onFinished = {},
+        )
+        Spacer(Modifier.height(18.dp))
+    }
+}
+
+/** Two sliders, thickness in points and opacity, shared by the tape tool's panel and the lasso's selected tape. */
+@Composable
+internal fun ColumnScope.TapeLookSliders(
+    thickness: Float,
+    opacity: Float,
+    onThickness: (Float) -> Unit,
+    onOpacity: (Float) -> Unit,
+    onFinished: () -> Unit,
+) {
+    val thicknessRange = TapeOptions.MAX_THICKNESS - TapeOptions.MIN_THICKNESS
+    LabeledRow(R.string.panel_thickness) { ValuePill { ValueText(thickness.roundToInt().toString()) } }
+    PanelSlider(
+        fraction = ((thickness - TapeOptions.MIN_THICKNESS) / thicknessRange).coerceIn(0f, 1f),
+        onChange = { f -> onThickness(TapeOptions.MIN_THICKNESS + f * thicknessRange) },
+        onChangeFinished = onFinished,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+    )
+    LabeledRow(R.string.panel_opacity) { ValuePill { ValueText("${(opacity * 100).roundToInt()}%") } }
+    PanelSlider(
+        fraction = ((opacity - TapeOptions.MIN_OPACITY) / (1f - TapeOptions.MIN_OPACITY)).coerceIn(0f, 1f),
+        onChange = { f -> onOpacity(TapeOptions.MIN_OPACITY + f * (1f - TapeOptions.MIN_OPACITY)) },
+        onChangeFinished = onFinished,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+    )
 }
 
 /** The stickers' row: the emoji in use, its size, and the way to the rest. */

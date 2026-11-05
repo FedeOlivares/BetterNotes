@@ -259,6 +259,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 state.activeTool == ActiveTool.ERASER -> EraserPanel(state, state.eraser, notices, sheet)
                 state.activeTool == ActiveTool.LASSO -> LassoPanel(state, state.lasso, notices, sheet)
                 state.activeTool == ActiveTool.SHAPE -> ShapePanel(state, state.shape, sheet)
+                state.activeTool == ActiveTool.TAPE -> TapePanel(state, state.tape, sheet)
                 state.activeTool == ActiveTool.STICKY -> NotePanel(state, state.note, sheet, sticky = true)
                 state.activeTool == ActiveTool.TEXT -> NotePanel(state, state.note, sheet, sticky = false)
                 state.activeTool == ActiveTool.TABLE -> TablePanel(state, state.table, sheet)

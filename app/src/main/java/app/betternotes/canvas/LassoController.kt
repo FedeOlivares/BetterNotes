@@ -16,6 +16,8 @@ import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.withId
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.tools.withTape
+import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.ResizeHandle
@@ -402,6 +404,40 @@ internal class LassoController(
         if (found.isEmpty) onSelectionDropped()
     }
 
+    private var adjustFrom: List<PageItem>? = null
+
+    /** The thickness and opacity of the first strip of tape in the selection, or null if it holds none. */
+    fun selectedTape(): TapeLook? {
+        val tape = selection?.items?.firstOrNull { it is ShapeItem && it.kind == ShapeKind.TAPE } as? ShapeItem ?: return null
+        return TapeLook(tape.frame.height, tape.opacity)
+    }
+
+    /**
+     * Changes the tape in the selection as a slider moves, straight on the page. [finishAdjust] then records
+     * the whole change as one step, so a drag of the slider is one undo.
+     */
+    fun adjustTapes(thickness: Float?, opacity: Float?) {
+        val selected = selection ?: return
+        val page = pageContent() ?: return
+        if (adjustFrom == null) adjustFrom = selected.items
+        val changed = selected.items.map { item -> if (item is ShapeItem && item.kind == ShapeKind.TAPE) item.withTape(thickness, opacity) else item }
+        page.splice(selected.indices, selected.indices, changed)
+        selection = Selection(selected.pageId, selected.indices, changed)
+        redraw()
+    }
+
+    fun finishAdjust() {
+        val original = adjustFrom ?: return
+        adjustFrom = null
+        val selected = selection ?: return
+        if (original == selected.items) return
+        val edit = ItemsEdit(selected.pageId, selected.indices, original, selected.indices, selected.items)
+        // Recording fires the history callback, which would otherwise take this for someone else's edit.
+        selection = null
+        editor?.record(edit)
+        selection = selected
+    }
+
     private fun finishParam() {
         val selected = selection ?: return
         val page = pageContent() ?: return
@@ -708,3 +744,6 @@ internal class LassoController(
         const val MIN_DRAG_PT = 0.5f
     }
 }
+
+/** How a strip of tape looks: its thickness in points and its opacity from 0 to 1. */
+data class TapeLook(val thickness: Float, val opacity: Float)

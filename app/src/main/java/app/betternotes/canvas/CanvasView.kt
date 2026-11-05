@@ -764,6 +764,19 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     val hasSelection get() = lasso.hasSelection
 
+    /** The look of the tape in the lasso selection, if there is any. */
+    fun selectedTape(): TapeLook? = lasso.selectedTape()
+
+    fun adjustSelectedTape(thickness: Float?, opacity: Float?) {
+        lasso.adjustTapes(thickness, opacity)
+        syncChanges()
+    }
+
+    fun finishAdjustSelectedTape() {
+        lasso.finishAdjust()
+        syncChanges()
+    }
+
     /**
      * Clears the page at the middle of the view. On an infinite canvas it clears only what is showing,
      * since there is no end to the rest.

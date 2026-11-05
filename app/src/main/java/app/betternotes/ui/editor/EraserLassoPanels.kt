@@ -1,6 +1,12 @@
 package app.betternotes.ui.editor
 
 import androidx.annotation.StringRes
+import kotlinx.coroutines.delay
+import app.betternotes.canvas.TapeLook
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -259,6 +265,35 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
             PanelSwitch(options.anyPortion, stringResource(R.string.panel_any_portion)) { on ->
                 state.updateLasso { it.copy(anyPortion = on, fullSelectionOnly = it.fullSelectionOnly && !on) }
             }
+        }
+        // With strips of tape selected, their thickness and opacity can be changed here.
+        val tape by produceState<TapeLook?>(null) {
+            while (true) {
+                value = state.selectionTape()
+                delay(250)
+            }
+        }
+        var shown by remember { mutableStateOf<TapeLook?>(null) }
+        (shown ?: tape)?.let { look ->
+            PanelDivider()
+            LabeledRow(R.string.tool_tape) {}
+            TapeLookSliders(
+                thickness = look.thickness,
+                opacity = look.opacity,
+                onThickness = { value ->
+                    shown = look.copy(thickness = value)
+                    state.adjustSelectionTape(value, null)
+                },
+                onOpacity = { value ->
+                    shown = look.copy(opacity = value)
+                    state.adjustSelectionTape(null, value)
+                },
+                onFinished = {
+                    shown = null
+                    state.finishAdjustSelectionTape()
+                },
+            )
+            PanelDivider()
         }
         LabeledRow(R.string.panel_select_following) {}
         KindFilters(options.kinds) { kind -> state.updateLasso { it.copy(kinds = it.kinds.toggled(kind)) } }

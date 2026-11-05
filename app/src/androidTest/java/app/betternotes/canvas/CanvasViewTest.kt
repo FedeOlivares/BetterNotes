@@ -680,6 +680,29 @@ class CanvasViewTest {
     }
 
     @Test
+    fun selectedTapeChangesThicknessAndOpacityAsOneUndoStep() {
+        val strip = app.betternotes.core.tools.TapeOptions().item(77L, 100f, 200f, 300f, 200f)
+        onMain { editor.perform(app.betternotes.core.edit.ItemsEdit.addOnTop(pageId, editor.content(pageId), strip)) }
+        onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = app.betternotes.core.tools.ALL_ITEM_KINDS, fullOnly = false) }
+        stylusStroke(worldToScreen(80f, 150f), worldToScreen(320f, 250f))
+        waitUntil { onMain { canvas.hasSelection } }
+        assertEquals(20f, onMain { canvas.selectedTape()!!.thickness }, 0.01f)
+        // Dragging a slider fires several changes, then finishes once.
+        onMain {
+            canvas.adjustSelectedTape(30f, null)
+            canvas.adjustSelectedTape(44f, null)
+            canvas.adjustSelectedTape(null, 0.4f)
+            canvas.finishAdjustSelectedTape()
+        }
+        fun tape() = pageContent().let { c -> (0 until c.size).map { c[it] }.filterIsInstance<app.betternotes.core.model.ShapeItem>().single() }
+        assertEquals(44f, onMain { tape().frame.height }, 0.01f)
+        assertEquals(0.4f, onMain { tape().opacity }, 0.001f)
+        onMain { canvas.undo() }
+        assertEquals("one undo takes back the whole change", 20f, onMain { tape().frame.height }, 0.01f)
+        assertEquals(1f, onMain { tape().opacity }, 0.001f)
+    }
+
+    @Test
     fun theToolIsGivenBackWhenAnOutsideTouchEndsTheSelectionMadeFromACircle() {
         val dropped = lassoFromCircle()
         assertEquals(0, onMain { dropped() })
