@@ -207,11 +207,24 @@ internal object InkBrushes {
 ),
                 brushFamily(tip { setCornerRounding(1f); addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.45f, 0.7f, noise(1, 0.3f))) }),
             )
-            // Nine thin bristles on one faint bleed that spans the line (the glow trick, smaller). Each bristle runs
-            // 1.8 line widths: it starts at a point, swells to full width, thins to a point and starts again, and
-            // it points along the direction of travel. Ten layers is the ink library's limit, so the bleed is one
-            // layer under all the bristles, not one per bristle.
-            BrushKind.OIL -> paintedFamily(oilBleed(), *oilBristles().map { BrushCoat(it) }.toTypedArray())
+            // Oil: slices of the reference's bristle streaks, stamped end to end along the line and turned with the pen.
+            // On a software canvas, where stamps cannot be drawn, the bristles are drawn as plain lines instead.
+            BrushKind.OIL -> stampedFamily(
+                paintedFamily(
+                    painted(
+                        tip {
+                            setCornerRounding(0f)
+                            setScaleX(2.8f)
+                            setScaleY(2.4f)
+                            setParticleGapDistanceScale(0.35f)
+                            addBehavior(aimedAtDirection())
+                            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.75f, 0.95f, noise(3, 0.25f)))
+                        },
+                        stamped(BrushTextures.OIL),
+                    ),
+                ),
+                paintedFamily(oilBleed(), *oilBristles().map { BrushCoat(it) }.toTypedArray()),
+            )
             BrushKind.SPILL -> brushFamily(
                 *Array(2) { c ->
                     tip {

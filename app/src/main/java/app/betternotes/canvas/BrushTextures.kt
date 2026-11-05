@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 internal object BrushTextures : TextureBitmapStore {
     const val GRAIN = "grain-stamp"
     const val BLOT = "blot-stamp"
+    const val OIL = "oil-stamp"
     const val LEAVES = "leaf-stamps"
     const val LEAF_COLUMNS = 3
     const val LEAF_ROWS = 2

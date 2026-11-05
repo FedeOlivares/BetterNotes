@@ -109,7 +109,20 @@ def grain_stamp():
     return fit((alpha * np.clip((1 - radius) / 0.2, 0, 1)) ** 0.6, margin=2)
 
 
+def oil_stamp():
+    """A slice of the oil stroke, one bristle-width tall and a few diamonds wide, faded at both ends so slices join."""
+    alpha = np.clip((darkness_alpha(crop('watercolor, oil and comic.jpg', (980, 470, 1240, 690))) - 0.15) / 0.7, 0, 1) ** 1.2
+    window = np.sin(np.linspace(0, np.pi, alpha.shape[1])) ** 0.8
+    return alpha * window[None, :]
+
+
 if __name__ == '__main__':
     save_cells(leaf_stamps(), 'leaf-stamps.png', 3)
     save_cells([blot_stamp()], 'blot-stamp.png', 1)
     save_cells([grain_stamp()], 'grain-stamp.png', 1)
+    # The slice keeps its own shape: wider than tall, so it is saved as it is, not fitted to a square.
+    oil = oil_stamp()
+    white = Image.new('RGBA', (oil.shape[1], oil.shape[0]), (255, 255, 255, 0))
+    white.putalpha(Image.fromarray((oil * 255).astype(np.uint8)))
+    white.save(os.path.join(OUT, 'oil-stamp.png'), optimize=True)
+    print('oil-stamp.png', white.size)
