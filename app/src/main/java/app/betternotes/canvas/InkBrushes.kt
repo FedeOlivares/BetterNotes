@@ -50,9 +50,19 @@ internal object InkBrushes {
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
     private const val CALLIGRAPHY_NIB_RATIO = 0.25f
-    private const val CALLIGRAPHY_NIB_DEGREES = 45f
+    /** A flat nib held level: strokes going up and down are as wide as it is long, and strokes going across are as thin as it is thick. */
+    private const val CALLIGRAPHY_NIB_DEGREES = 0f
 
     private val pressurePen by lazy { StockBrushes.pressurePen(PressurePenVersion.V1) }
+    /** The pressure pen, with its width and opacity wavering by a few percent along the line, as ink from a real pen does. */
+    private val naturalPen by lazy {
+        val stock = pressurePen.coats.first()
+        val tip = stock.tip.toBuilder()
+            .addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.95f, 1f, noise(110, 0.35f)))
+            .addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.95f, 1f, noise(111, 0.5f)))
+            .build()
+        BrushFamily.builder().setCoat(stock.copy(tip = tip)).setInputModel(pressurePen.inputModel).build()
+    }
     private val marker by lazy { StockBrushes.marker(MarkerVersion.V1) }
     private val highlighter by lazy { StockBrushes.highlighter(version = HighlighterVersion.V1) }
     /** The stock highlighter, but ending in a half circle. Its tip has square corners rounded off. */
@@ -376,7 +386,7 @@ internal object InkBrushes {
         style.tip == TipShape.SQUARE && style.tool != InkTool.PENCIL -> squareNib
         style.tool == InkTool.PENCIL -> creativeFamily(style.brush)
         else -> when (style.penType) {
-            PenType.NATURAL -> pressurePen
+            PenType.NATURAL -> naturalPen
             PenType.BALL -> marker
             PenType.CALLIGRAPHY -> calligraphyNib
         }

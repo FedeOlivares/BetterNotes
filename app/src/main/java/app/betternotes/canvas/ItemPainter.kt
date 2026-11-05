@@ -207,10 +207,13 @@ internal class ItemPainter(
         canvas.restoreToCount(layer)
     }
 
-    /** The outline of the strip: along one side and back along the other. */
+    /** The outline of the strip: along one side and back along the other, with both ends torn in a zigzag like straight tape. */
     private fun stripOutline(half: Float) {
         strip.rewind()
         val length = geometry.length
+        val width = half * 2f
+        val teeth = TAPE_TEETH
+        val bite = minOf(width / teeth, length / 4f)
         var s = 0f
         while (true) {
             geometry.place(s, half, spot)
@@ -218,11 +221,21 @@ internal class ItemPainter(
             if (s >= length) break
             s = minOf(s + OUTLINE_STEP, length)
         }
+        // The far end, torn: every other point is pulled back along the strip.
+        for (i in 1..teeth * 2) {
+            geometry.place(if (i % 2 == 1) length - bite else length, half - width * i / (teeth * 2), spot)
+            strip.lineTo(spot[0], spot[1])
+        }
         while (true) {
             geometry.place(s, -half, spot)
             strip.lineTo(spot[0], spot[1])
             if (s <= 0f) break
             s = maxOf(s - OUTLINE_STEP, 0f)
+        }
+        // The near end, torn the same way.
+        for (i in 1..teeth * 2) {
+            geometry.place(if (i % 2 == 1) bite else 0f, -half + width * i / (teeth * 2), spot)
+            strip.lineTo(spot[0], spot[1])
         }
         strip.close()
     }
@@ -512,6 +525,7 @@ internal class ItemPainter(
         const val MIN_PATTERN_GAP = 3f
         const val PATTERN_ALPHA = 210
         const val BAND_STEPS = 6
+        const val TAPE_TEETH = 5
         const val OUTLINE_STEP = 1.5f
         const val DOT_LENGTH = 0.01f
         const val CELL_PADDING = 3f

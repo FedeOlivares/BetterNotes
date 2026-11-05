@@ -50,7 +50,7 @@ internal object EditorIcons {
         line("pencil", "M12 11.5L18.2 4a1.8 1.8 0 0 1 2.6 2.6L13.5 13 M12 11.5l1.5 1.5c.4 3-2.4 6.5-9.5 7 1.6-1.6 2-3.2 2.2-4.6.3-2.3 3.2-4.6 5.8-3.9z")
     }
     val Highlighter by lazy {
-        line("highlighter", "M5.5 14.5L16 4a2 2 0 0 1 2.8 0l1.2 1.2a2 2 0 0 1 0 2.8L9.5 18.5z M5.5 14.5L4 20l5.5-1.5 M13.5 6.5l4 4")
+        line("highlighter", "M14.74 4.74L19.26 9.26 11.26 17.26 6.74 12.74z M7.44 13.44L4.64 16.24 7.76 19.36 10.56 16.56 M3 21.5h9 M16.2 8.3l-4.6 4.6")
     }
     val Eraser by lazy {
         line("eraser", "M3.9 15l10.6-10.6a2 2 0 0 1 2.8 0l2.8 2.8a2 2 0 0 1 0 2.8L9.5 20.6a2 2 0 0 1-2.8 0l-2.8-2.8a2 2 0 0 1 0-2.8z M8.5 10.5l5.5 5.5")
@@ -113,7 +113,9 @@ internal object EditorIcons {
     val AddColor by lazy { line("add-color", dashedCircle() + "M12 8v8 M8 12h8") }
     val EditColor by lazy { line("edit-color", "M14.5 4.5l3.5 3.5L8.5 17.5H5v-3.5z M5 21h14") }
     val Grip by lazy { filled("grip", "M8.5 5a1.4 1.4 0 1 0 .01 0z M15.5 5a1.4 1.4 0 1 0 .01 0z M8.5 10.6a1.4 1.4 0 1 0 .01 0z M15.5 10.6a1.4 1.4 0 1 0 .01 0z M8.5 16.2a1.4 1.4 0 1 0 .01 0z M15.5 16.2a1.4 1.4 0 1 0 .01 0z") }
-    val Brush by lazy { line("brush", "M20 4c-3.5 1-9 5-10.5 9.5l3 3C17.500 15 19.500 8 20 4z M9.500 14.500c-2.500 0-4 1.500-4 3.500 0 1-.5 1.800-1.500 2 2.500 1 5.500.5 6.500-2 .5-1.300.3-2.700-1-3.500z") }
+    val Brush by lazy {
+        line("brush", "M21 3L13.2 10.8 M11.4 9.4l3.2 3.2-2 2-3.2-3.2z M9.4 11.4c-3.2.2-5.4 2.2-5.4 5 0 1.4-.6 2.5-1.5 3.4 3.2.5 6.6-.4 7.8-3.4")
+    }
     val Export by lazy { line("export", "M12 15V4 M8 8l4-4 4 4 M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5") }
     val GoToPage by lazy { line("go-to-page", "M12 3a9 9 0 1 0 .01 0 M8 12h8 M13 9l3 3-3 3") }
     val Template by lazy { line("template", rrect(4f, 4f, 16f, 6f, 1.5f) + "M4 14h6 M4 18h6 M14 14h6 M14 18h6") }
