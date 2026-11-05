@@ -111,6 +111,7 @@ private fun TemplateHost(repository: SettingsRepository, canvas: CanvasView, onD
             },
             onNewLayout = { editing = LayoutEdit(null) },
             onEditLayout = { editing = LayoutEdit(it) },
+            onDeleteLayout = { name -> repository.update { it.withoutCustomLayout(name) } },
             onClose = onDismiss,
             modifier = modifier,
         )

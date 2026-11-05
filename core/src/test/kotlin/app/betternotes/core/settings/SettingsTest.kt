@@ -119,6 +119,15 @@ class SettingsTest {
         assertEquals(listOf(renamed), settings.customLayouts)
         assertEquals(emptyList<CustomLayout>(), settings.withoutCustomLayout("Lab").customLayouts)
     }
+
+    @Test
+    fun `deleting the layout new pages use puts them back on a blank page`() {
+        val template = app.betternotes.core.template.PageTemplate.Custom(layout)
+        val settings = AppSettings().withCustomLayout(layout)
+            .let { it.copy(newPages = it.newPages.copy(background = it.newPages.background.copy(template = template))) }
+        assertEquals(app.betternotes.core.template.PageTemplate.Blank, settings.withoutCustomLayout("Lab").newPages.background.template)
+        assertEquals(template, settings.withoutCustomLayout("Other").newPages.background.template)
+    }
 }
 
 class KeyBindingsTest {

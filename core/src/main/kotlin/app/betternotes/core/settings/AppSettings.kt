@@ -137,6 +137,16 @@ data class AppSettings(
         return copy(customLayouts = next)
     }
 
-    /** Pages already using the layout keep their own copy of it. */
-    fun withoutCustomLayout(name: String) = copy(customLayouts = customLayouts.filterNot { it.name == name })
+    /**
+     * Pages already using the layout keep their own copy of it. New pages stop using it: if it was the default for
+     * them, they go back to a blank page.
+     */
+    fun withoutCustomLayout(name: String): AppSettings {
+        val template = newPages.background.template
+        val usedForNew = template is PageTemplate.Custom && template.layout.name == name
+        return copy(
+            customLayouts = customLayouts.filterNot { it.name == name },
+            newPages = if (usedForNew) newPages.copy(background = newPages.background.copy(template = PageTemplate.Blank)) else newPages,
+        )
+    }
 }

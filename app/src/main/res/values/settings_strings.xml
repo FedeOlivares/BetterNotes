@@ -145,6 +145,13 @@
     <string name="layout_element_size">Size</string>
     <string name="layout_remove_element">Remove this</string>
     <string name="layout_delete">Delete layout</string>
+    <string name="layout_cancel">Cancel</string>
+    <string name="layout_delete_title">Delete this layout?</string>
+    <string name="layout_delete_message">Notes that already use it keep it. You will not be able to pick it for new notes.</string>
+    <string name="layout_delete_continue">Delete</string>
+    <string name="layout_delete_final_title">Delete %1$s for good?</string>
+    <string name="layout_delete_final_message">This cannot be undone. The layout will be gone from the list and cannot be used again.</string>
+    <string name="layout_delete_forever">Delete forever</string>
     <string name="layout_book_style">Book style</string>
     <string name="layout_background">Background</string>
     <string name="layout_pattern">Pattern</string>

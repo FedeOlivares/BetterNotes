@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import app.betternotes.ui.theme.opensFrom
+import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.template.CustomLayout
@@ -94,6 +98,7 @@ fun TemplateSheet(
     onNewLayout: () -> Unit,
     onEditLayout: (CustomLayout) -> Unit,
     onClose: () -> Unit,
+    onDeleteLayout: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalSettingsColors.current
@@ -102,6 +107,9 @@ fun TemplateSheet(
     var size by remember { mutableStateOf(pageSize) }
     var customTab by remember { mutableStateOf(current.template is PageTemplate.Custom) }
     val collapsed = remember { mutableStateListOf<TemplateGroup>() }
+    // The layout a long press picked for deleting, and how far through the two warnings it is.
+    var deleting by remember { mutableStateOf<String?>(null) }
+    var deleteStep by remember { mutableIntStateOf(0) }
 
     SettingsSheet(stringResource(R.string.template_title), onClose, modifier, headerHeight = 88.dp) {
         Box(Modifier.fillMaxSize()) {
@@ -140,7 +148,11 @@ fun TemplateSheet(
                     CustomLayouts(customLayouts, template, paper, onSelect = {
                         template = PageTemplate.Custom(it)
                         paper = it.paper
-                    }, onEdit = onEditLayout, onNew = onNewLayout)
+                    }, onEdit = onEditLayout, onNew = onNewLayout, onLongPress = {
+                        template = PageTemplate.Custom(it)
+                        paper = it.paper
+                        deleting = it.name
+                    })
                 } else {
                     for (group in TemplateGroup.entries) {
                         GroupHeader(group, selected = template.kind in group.kinds, collapsed = group in collapsed) {
@@ -151,6 +163,28 @@ fun TemplateSheet(
                                 template = kind.newTemplate().keepingLevelsOf(template)
                             }
                         }
+                    }
+                }
+            }
+            deleting?.takeIf { customTab }?.let { name ->
+                Text(
+                    stringResource(R.string.layout_delete),
+                    color = colors.danger,
+                    fontSize = 22.sp,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 15.dp, bottom = 14.dp)
+                        .clip(CircleShape)
+                        .background(colors.chipIdle)
+                        .clickable(role = Role.Button) { deleteStep = 1 }
+                        .padding(horizontal = 32.dp, vertical = 18.dp),
+                )
+                if (deleteStep > 0) {
+                    DeleteWarning(name, deleteStep, onBack = { deleteStep = 0 }, onNext = { deleteStep = 2 }) {
+                        onDeleteLayout(name)
+                        deleteStep = 0
+                        deleting = null
+                        template = TemplateKind.BLANK.newTemplate()
                     }
                 }
             }
@@ -401,6 +435,7 @@ private fun ColumnScope.CustomLayouts(
     onSelect: (CustomLayout) -> Unit,
     onEdit: (CustomLayout) -> Unit,
     onNew: () -> Unit,
+    onLongPress: (CustomLayout) -> Unit,
 ) {
     val colors = LocalSettingsColors.current
     val shape = RoundedCornerShape(9.dp)
@@ -430,7 +465,7 @@ private fun ColumnScope.CustomLayouts(
                         .shadow(3.dp, shape)
                         .clip(shape)
                         .then(if (isSelected) Modifier.border(3.dp, colors.accent, shape) else Modifier)
-                        .clickable(role = Role.RadioButton, onClickLabel = layout.name) { onSelect(layout) },
+                        .combinedClickable(role = Role.RadioButton, onClickLabel = layout.name, onLongClick = { onLongPress(layout) }) { onSelect(layout) },
                 ) {
                     TemplatePreview(PageTemplate.Custom(layout), layout.paper, layout.size, Modifier.fillMaxSize())
                 }
@@ -492,6 +527,45 @@ private fun ApplyButton(enabled: Boolean, modifier: Modifier = Modifier, onApply
                     onApply(ApplyScope.ALL_PAGES)
                 },
             )
+        }
+    }
+}
+
+/** Two warnings in a row before a layout goes: a first question, then a last one that says it cannot be undone. */
+@Composable
+private fun DeleteWarning(name: String, step: Int, onBack: () -> Unit, onNext: () -> Unit, onDelete: () -> Unit) {
+    val colors = LocalSettingsColors.current
+    Box(
+        Modifier.fillMaxSize().background(Color(0x99000000)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            modifier = Modifier.opensFrom(OpenFrom.Center).width(460.dp).clip(RoundedCornerShape(24.dp)).background(colors.card).padding(28.dp),
+        ) {
+            val first = step == 1
+            Text(
+                if (first) stringResource(R.string.layout_delete_title) else stringResource(R.string.layout_delete_final_title, name),
+                color = colors.text,
+                fontSize = 22.sp,
+            )
+            Text(
+                stringResource(if (first) R.string.layout_delete_message else R.string.layout_delete_final_message),
+                color = colors.text,
+                fontSize = 19.5.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                ChoiceChip(stringResource(R.string.layout_cancel), true, onBack)
+                Text(
+                    stringResource(if (first) R.string.layout_delete_continue else R.string.layout_delete_forever),
+                    color = colors.danger,
+                    fontSize = 19.5.sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(role = Role.Button, onClick = if (first) onNext else onDelete)
+                        .padding(horizontal = 22.dp, vertical = 10.dp),
+                )
+            }
         }
     }
 }

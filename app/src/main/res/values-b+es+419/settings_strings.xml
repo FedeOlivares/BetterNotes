@@ -145,6 +145,13 @@
     <string name="layout_element_size">Tamaño</string>
     <string name="layout_remove_element">Quitar este</string>
     <string name="layout_delete">Eliminar diseño</string>
+    <string name="layout_cancel">Cancelar</string>
+    <string name="layout_delete_title">¿Eliminar este diseño?</string>
+    <string name="layout_delete_message">Las notas que ya lo usan lo conservan. No podrás elegirlo para notas nuevas.</string>
+    <string name="layout_delete_continue">Eliminar</string>
+    <string name="layout_delete_final_title">¿Eliminar %1$s definitivamente?</string>
+    <string name="layout_delete_final_message">Esto no se puede deshacer. El diseño desaparecerá de la lista y no se podrá volver a usar.</string>
+    <string name="layout_delete_forever">Eliminar definitivamente</string>
     <string name="layout_book_style">Estilo libro</string>
     <string name="layout_background">Fondo</string>
     <string name="layout_pattern">Patrón</string>
