@@ -1,7 +1,11 @@
 package app.betternotes.canvas
 
 import android.graphics.Bitmap
-import android.graphics.Canvas
+import android.graphics.HardwareRenderer
+import android.graphics.PixelFormat
+import android.graphics.RenderNode
+import android.hardware.HardwareBuffer
+import android.media.ImageReader
 import android.graphics.Color
 import android.graphics.Matrix
 import androidx.ink.authoring.InProgressStrokesView
@@ -36,8 +40,11 @@ class BrushGalleryTest {
         val rowPt = 40f
         val widthPt = 320f
         val kinds = BrushKind.entries
-        val bitmap = Bitmap.createBitmap((widthPt * scale).toInt(), (rowPt * kinds.size * scale).toInt(), Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
+        val width = (widthPt * scale).toInt()
+        val height = (rowPt * kinds.size * scale).toInt()
+        // A hardware canvas, as the app's tiles and wet ink use: stamped textures can only be drawn on one.
+        val node = RenderNode("gallery").apply { setPosition(0, 0, width, height) }
+        val canvas = node.beginRecording(width, height)
         canvas.drawColor(Color.WHITE)
         val colors = intArrayOf(0xFF333333.toInt(), 0xFFE07A2F.toInt(), 0xFF8E44E0.toInt(), 0xFFE8C23A.toInt(), 0xFF2FB4E8.toInt(), 0xFFE07A2F.toInt(), 0xFF7A1FE0.toInt(), 0xFFE8B21F.toInt(), 0xFF6FC6E8.toInt(), 0xFF3CC64B.toInt(), 0xFF7A1FE0.toInt())
         kinds.forEachIndexed { row, kind ->
@@ -60,6 +67,19 @@ class BrushGalleryTest {
             renderer.draw(canvas, stroke, matrix)
             canvas.restore()
         }
+        node.endRecording()
+        val reader = ImageReader.newInstance(
+            width, height, PixelFormat.RGBA_8888, 1,
+            HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT,
+        )
+        val hardware = HardwareRenderer()
+        hardware.setContentRoot(node)
+        hardware.setSurface(reader.surface)
+        hardware.createRenderRequest().setWaitForPresent(true).syncAndDraw()
+        val image = reader.acquireNextImage()
+        val bitmap = Bitmap.wrapHardwareBuffer(image.hardwareBuffer!!, null)!!.copy(Bitmap.Config.ARGB_8888, false)
+        image.close()
+        hardware.destroy()
         val out = File(context.getExternalFilesDir(null), "brushes.png")
         out.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }

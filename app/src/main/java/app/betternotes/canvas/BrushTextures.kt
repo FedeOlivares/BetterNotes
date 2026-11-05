@@ -13,9 +13,12 @@ import java.util.concurrent.ConcurrentHashMap
  * may change but its meaning may not.
  */
 internal object BrushTextures : TextureBitmapStore {
-    const val GRAIN = "pencil"
-    const val WASH = "wash"
-    const val LEAVES = "leaves"
+    const val GRAIN = "grain-stamp"
+    const val BLOT = "blot-stamp"
+    const val LEAVES = "leaf-stamps"
+    const val LEAF_COLUMNS = 3
+    const val LEAF_ROWS = 2
+    const val LEAF_COUNT = LEAF_COLUMNS * LEAF_ROWS
 
     private const val FOLDER = "brush_textures/"
     private var assets: AssetManager? = null

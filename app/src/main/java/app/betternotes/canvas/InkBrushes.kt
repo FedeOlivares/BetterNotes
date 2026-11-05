@@ -22,6 +22,7 @@ import androidx.ink.brush.behavior.SourceNode
 import androidx.ink.brush.behavior.TargetNode
 import androidx.ink.brush.behavior.ValueNode
 import androidx.ink.geometry.ImmutableVec
+import androidx.ink.strokes.Stroke
 import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.InkTool
@@ -45,6 +46,7 @@ internal object InkBrushes {
     private const val EPSILON_PT = 0.003f
 
     private const val TWO_PI = 6.2831855f
+    private const val STAMP_LOOP_MS = 1000L
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
     private const val CALLIGRAPHY_NIB_RATIO = 0.25f
@@ -147,22 +149,13 @@ internal object InkBrushes {
         .build()
 
     /**
-     * A picture tiled over the stroke. It mirrors at its edges, so there is no seam. [width] is along the page's x
-     * axis and [height] along y, in multiples of the brush size, so the picture grows with the pen's width.
+     * A picture stamped once for each particle, turned with the particle. A sheet of several pictures shows one at
+     * random for each stamp, chosen by a PAINT_ANIMATION_PROGRESS_OFFSET behaviour on the tip.
      */
-    private fun tiled(
-        id: String,
-        width: Float,
-        height: Float,
-        degrees: Float = 0f,
-        wrapX: BrushPaint.TextureLayer.Wrap = BrushPaint.TextureLayer.Wrap.MIRROR,
-    ) = BrushPaint.TilingTexture(
-        id, width, height, 0f, 0f, degrees,
-        BrushPaint.TextureLayer.SizeUnit.BRUSH_SIZE,
-        BrushPaint.TilingTexture.Origin.STROKE_SPACE_ORIGIN,
-        wrapX,
-        BrushPaint.TextureLayer.Wrap.MIRROR,
-        BrushPaint.TextureLayer.BlendMode.MODULATE,
+    // Lint marks the stamping constructor as restricted, though ink's own docs use it and it is the only way to build one.
+    @android.annotation.SuppressLint("RestrictedApi")
+    private fun stamped(id: String, frames: Int = 1, columns: Int = 1, rows: Int = 1) = BrushPaint.StampingTexture(
+        id, BrushPaint.TextureLayer.BlendMode.MODULATE, frames, rows, columns, STAMP_LOOP_MS, BrushPaint.AnimationRepeatMode.RESTART,
     )
 
     /** A coat drawn at a fixed fraction of the stroke's opacity. The paint does this, so no behaviour is involved. */
@@ -173,17 +166,46 @@ internal object InkBrushes {
 
     private val creative = ConcurrentHashMap<BrushKind, BrushFamily>()
 
+    /** Brushes that stamp pictures, and so can only be drawn on a hardware canvas, with the plain brush that stands in on a software one. */
+    private val standIns = ConcurrentHashMap<BrushFamily, BrushFamily>()
+
+    private fun stampedFamily(family: BrushFamily, standIn: BrushFamily): BrushFamily {
+        standIns[family] = standIn
+        return family
+    }
+
+    /**
+     * Draws [stroke]. Canvases that are not hardware accelerated, such as a bitmap or a PDF page, cannot draw
+     * the stamped brushes, so a plain look-alike is drawn there: for thumbnails and exports.
+     */
+    fun draw(renderer: androidx.ink.rendering.android.canvas.CanvasStrokeRenderer, canvas: android.graphics.Canvas, stroke: Stroke, matrix: android.graphics.Matrix) {
+        val standIn = if (canvas.isHardwareAccelerated) null else standIns[stroke.brush.family]
+        if (standIn == null) {
+            renderer.draw(canvas, stroke, matrix)
+        } else {
+            renderer.draw(canvas, Stroke(stroke.brush.copy(family = standIn), stroke.inputs), matrix)
+        }
+    }
+
     private fun creativeFamily(kind: BrushKind): BrushFamily = creative.getOrPut(kind) {
         when (kind) {
-            // Graphite: a soft round line with a speckled grain over it that stays fixed to the page.
-            BrushKind.PENCIL -> paintedFamily(
-                painted(
-                    tip {
-                        setCornerRounding(1f)
-                        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.55f, 0.8f, noise(1, 0.3f)))
-                    },
-                    tiled(BrushTextures.GRAIN, 13.8f, 1f),
-                ),
+            // Graphite: a dense run of round patches of grain, each turned along the line.
+            BrushKind.PENCIL -> stampedFamily(
+                paintedFamily(
+                    painted(
+                        tip {
+                            setCornerRounding(1f)
+                            setScaleX(1.1f)
+                            setScaleY(1.1f)
+                            setParticleGapDistanceScale(0.22f)
+                            addBehavior(aimedAtDirection())
+                            addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(2, 0.07f)))
+                            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.45f, 0.8f, noise(1, 0.15f)))
+                        },
+                        stamped(BrushTextures.GRAIN),
+                    ),
+),
+                brushFamily(tip { setCornerRounding(1f); addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.45f, 0.7f, noise(1, 0.3f))) }),
             )
             // Nine thin bristles on one faint bleed that spans the line (the glow trick, smaller). Each bristle runs
             // 1.8 line widths: it starts at a point, swells to full width, thins to a point and starts again, and
@@ -204,20 +226,24 @@ internal object InkBrushes {
                     }
                 },
             )
-            // Wet washes: a wide stroke of mottled pigment, two patterns laid over each other so the
-            // heavy patches deepen where they meet.
-            BrushKind.WATERCOLOR -> paintedFamily(
-                *Array(2) { c ->
+            // Wet washes: ragged blots of pigment stamped along the line, turned by the pen and overlapping into darker patches.
+            BrushKind.WATERCOLOR -> stampedFamily(
+                paintedFamily(
                     painted(
                         tip {
                             setCornerRounding(1f)
-                            setScaleX(1.7f)
-                            setScaleY(1.7f)
-                            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.35f, 0.6f, noise(10 + c, 0.4f)))
+                            setScaleX(1.9f)
+                            setScaleY(1.9f)
+                            setParticleGapDistanceScale(0.22f)
+                            addBehavior(aimedAtDirection())
+                            addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, -0.5f, 0.5f, noise(62, 0.2f)))
+                            addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.8f, 1.15f, noise(9, 0.15f)))
+                            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.2f, 0.4f, noise(10, 0.2f)))
                         },
-                        tiled(BrushTextures.WASH, 14f - 4f * c, 1.7f - 0.5f * c, 90f * c),
-                    )
-                },
+                        stamped(BrushTextures.BLOT),
+                    ),
+),
+                brushFamily(tip { setCornerRounding(1f); setScaleX(1.8f); setScaleY(1.8f); addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.3f, 0.5f, noise(10, 0.4f))) }),
             )
             BrushKind.COMICS -> brushFamily(
                 tip {
@@ -274,16 +300,25 @@ internal object InkBrushes {
                     addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.2f, noise(13, 0.1f)))
                 },
             )
-            // Tree leaves: oak, maple, birch, ginkgo, willow, linden, elm and aspen, as a pattern the stroke reveals.
-            BrushKind.LEAVES -> paintedFamily(
-                painted(
-                    tip {
-                        setCornerRounding(1f)
-                        setScaleX(3.2f)
-                        setScaleY(3.2f)
-                    },
-                    tiled(BrushTextures.LEAVES, 13.6f, 3.2f, wrapX = BrushPaint.TextureLayer.Wrap.REPEAT),
-                ),
+            // Tree leaves cut from the reference stroke, one picked at random for each stamp and turned with the pen.
+            BrushKind.LEAVES -> stampedFamily(
+                paintedFamily(
+                    painted(
+                        tip {
+                            setCornerRounding(1f)
+                            setScaleX(2.2f)
+                            setScaleY(2.2f)
+                            setParticleGapDistanceScale(0.9f)
+                            addBehavior(vary(TargetNode.Target.PAINT_ANIMATION_PROGRESS_OFFSET, 0f, 1f, noise(80, 0.002f)))
+                            addBehavior(aimedAtDirection())
+                            addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, -0.9f, 0.9f, noise(14, 0.05f)))
+                            addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.65f, 1.2f, noise(15, 0.06f)))
+                            addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -1f, 1f, noise(16, 0.06f)))
+                        },
+                        stamped(BrushTextures.LEAVES, BrushTextures.LEAF_COUNT, BrushTextures.LEAF_COLUMNS, BrushTextures.LEAF_ROWS),
+                    ),
+),
+                brushFamily(tip { setCornerRounding(0.5f); setPinch(0.85f); setScaleX(1.4f); setScaleY(0.8f); setParticleGapDistanceScale(0.9f); addBehavior(vary(TargetNode.Target.ROTATION_OFFSET_IN_RADIANS, 0f, TWO_PI, noise(14, 0.03f))) }),
             )
             BrushKind.CROSS -> brushFamily(
                 tip {

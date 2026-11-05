@@ -59,7 +59,7 @@ internal class PagePainter(private val source: PaintSource) {
     private val template = CanvasTemplateSink()
     private val strokeToTile = Matrix()
     private val items = ItemPainter(source::image) { canvas, stroke ->
-        renderer.draw(canvas, source.mesh(stroke), strokeToTile)
+        InkBrushes.draw(renderer, canvas, source.mesh(stroke), strokeToTile)
     }
     private val highlightPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
 

@@ -16,6 +16,7 @@ import androidx.core.graphics.withRotation
 import androidx.core.graphics.withTranslation
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import app.betternotes.canvas.BrushTextures
+import app.betternotes.canvas.InkBrushes
 import app.betternotes.canvas.CanvasTemplateSink
 import app.betternotes.canvas.toInkStroke
 import app.betternotes.core.format.DocumentStore
@@ -188,7 +189,7 @@ internal object ThumbnailRenderer {
         val strokeToBitmap = Matrix().apply { setScale(scale, scale) }
         for (item in items) {
             when (item) {
-                is StrokeItem -> renderer.draw(canvas, item.toInkStroke(), strokeToBitmap)
+                is StrokeItem -> InkBrushes.draw(renderer, canvas, item.toInkStroke(), strokeToBitmap)
                 is ImageItem -> drawImage(canvas, store, item, scale)
                 is TextItem -> drawText(canvas, item)
                 else -> Unit

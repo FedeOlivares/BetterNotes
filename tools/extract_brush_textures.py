@@ -2,6 +2,7 @@
 
 The screenshots live in reference/notewise, which is not in git. Each texture is a white picture whose alpha is
 how much ink the reference had there, so it takes any brush color. Run: python tools/extract_brush_textures.py
+Needs: pip install pillow numpy scipy
 """
 import os
 import sys
@@ -33,26 +34,82 @@ def clean(alpha, floor):
     return np.clip((alpha - floor) / (1 - floor), 0, 1)
 
 
-def save(alpha, name, width):
-    height = max(1, round(alpha.shape[0] * width / alpha.shape[1]))
-    image = Image.fromarray((alpha * 255).astype(np.uint8)).resize((width, height), Image.LANCZOS)
-    white = Image.new('RGBA', image.size, (255, 255, 255, 0))
-    white.putalpha(image)
-    os.makedirs(OUT, exist_ok=True)
+# ---- stamped textures: one picture for each particle of a brush, turned along the stroke ----
+from scipy import ndimage  # noqa: E402
+
+CELL = 160
+
+
+def fit(alpha, cell=CELL, margin=6):
+    """The picture's bounding box, scaled to fit a cell and centered in it."""
+    rows = np.where(alpha.max(axis=1) > 0.05)[0]
+    columns = np.where(alpha.max(axis=0) > 0.05)[0]
+    alpha = alpha[rows[0]:rows[-1] + 1, columns[0]:columns[-1] + 1]
+    scale = (cell - 2 * margin) / max(alpha.shape)
+    image = Image.fromarray((alpha * 255).astype(np.uint8)).resize(
+        (max(1, round(alpha.shape[1] * scale)), max(1, round(alpha.shape[0] * scale))), Image.LANCZOS)
+    out = Image.new('L', (cell, cell), 0)
+    out.paste(image, ((cell - image.width) // 2, (cell - image.height) // 2))
+    return np.asarray(out).astype(np.float32) / 255
+
+
+def save_cells(cells, name, columns):
+    rows = (len(cells) + columns - 1) // columns
+    sheet = Image.new('L', (columns * CELL, rows * CELL), 0)
+    for i, cell in enumerate(cells):
+        sheet.paste(Image.fromarray((cell * 255).astype(np.uint8)), ((i % columns) * CELL, (i // columns) * CELL))
+    white = Image.new('RGBA', sheet.size, (255, 255, 255, 0))
+    white.putalpha(sheet)
     white.save(os.path.join(OUT, name), optimize=True)
-    print(name, white.size)
+    print(name, white.size, len(cells), 'pictures')
 
 
-REGIONS = {
-    # name: (file, box, background or None, gamma, output width)
-    'pencil': ('brushes samples.jpg', (520, 215, 1620, 295), None, 0.9, 1024),
-    'wash': ('watercolor, oil and comic.jpg', (900, 175, 1850, 290), None, 1.0, 1024),
-    'leaves': ('brushes samples.jpg', (430, 2200, 1840, 2530), None, 1.0, 1024),
-}
+def leaf_stamps():
+    """Up to eight separate, whole leaves cut out of the reference stroke, one per cell. Clumps of overlapping leaves are skipped."""
+    from scipy.spatial import ConvexHull
+
+    image = crop('brushes samples.jpg', (340, 2190, 1910, 2540))
+    alpha = clean(darkness_alpha(image), 0.22)
+    labels, count = ndimage.label(alpha > 0.35)
+    slices = ndimage.find_objects(labels)
+    found = []
+    for index in range(1, count + 1):
+        box = slices[index - 1]
+        if box[0].start == 0 or box[1].start == 0 or box[0].stop >= alpha.shape[0] or box[1].stop >= alpha.shape[1]:
+            continue
+        mask = ndimage.binary_fill_holes(labels[box] == index)
+        area = mask.sum()
+        if not 1800 < area < 9000:
+            continue
+        points = np.argwhere(mask)
+        solidity = area / ConvexHull(points).volume
+        if solidity < 0.86:
+            continue
+        found.append((area, alpha[box] * ndimage.binary_dilation(mask, iterations=1)))
+    found.sort(key=lambda item: -item[0])
+    step = max(1, len(found) // 8)
+    print(len(found), 'whole leaves found')
+    # The reference leaves are slightly see-through; the brush's own opacity sets how much shows, so firm them up.
+    leaves = [fit(leaf ** 0.45) for _, leaf in found[::step][:8]]
+    # Two of these are pairs of leaves that overlap in the reference, so they are left out.
+    return [leaf for i, leaf in enumerate(leaves) if i not in (1, 2)]
+
+
+def blot_stamp():
+    return fit(darkness_alpha(crop('watercolor, oil and comic.jpg', (560, 165, 740, 335))), margin=4)
+
+
+def grain_stamp():
+    """A round patch of graphite grain, soft at its edge, from the middle of the pencil stroke."""
+    alpha = darkness_alpha(crop('brushes samples.jpg', (900, 195, 1100, 310)), gamma=0.9)
+    side = min(alpha.shape)
+    alpha = alpha[:side, :side]
+    yy, xx = np.mgrid[:side, :side]
+    radius = np.hypot(yy - side / 2, xx - side / 2) / (side / 2)
+    return fit((alpha * np.clip((1 - radius) / 0.2, 0, 1)) ** 0.6, margin=2)
+
 
 if __name__ == '__main__':
-    only = sys.argv[1:] or list(REGIONS)
-    for key in only:
-        file, box, background, gamma, width = REGIONS[key]
-        alpha = darkness_alpha(crop(file, box), background, gamma)
-        save(clean(alpha, 0.22) if key == 'leaves' else alpha, key + '.png', width)
+    save_cells(leaf_stamps(), 'leaf-stamps.png', 3)
+    save_cells([blot_stamp()], 'blot-stamp.png', 1)
+    save_cells([grain_stamp()], 'grain-stamp.png', 1)
