@@ -191,6 +191,8 @@ class CanvasViewTest {
         twoFingerTap(at)
         twoFingerTap(at)
         waitUntil { pageContent().size == 0 }
+        // Undo no longer waits, so let the tap window close or the next tap would be this sequence's third.
+        SystemClock.sleep(600)
 
         twoFingerTap(at)
         twoFingerTap(at)
