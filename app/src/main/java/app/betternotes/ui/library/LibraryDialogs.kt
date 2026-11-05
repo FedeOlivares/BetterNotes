@@ -24,6 +24,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.betternotes.R
 import app.betternotes.core.library.LibraryEntry
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 
 // No screenshot shows these dialogs. They are plain Material stand-ins, and need the owner's references.
 
@@ -37,6 +39,7 @@ internal fun TextDialog(
 ) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { OutlinedTextField(text, { text = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
@@ -50,6 +53,7 @@ internal fun TextDialog(
 @Composable
 internal fun ConfirmDialog(title: String, confirmLabel: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
         onDismissRequest = onDismiss,
         title = { Text(title) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
@@ -65,6 +69,7 @@ internal fun MoveDialog(
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.library_move_to)) },
         text = {
@@ -91,6 +96,7 @@ internal fun TagsDialog(
     var added by remember { mutableStateOf("") }
     val shown = (known + chosen).distinct().sorted()
     AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.library_tags)) },
         text = {

@@ -42,6 +42,8 @@ import app.betternotes.R
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 
 /**
  * Every swatch of the tool's color row as a list, from the owner's screenshot: the color and its hex code,
@@ -63,6 +65,7 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
     ) {
         Column(
             Modifier
+                .opensFrom(OpenFrom.Center)
                 .width(SHEET_WIDTH)
                 .height(SHEET_HEIGHT)
                 .clip(RoundedCornerShape(28.dp))

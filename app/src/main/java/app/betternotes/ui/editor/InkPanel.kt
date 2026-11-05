@@ -62,6 +62,8 @@ import app.betternotes.core.model.TipShape
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -82,6 +84,7 @@ internal fun PanelSheet(
     val colors = LocalEditorColors.current
     Column(
         modifier
+            .opensFrom(OpenFrom.TopEnd)
             .width(PanelWidth)
             .shadow(12.dp, PanelShape, clip = false)
             .clip(PanelShape)

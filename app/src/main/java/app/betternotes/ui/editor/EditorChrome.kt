@@ -85,6 +85,8 @@ import app.betternotes.core.model.LineKind
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
@@ -827,6 +829,7 @@ private fun PageEntry(state: EditorState, close: () -> Unit) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
+                .opensFrom(OpenFrom.Center)
                 .clip(RoundedCornerShape(18.dp))
                 .background(colors.pill)
                 .border(1.dp, colors.pillBorder, RoundedCornerShape(18.dp))

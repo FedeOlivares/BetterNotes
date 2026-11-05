@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.ui.theme.LocalAppColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 
 /** What the "+" panel can start. */
 internal class NewItemActions(
@@ -67,6 +69,7 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
     )
     Column(
         modifier
+            .opensFrom(OpenFrom.BottomEnd)
             .width(PanelWidth)
             .shadow(16.dp, PanelShape)
             .background(colors.surface, PanelShape)

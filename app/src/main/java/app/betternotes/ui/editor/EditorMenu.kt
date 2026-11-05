@@ -44,6 +44,8 @@ import app.betternotes.R
 import app.betternotes.ui.settings.SettingsOverlay
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import java.util.Date
 
 /** What the menu shows of the open document. */
@@ -68,6 +70,7 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
             Modifier
                 .align(Alignment.TopEnd)
                 .padding(top = 60.dp, end = 8.dp)
+                .opensFrom(OpenFrom.TopEnd)
                 .width(MenuWidth)
                 .clip(RoundedCornerShape(26.dp))
                 .background(colors.panel)
@@ -210,6 +213,7 @@ private fun Entry(icon: ImageVector, label: Int, onClick: () -> Unit) {
 internal fun RenameDialog(current: String, onDismiss: () -> Unit, onDone: (String) -> Unit) {
     var name by remember { mutableStateOf(current) }
     AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.menu_rename)) },
         text = { TextField(name, { name = it }, singleLine = true) },

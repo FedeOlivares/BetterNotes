@@ -38,6 +38,8 @@ import app.betternotes.library.LibraryRepository
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.library.Thumbnail
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 
 private const val RECENT_LIMIT = 40
 
@@ -66,6 +68,7 @@ internal fun QuickSwitch(state: EditorState, actions: EditorActions, notices: No
         Column(
             Modifier
                 .padding(start = 6.dp, top = 62.dp, bottom = 8.dp)
+                .opensFrom(OpenFrom.TopStart)
                 .width(PanelWidth)
                 .masksInk(state, "quick-switch")
                 .shadow(12.dp, shape, clip = false)

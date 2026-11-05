@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.ui.theme.ReferenceScale
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -220,7 +222,7 @@ internal fun SettingsSheet(
 ) {
     val colors = LocalSettingsColors.current
     val shape = RoundedCornerShape(32.dp)
-    Column(modifier.shadow(16.dp, shape, clip = false).clip(shape).background(colors.sheet)) {
+    Column(modifier.opensFrom(OpenFrom.Center).shadow(16.dp, shape, clip = false).clip(shape).background(colors.sheet)) {
         Box(Modifier.fillMaxWidth().height(headerHeight)) {
             Text(title, color = colors.title, fontSize = 27.sp, modifier = Modifier.align(Alignment.Center))
             CloseButton(onClose, Modifier.align(Alignment.CenterEnd).padding(end = 30.dp))

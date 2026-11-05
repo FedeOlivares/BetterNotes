@@ -76,6 +76,8 @@ import app.betternotes.canvas.CanvasView
 import app.betternotes.core.model.AudioItem
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.delay
 import java.io.File
 import java.io.IOException
@@ -277,6 +279,7 @@ internal fun RecorderMenu(state: EditorState, recorder: RecorderState, modifier:
     val recordings = remember(state.historyVersion) { state.recordings() }
     Column(
         modifier
+            .opensFrom(OpenFrom.TopEnd)
             .width(MENU_WIDTH)
             .heightIn(max = MENU_MAX_HEIGHT)
             .shadow(12.dp, PanelShape, clip = false)

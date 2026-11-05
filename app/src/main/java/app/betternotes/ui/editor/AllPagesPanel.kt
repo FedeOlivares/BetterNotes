@@ -51,6 +51,8 @@ import app.betternotes.R
 import app.betternotes.core.model.Page
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.yield
 
 /** Every page of the document as a thumbnail, to go to, add to, or rearrange by holding and dragging. */
@@ -71,6 +73,7 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
     ) {
         Column(
             Modifier
+                .opensFrom(OpenFrom.Center)
                 .fillMaxSize()
                 .padding(horizontal = PANEL_SIDE_MARGIN, vertical = PANEL_END_MARGIN)
                 .clip(PanelShape)

@@ -87,6 +87,8 @@ import app.betternotes.ui.settings.SettingsTheme
 import app.betternotes.ui.theme.AppColors
 import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.ThemeMode
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -673,6 +675,7 @@ private fun OptionsMenu(
             properties = PopupProperties(focusable = true),
         ) { CompositionLocalProvider(LocalDensity provides scale) { Column(
             Modifier
+                .opensFrom(OpenFrom.TopEnd)
                 .width(274.dp)
                 .padding(bottom = 12.dp)
                 .shadow(12.dp, MenuShape)

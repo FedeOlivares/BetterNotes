@@ -57,6 +57,8 @@ import app.betternotes.core.search.TextMatch
 import app.betternotes.core.search.TextSource
 import app.betternotes.export.exporter
 import app.betternotes.search.DocumentSearch
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -171,7 +173,7 @@ internal fun SearchPanel(
     }
 
     val shape = RoundedCornerShape(32.dp)
-    Column(modifier.shadow(16.dp, shape, clip = false).clip(shape).background(colors.sheet).imePadding()) {
+    Column(modifier.opensFrom(OpenFrom.Center).shadow(16.dp, shape, clip = false).clip(shape).background(colors.sheet).imePadding()) {
         Box(Modifier.fillMaxWidth().height(80.dp)) {
             Text(stringResource(R.string.search_title), color = colors.title, fontSize = 20.sp, modifier = Modifier.align(Alignment.Center))
             CloseButton(onClose, Modifier.align(Alignment.CenterEnd).padding(end = 22.dp))

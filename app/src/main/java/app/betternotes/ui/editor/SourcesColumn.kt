@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.opensFrom
 import java.util.Date
 
 /**
@@ -86,6 +88,7 @@ internal fun SourcesColumn(
     ) {
         Column(
             Modifier
+                .opensFrom(OpenFrom.Start)
                 .fillMaxHeight()
                 .width(ColumnWidth)
                 .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
@@ -250,6 +253,7 @@ private fun AddToNote(state: EditorState, sources: ImageSources, recorder: Recor
     ) {
         Column(
             Modifier
+                .opensFrom(OpenFrom.Center)
                 .width(AddSheetWidth)
                 .clip(RoundedCornerShape(28.dp))
                 .background(colors.panel)
