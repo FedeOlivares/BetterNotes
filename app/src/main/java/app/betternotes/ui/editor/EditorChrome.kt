@@ -1,5 +1,7 @@
 package app.betternotes.ui.editor
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -136,6 +138,28 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     }
 }
 
+/** The second row for [tool]. */
+@Composable
+private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSources) {
+    val none = Modifier
+    val preset = state.presetFor(tool)
+    when {
+        preset != null -> ToolRow(state, preset, none)
+        tool == ActiveTool.LASER -> LaserRow(state, none)
+        tool == ActiveTool.ERASER -> EraserRow(state, state.eraser, none)
+        tool == ActiveTool.LASSO -> LassoRow(state, state.lasso, none)
+        tool == ActiveTool.SHAPE -> ShapeRow(state, state.shape, none)
+        tool == ActiveTool.STICKY || tool == ActiveTool.TEXT -> NoteRow(state, state.note, none, tool == ActiveTool.STICKY)
+        tool == ActiveTool.TABLE -> TableRow(state, state.table, none)
+        tool == ActiveTool.TAPE -> TapeRow(state, state.tape, none)
+        tool == ActiveTool.EMOJI -> EmojiRow(state, none)
+        tool == ActiveTool.IMAGE -> ImageRow(state, state.image, sources, none)
+    }
+}
+
+/** How long a change of tool takes to show: the row fading and the selection circle growing, together. */
+internal const val TOOL_CHANGE_MS = 140
+
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
     val sources = rememberImageSources(state)
@@ -165,29 +189,17 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                     CenterPill(state, recorder, sources, actions, notices, Modifier.layoutId(CENTER).masksInk(state, CENTER))
                 }
                 RightPill(state, recorder, actions, Modifier.layoutId(RIGHT).masksInk(state, RIGHT))
-                if (!state.viewOnly && recorder.recording) {
-                    RecordingControls(state, recorder, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                } else if (!state.viewOnly && !state.toolRowCollapsed) {
-                    if (preset != null) {
-                        ToolRow(state, preset, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.LASER) {
-                        LaserRow(state, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.ERASER) {
-                        EraserRow(state, state.eraser, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.LASSO) {
-                        LassoRow(state, state.lasso, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.SHAPE) {
-                        ShapeRow(state, state.shape, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.STICKY || state.activeTool == ActiveTool.TEXT) {
-                        NoteRow(state, state.note, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW), state.activeTool == ActiveTool.STICKY)
-                    } else if (state.activeTool == ActiveTool.TABLE) {
-                        TableRow(state, state.table, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.TAPE) {
-                        TapeRow(state, state.tape, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.EMOJI) {
-                        EmojiRow(state, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
-                    } else if (state.activeTool == ActiveTool.IMAGE) {
-                        ImageRow(state, state.image, sources, Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW))
+                if (!state.viewOnly && (recorder.recording || !state.toolRowCollapsed)) {
+                    // The row of the tool in use fades into the next one's when the tool changes. Each row is built from the tool
+                    // it belongs to, so the one fading out keeps showing its own tool.
+                    Box(Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW)) {
+                        Crossfade(
+                            targetState = if (recorder.recording) null else state.activeTool,
+                            animationSpec = tween(TOOL_CHANGE_MS),
+                            label = "toolRow",
+                        ) { tool ->
+                            if (tool == null) RecordingControls(state, recorder, Modifier) else ToolRowFor(tool, state, sources)
+                        }
                     }
                 }
             },

@@ -3,6 +3,9 @@ package app.betternotes.ui.editor
 import android.graphics.RectF
 import android.widget.Toast
 import androidx.annotation.StringRes
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -119,7 +122,19 @@ internal fun ToolbarIcon(
             .size(ToolbarCell, PillHeight)
             .tappable(radius = 20.dp, enabled = enabled, onClick = onClick),
     ) {
-        if (selected) Box(Modifier.size(42.dp).background(colors.toolSelected, CircleShape))
+        // The circle behind the tool in use grows out from the middle, and shrinks back into it when another is chosen.
+        val grow by animateFloatAsState(if (selected) 1f else 0f, tween(TOOL_CHANGE_MS), label = "toolSelected")
+        if (grow > 0f) {
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .graphicsLayer {
+                        scaleX = grow
+                        scaleY = grow
+                    }
+                    .background(colors.toolSelected, CircleShape),
+            )
+        }
         Icon(
             icon,
             description,

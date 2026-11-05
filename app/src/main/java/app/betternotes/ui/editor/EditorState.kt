@@ -142,6 +142,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     /** The settings of the ink tool in use, or null if the tool in use lays no ink. */
     val preset: InkPreset? get() = activeTool.ink?.let { presets[it] }
 
+    /** The settings of [tool], for a row that may be showing a tool other than the one in use while it fades. */
+    fun presetFor(tool: ActiveTool): InkPreset? = tool.ink?.let { presets[it] }
+
     val screenDpi get() = canvas.viewport.screenDpi
 
     val canvasForRecorder get() = canvas
