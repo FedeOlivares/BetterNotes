@@ -36,7 +36,7 @@ data class InkPreset(
     val brush: BrushKind = BrushKind.PENCIL,
 ) {
     init {
-        require(colors.size == DEFAULT_COLOR_SLOTS || colors.size == DEFAULT_COLOR_SLOTS + 1) { "${colors.size} colors" }
+        require(colors.size in 1..MAX_COLOR_SLOTS) { "${colors.size} colors" }
         require(widths.size == WIDTH_SLOTS) { "${widths.size} widths" }
         require(selectedColor in colors.indices) { "Color slot $selectedColor" }
         require(selectedWidth in widths.indices) { "Width slot $selectedWidth" }
@@ -85,10 +85,27 @@ data class InkPreset(
         return copy(colors = next, selectedColor = DEFAULT_COLOR_SLOTS)
     }
 
+    /** Puts [color] on the bar and selects it. If the bar is full, it takes the place of the slot in use. */
+    fun withColorAdded(color: Int): InkPreset {
+        val slot = colors.indexOf(color)
+        return when {
+            slot >= 0 -> copy(selectedColor = slot)
+            colors.size < MAX_COLOR_SLOTS -> copy(colors = colors + color, selectedColor = colors.size)
+            else -> withSlotColor(color)
+        }
+    }
+
+    /** The bar with [list] as its colors, in that order. The color in use stays selected if it is still there. */
+    fun withColorList(list: List<Int>): InkPreset {
+        val next = list.take(MAX_COLOR_SLOTS).ifEmpty { return this }
+        return copy(colors = next, selectedColor = next.indexOf(color).takeIf { it >= 0 } ?: 0)
+    }
+
     fun withPaletteColor(color: Int) = if (color in palette) this else copy(palette = palette + color)
 
     companion object {
         const val DEFAULT_COLOR_SLOTS = 5
+        const val MAX_COLOR_SLOTS = 12
         const val WIDTH_SLOTS = 3
         const val MIN_THICKNESS = 1
         const val MAX_THICKNESS = 100

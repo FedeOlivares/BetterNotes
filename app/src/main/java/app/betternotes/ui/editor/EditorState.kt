@@ -246,6 +246,18 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         image = change(image)
     }
 
+    /** The bar's colors while they are being edited, or null when they are not. Accepting it keeps them; discarding drops it. */
+    var colorDraft by mutableStateOf<List<Int>?>(null)
+
+    /** Whether the menu of more favorite colors is open. */
+    var moreColorsOpen by mutableStateOf(false)
+
+    fun acceptColorDraft() {
+        val draft = colorDraft
+        colorDraft = null
+        if (draft != null) update { it.withColorList(draft) }
+    }
+
     fun selectionTape(): TapeLook? = canvas.selectedTape()
 
     fun adjustSelectionTape(thickness: Float?, opacity: Float?) = canvas.adjustSelectedTape(thickness, opacity)

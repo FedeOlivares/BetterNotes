@@ -126,6 +126,10 @@
     <string name="panel_circle">Encerrar para seleccionar</string>
     <string name="panel_stabilization">Estabilización</string>
     <string name="panel_color">Color</string>
+    <string name="editor_colors_discard">Descartar cambios de color</string>
+    <string name="editor_colors_accept">Aceptar cambios de color</string>
+    <string name="editor_remove_color">Quitar este color</string>
+    <string name="editor_more_colors">Más colores</string>
     <string name="panel_add_swatch">Agregar una muestra</string>
     <string name="panel_swatch_list">Lista de muestras</string>
     <string name="panel_info">Sobre este ajuste</string>

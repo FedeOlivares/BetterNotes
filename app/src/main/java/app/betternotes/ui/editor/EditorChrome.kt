@@ -1,5 +1,8 @@
 package app.betternotes.ui.editor
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -598,24 +601,148 @@ private fun ToolRow(state: EditorState, preset: InkPreset, modifier: Modifier) {
                 }
             }
             PillDivider()
-            preset.colors.forEachIndexed { slot, color ->
-                ToolbarCellBox(onClick = { state.update { it.copy(selectedColor = slot) } }) {
-                    ColorDot(color)
-                    if (slot == preset.selectedColor) SelectedDot()
+            val draft = state.colorDraft
+            if (draft != null) {
+                ColorEditor(state, draft)
+            } else {
+                preset.colors.forEachIndexed { slot, color ->
+                    ToolbarCellBox(onClick = { state.update { it.copy(selectedColor = slot) } }) {
+                        ColorDot(color)
+                        if (slot == preset.selectedColor) SelectedDot()
+                    }
+                }
+                Box {
+                    ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) { state.moreColorsOpen = true }
+                    if (state.moreColorsOpen) MoreColors(state, preset)
+                }
+                ToolbarIcon(EditorIcons.EditColor, stringResource(R.string.editor_edit_color)) {
+                    state.colorDraft = preset.colors
                 }
             }
-            ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) {
-                state.colorTarget = ColorTarget.CUSTOM_SLOT
-            }
-            ToolbarIcon(EditorIcons.EditColor, stringResource(R.string.editor_edit_color)) {
-                state.colorTarget = ColorTarget.SELECTED_SLOT
-            }
-            PillDivider()
-            ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
-                state.panelOpen = !state.panelOpen
+            if (state.colorDraft == null) {
+                PillDivider()
+                ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
+                    state.panelOpen = !state.panelOpen
+                }
             }
         }
     }
+}
+
+/** Favorite colors beyond the five on the bar: the pen's own swatches, then a few more. Tapping one puts it on the bar. */
+@Composable
+private fun MoreColors(state: EditorState, preset: InkPreset) {
+    val colors = LocalEditorColors.current
+    val favorites = (preset.palette + MORE_FAVORITES).distinct()
+    DropdownMenu(expanded = true, onDismissRequest = { state.moreColorsOpen = false }) {
+        Text(
+            stringResource(R.string.editor_more_colors),
+            color = colors.label,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+        )
+        Column(Modifier.padding(horizontal = 8.dp).width((MORE_COLORS_COLUMNS * 44).dp)) {
+            favorites.chunked(MORE_COLORS_COLUMNS).forEach { line ->
+                Row {
+                    for (color in line) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(44.dp).tappable(radius = 20.dp) {
+                                state.update { it.withColorAdded(color) }
+                                state.moreColorsOpen = false
+                            },
+                        ) {
+                            ColorDot(color, diameter = 28.dp)
+                            if (color in preset.colors) SelectedDot()
+                        }
+                    }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .padding(vertical = 8.dp, horizontal = 8.dp)
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(androidx.compose.ui.graphics.Brush.sweepGradient(HueStops))
+                        .tappable(radius = 20.dp) {
+                            state.moreColorsOpen = false
+                            state.colorTarget = ColorTarget.CUSTOM_SLOT
+                        },
+                )
+            }
+        }
+    }
+}
+
+private const val MORE_COLORS_COLUMNS = 6
+
+private val MORE_FAVORITES = listOf(
+    0xFF000000.toInt(), 0xFF424242.toInt(), 0xFF9E9E9E.toInt(), 0xFFFFFFFF.toInt(),
+    0xFFB71C1C.toInt(), 0xFFE53935.toInt(), 0xFFFF7043.toInt(), 0xFFFFA000.toInt(),
+    0xFFFDD835.toInt(), 0xFFC0CA33.toInt(), 0xFF43A047.toInt(), 0xFF00897B.toInt(),
+    0xFF00ACC1.toInt(), 0xFF1E88E5.toInt(), 0xFF3949AB.toInt(), 0xFF8E24AA.toInt(),
+    0xFFD81B60.toInt(), 0xFF6D4C41.toInt(),
+)
+
+/**
+ * The bar while its colors are edited: each color has a red minus to remove it, holding and dragging one moves it,
+ * and a cross discards the changes while a tick keeps them.
+ */
+@Composable
+private fun ColorEditor(state: EditorState, draft: List<Int>) {
+    val colors = LocalEditorColors.current
+    val cell = ToolbarCell
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    draft.forEachIndexed { index, color ->
+        var dragged by remember(color) { mutableStateOf(0f) }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .width(cell)
+                .height(PillHeight)
+                .offset { androidx.compose.ui.unit.IntOffset(dragged.roundToInt(), 0) }
+                .pointerInput(color, draft.size) {
+                    detectDragGesturesAfterLongPress(
+                        onDragEnd = { dragged = 0f },
+                        onDragCancel = { dragged = 0f },
+                    ) { change, drag ->
+                        change.consume()
+                        dragged += drag.x
+                        val step = with(density) { cell.toPx() }
+                        // Past half a cell the color trades places with its neighbour.
+                        val current = state.colorDraft ?: return@detectDragGesturesAfterLongPress
+                        val at = current.indexOf(color)
+                        val target = (at + if (dragged > step / 2f) 1 else if (dragged < -step / 2f) -1 else 0).coerceIn(0, current.lastIndex)
+                        if (target != at) {
+                            val moved = current.toMutableList().apply { add(target, removeAt(at)) }
+                            state.colorDraft = moved
+                            dragged -= (target - at) * step
+                        }
+                    }
+                },
+        ) {
+            ColorDot(color)
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 3.dp, end = 3.dp)
+                    .size(16.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE53935))
+                    .tappable(radius = 12.dp) {
+                        val current = state.colorDraft ?: return@tappable
+                        if (current.size > 1) state.colorDraft = current - color
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.size(8.dp, 2.dp).background(Color.White))
+            }
+        }
+    }
+    PillDivider()
+    ToolbarIcon(EditorIcons.Close, stringResource(R.string.editor_colors_discard)) { state.colorDraft = null }
+    ToolbarIcon(EditorIcons.Check, stringResource(R.string.editor_colors_accept)) { state.acceptColorDraft() }
 }
 
 internal fun LineKind.next() = when (this) {

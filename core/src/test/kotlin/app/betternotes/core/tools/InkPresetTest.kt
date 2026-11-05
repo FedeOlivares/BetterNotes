@@ -70,4 +70,31 @@ class InkPresetTest {
         assertEquals(InkPreset.DEFAULT_HOLD_MS, pen.holdToLineMs)
         assertEquals(0, pen.copy(holdToLine = false).holdToLineMs)
     }
+
+    @Test
+    fun theBarTakesAddedColorsUpToItsLimitThenReplacesTheSlotInUse() {
+        var pen = InkPreset.defaults(InkTool.PEN)
+        for (i in 1..InkPreset.MAX_COLOR_SLOTS) pen = pen.withColorAdded(0xFF100000.toInt() + i)
+        assertEquals(InkPreset.MAX_COLOR_SLOTS, pen.colors.size)
+        val extra = 0xFF00FF00.toInt()
+        val replaced = pen.withColorAdded(extra)
+        assertEquals(InkPreset.MAX_COLOR_SLOTS, replaced.colors.size)
+        assertEquals(extra, replaced.color)
+        // A color that is already there is selected, not added again.
+        assertEquals(pen.colors[2], pen.withColorAdded(pen.colors[2]).color)
+    }
+
+    @Test
+    fun aReorderedOrShortenedBarKeepsTheColorInUseSelected() {
+        val pen = InkPreset.defaults(InkTool.PEN).pickColor(InkPreset.defaults(InkTool.PEN).colors[3])
+        val inUse = pen.color
+        val reordered = pen.withColorList(pen.colors.reversed())
+        assertEquals(inUse, reordered.color)
+        val shortened = pen.withColorList(listOf(pen.colors[0], inUse))
+        assertEquals(2, shortened.colors.size)
+        assertEquals(inUse, shortened.color)
+        // A list without the color in use selects the first, and an empty list changes nothing.
+        assertEquals(pen.colors[1], pen.withColorList(listOf(pen.colors[1])).color)
+        assertEquals(pen, pen.withColorList(emptyList()))
+    }
 }

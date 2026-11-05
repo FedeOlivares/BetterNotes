@@ -129,6 +129,7 @@ internal object EditorIcons {
     }
     val Sliders by lazy { line("sliders", "M3 8h10 M19 8h2 M3 16h2 M11 16h10 M16 5a3 3 0 1 0 .01 0 M8 13a3 3 0 1 0 .01 0") }
     val Close by lazy { line("close", "M6 6l12 12 M18 6L6 18") }
+    val Check by lazy { line("check", "M5 12.5l4.5 4.5L19 7.5") }
     val Minus by lazy { line("minus", "M5 12h14") }
     val Plus by lazy { line("plus", "M12 5v14 M5 12h14") }
     val Info by lazy { line("info", "M12 3a9 9 0 1 0 .01 0 M12 11v5.5 M12 7.6v.2") }

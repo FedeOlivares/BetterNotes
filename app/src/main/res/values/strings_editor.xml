@@ -125,6 +125,10 @@
     <string name="panel_circle">Circle to lasso</string>
     <string name="panel_stabilization">Stabilization</string>
     <string name="panel_color">Color</string>
+    <string name="editor_colors_discard">Discard color changes</string>
+    <string name="editor_colors_accept">Keep color changes</string>
+    <string name="editor_remove_color">Remove this color</string>
+    <string name="editor_more_colors">More colors</string>
     <string name="panel_add_swatch">Add a swatch</string>
     <string name="panel_swatch_list">Swatch list</string>
     <string name="panel_info">About this setting</string>
