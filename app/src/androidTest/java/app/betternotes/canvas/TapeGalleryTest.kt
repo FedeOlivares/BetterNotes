@@ -26,13 +26,13 @@ class TapeGalleryTest {
         var id = 1L
         var y = 30f
         for (pattern in TapePattern.entries) {
-            val options = TapeOptions(selectedColor = 3, pattern = pattern, thickness = 28)
+            val options = TapeOptions(selectedColor = 3, pattern = pattern).withWidth(28)
             painter.paint(canvas, options.item(id++, 20f, y, 300f, y))
             y += 40f
         }
         // Warning tape, and a slanted strip with a stronger shadow.
-        painter.paint(canvas, TapeOptions(selectedColor = TapeOptions().colors.size, pattern = TapePattern.DOTS, thickness = 28).item(id++, 20f, y, 300f, y))
-        painter.paint(canvas, TapeOptions(selectedColor = 1, pattern = TapePattern.LINES, thickness = 24, shadowDistance = 4f, shadowOpacity = 0.5f).item(id++, 40f, 245f, 280f, 190f))
+        painter.paint(canvas, TapeOptions(selectedColor = TapeOptions().colors.size, pattern = TapePattern.DOTS).withWidth(28).item(id++, 20f, y, 300f, y))
+        painter.paint(canvas, TapeOptions(selectedColor = 1, pattern = TapePattern.LINES, shadowDistance = 4f, shadowOpacity = 0.5f).withWidth(24).item(id++, 40f, 245f, 280f, 190f))
         File(context.getExternalFilesDir(null), "tapes.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

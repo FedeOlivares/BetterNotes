@@ -17,8 +17,6 @@ data class TapeOptions(
     val selectedWidth: Int = 1,
     val colors: List<Int> = PALETTE,
     val selectedColor: Int = 0,
-    /** A thickness set with the slider, in points. 0 means the selected preset width. */
-    val thickness: Int = 0,
     /** How see-through the whole strip is, on top of the color's own transparency. */
     val opacity: Float = 1f,
     val pattern: TapePattern = TapePattern.PLAIN,
@@ -32,7 +30,14 @@ data class TapeOptions(
 ) {
     val shadow get() = TapeShadow(shadowDistance, shadowAngle, shadowOpacity)
 
-    val width get() = if (thickness > 0) thickness else widths[selectedWidth]
+    val width get() = widths[selectedWidth]
+
+    /** The width slot in use set to [points], as the pen's thickness slider changes its slot. */
+    fun withWidth(points: Int): TapeOptions {
+        val next = widths.toMutableList()
+        next[selectedWidth] = points.coerceIn(MIN_THICKNESS, MAX_THICKNESS)
+        return copy(widths = next)
+    }
 
     /** The slot after the last color is the warning tape: yellow and red stripes, drawn by the painter. */
     val color get() = colors.getOrElse(selectedColor) { WARNING_FILL }

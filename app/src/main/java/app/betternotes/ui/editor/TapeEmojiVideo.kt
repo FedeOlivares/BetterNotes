@@ -58,9 +58,9 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
             }
             PillDivider()
             options.widths.forEachIndexed { slot, width ->
-                ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot, thickness = 0) } }) {
+                ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedWidth = slot) } }) {
                     WidthGlyph(width)
-                    if (options.thickness == 0 && slot == options.selectedWidth) SelectedDot()
+                    if (slot == options.selectedWidth) SelectedDot()
                 }
             }
             PillDivider()
@@ -103,7 +103,7 @@ internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modif
         TapeLookSliders(
             thickness = options.width.toFloat(),
             opacity = options.opacity,
-            onThickness = { value -> state.updateTape { it.copy(thickness = value.roundToInt()) } },
+            onThickness = { value -> state.updateTape { it.withWidth(value.roundToInt()) } },
             onOpacity = { value -> state.updateTape { it.copy(opacity = value) } },
             onFinished = {},
         )

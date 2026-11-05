@@ -6,12 +6,12 @@ import org.junit.Test
 class TapeOptionsTest {
     @Test
     fun aStripTakesTheSlidersThicknessAndOpacity() {
-        val options = TapeOptions(thickness = 40, opacity = 0.5f)
+        val options = TapeOptions(opacity = 0.5f).withWidth(40)
         val strip = options.item(1L, 0f, 0f, 100f, 0f)
         assertEquals(40f, strip.frame.height, 0.001f)
         assertEquals(0.5f, strip.opacity, 0.001f)
-        // Without a slider thickness, the selected preset width is used.
-        assertEquals(20f, TapeOptions().item(2L, 0f, 0f, 100f, 0f).frame.height, 0.001f)
+        // The slider changed the slot in use, as the pen's does, and left the others.
+        assertEquals(listOf(12, 40, 32), options.widths)
     }
 
     @Test
