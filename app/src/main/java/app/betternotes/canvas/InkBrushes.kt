@@ -12,8 +12,11 @@ import androidx.ink.brush.StockBrushes.HighlighterVersion
 import androidx.ink.brush.StockBrushes.MarkerVersion
 import androidx.ink.brush.StockBrushes.PressurePenVersion
 import androidx.ink.brush.behavior.ConstantNode
+import androidx.ink.brush.behavior.EasingFunction
 import androidx.ink.brush.behavior.NoiseNode
+import androidx.ink.brush.behavior.OutOfRange
 import androidx.ink.brush.behavior.ProgressDomain
+import androidx.ink.brush.behavior.ResponseNode
 import androidx.ink.brush.behavior.SourceNode
 import androidx.ink.brush.behavior.TargetNode
 import androidx.ink.brush.behavior.ValueNode
@@ -40,6 +43,8 @@ internal object InkBrushes {
     private const val EPSILON_PT = 0.003f
 
     private const val TWO_PI = 6.2831855f
+    private const val OIL_RUN = 1.8f
+    private const val OIL_RUN_STAGGER = 0.2f
     private const val CALLIGRAPHY_NIB_RATIO = 0.25f
     private const val CALLIGRAPHY_NIB_DEGREES = 45f
 
@@ -74,23 +79,21 @@ internal object InkBrushes {
     private fun vary(target: TargetNode.Target, from: Float, to: Float, input: ValueNode) =
         BrushBehavior(TargetNode(target, from, to, input))
 
-    private fun oilBristles(bleed: Boolean) = lanes(-0.45f, 0.45f, 0.3f) { lane, i ->
-        setCornerRounding(0.4f)
-        setScaleY(if (bleed) 0.072f else 0.036f)
+    private fun oilBristles() = lanes(-0.46f, 0.46f, 0.115f) { lane, i ->
+        setCornerRounding(0.6f)
+        setScaleY(0.08f)
         addBehavior(lane)
-        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.25f)))
-        addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.2f, noise(40 + i, 0.18f)))
-        addBehavior(startPoint(1f + 0.5f * (i % 4)))
-        if (bleed) addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.67f, ConstantNode(1f)))
+        addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.3f + 0.04f * i)))
+        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 0.8f, noise(50 + i, 0.2f)))
+        // Full width for most of each run, thinning to a point at its end, then a fresh start. Runs are staggered.
+        val run = SourceNode(
+            SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE,
+            -OIL_RUN_STAGGER * i,
+            OIL_RUN - OIL_RUN_STAGGER * i,
+            OutOfRange.REPEAT,
+        )
+        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 1f, 0.05f, ResponseNode(EasingFunction.Predefined.EASE_IN, run))))
     }
-
-    /** Grows from a point to full size over [length] brush sizes of travel. */
-    private fun startPoint(length: Float) = vary(
-        TargetNode.Target.SIZE_MULTIPLIER,
-        0.1f,
-        1f,
-        SourceNode(SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, length),
-    )
 
     private fun aimedAtDirection() = vary(
         TargetNode.Target.ROTATION_OFFSET_IN_RADIANS,
@@ -139,20 +142,10 @@ internal object InkBrushes {
                     }
                 },
             )
-            // A thin wash (30% of the stroke opacity) with four bristles at full opacity on it. Each bristle
-            // wanders sideways, swells and thins, and starts at a point, later the further out it sits. Under
-            // it, a bleed as wide as the bristle again (half its width each side) at two thirds opacity. The
-            // library allows ten layers, which is why there are only four bristles.
-            BrushKind.OIL -> brushFamily(
-                tip {
-                    setCornerRounding(0.3f)
-                    setScaleY(1f)
-                    addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.3f, ConstantNode(1f)))
-                    addBehavior(startPoint(1f))
-                },
-                *oilBristles(bleed = true),
-                *oilBristles(bleed = false),
-            )
+            // Nine thin bristles, each 8% of the line width with the rest as gaps. Each wanders a little, so
+            // neighbours sometimes cross and the ink doubles up (80% each, about 96% where they meet), and each
+            // tapers off and starts again every 1.8 line widths. The ink allows ten layers, so there is no wash.
+            BrushKind.OIL -> brushFamily(*oilBristles())
             BrushKind.SPILL -> brushFamily(
                 *Array(2) { c ->
                     tip {
