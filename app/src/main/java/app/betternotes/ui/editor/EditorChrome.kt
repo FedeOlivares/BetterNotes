@@ -158,7 +158,7 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
 }
 
 /** How long a change of tool takes to show: the row fading and the selection circle growing, together. */
-internal const val TOOL_CHANGE_MS = 140
+internal const val TOOL_CHANGE_MS = 200
 
 @Composable
 private fun EditorControls(state: EditorState, actions: EditorActions, notices: Notices, preset: InkPreset?) {
