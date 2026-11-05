@@ -76,7 +76,7 @@ internal object InkBrushes {
 
     private fun oilBristles(bleed: Boolean) = lanes(-0.45f, 0.45f, 0.3f) { lane, i ->
         setCornerRounding(0.4f)
-        setScaleY(if (bleed) 0.18f else 0.09f)
+        setScaleY(if (bleed) 0.072f else 0.036f)
         addBehavior(lane)
         addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.25f)))
         addBehavior(vary(TargetNode.Target.SIZE_MULTIPLIER, 0.7f, 1.2f, noise(40 + i, 0.18f)))

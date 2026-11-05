@@ -571,13 +571,44 @@ class CanvasViewTest {
         assertTrue(app.betternotes.core.model.AudioBar.isOpen(open))
         // A touch on the play button plays it and draws no ink.
         val play = worldToScreen(open.left + 8f, open.centerY)
-        stylusStroke(play, play.first to play.second + 1f)
+        stylusTap(play)
         waitUntil { played.isNotEmpty() }
         assertEquals(1, onMain { pageContent().size })
         // A touch on the corner folds it down to the button and its arrow.
         val corner = worldToScreen(open.left + open.width - 3f, open.top + 3f)
-        stylusStroke(corner, corner.first to corner.second + 1f)
+        stylusTap(corner)
         waitUntil { !app.betternotes.core.model.AudioBar.isOpen(onMain { bar().frame }) }
+    }
+
+    @Test
+    fun holdingAPlacedRecordingMovesIt() {
+        onMain { canvas.addAudio("sound", 4000L) }
+        val id = onMain { canvas.recordings().single().id }
+        onMain {
+            canvas.audio = object : AudioPlayback {
+                override fun isPlaying(id: Long) = false
+                override fun fraction(id: Long) = 0f
+                override fun toggle(item: app.betternotes.core.model.AudioItem) = Unit
+                override fun seek(item: app.betternotes.core.model.AudioItem, fraction: Float) = Unit
+            }
+        }
+        val drop = worldToScreen(300f, 300f)
+        onMain { canvas.placeAudio(id, drop.first, drop.second) }
+        fun frame() = pageContent().let { c ->
+            (0 until c.size).map { c[it] }.filterIsInstance<app.betternotes.core.model.AudioItem>().single().frame
+        }
+        val before = onMain { frame() }
+        // Hold on the bar's play button, then carry it elsewhere.
+        val from = worldToScreen(before.left + 8f, before.centerY)
+        val to = worldToScreen(150f, 500f)
+        val tool = MotionEvent.TOOL_TYPE_STYLUS
+        val down = SystemClock.uptimeMillis()
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(from), 1f))
+        SystemClock.sleep(700)
+        send(event(down, down + 710, MotionEvent.ACTION_MOVE, tool, listOf(to), 1f))
+        send(event(down, down + 720, MotionEvent.ACTION_UP, tool, listOf(to), 1f))
+        waitUntil { frame().centerY > 450f }
+        assertEquals(150f, onMain { frame().centerX }, 2f)
     }
 
     // ---- Helpers ----
@@ -611,6 +642,14 @@ class CanvasViewTest {
         pressure: Boolean = false,
     ) {
         drag(MotionEvent.TOOL_TYPE_STYLUS, from, to, if (pressure) 0.5f else 1f)
+    }
+
+    /** A pen touch with no movement, quick enough not to count as a hold. */
+    private fun stylusTap(at: Pair<Float, Float>) {
+        val tool = MotionEvent.TOOL_TYPE_STYLUS
+        val down = SystemClock.uptimeMillis()
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(at), 1f))
+        send(event(down, down + 20, MotionEvent.ACTION_UP, tool, listOf(at), 1f))
     }
 
     private fun fingerDrag(from: Pair<Float, Float>, dy: Float) {

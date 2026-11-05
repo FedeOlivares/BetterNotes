@@ -207,7 +207,7 @@ private fun Entry(icon: ImageVector, label: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RenameDialog(current: String, onDismiss: () -> Unit, onDone: (String) -> Unit) {
+internal fun RenameDialog(current: String, onDismiss: () -> Unit, onDone: (String) -> Unit) {
     var name by remember { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,

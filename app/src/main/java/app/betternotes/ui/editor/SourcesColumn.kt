@@ -26,6 +26,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +63,8 @@ internal fun SourcesColumn(
 ) {
     val colors = LocalEditorColors.current
     val info = remember { actions.documentInfo() }
+    var title by remember { mutableStateOf(info?.title.orEmpty()) }
+    var renaming by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxSize()
@@ -86,12 +90,13 @@ internal fun SourcesColumn(
             if (info != null) {
                 Spacer(Modifier.height(26.dp))
                 Text(
-                    info.title,
+                    title,
                     color = colors.title,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 28.sp,
                     maxLines = 2,
+                    modifier = Modifier.clickable(role = Role.Button) { renaming = true },
                 )
                 val context = LocalContext.current
                 val stamp = "${DateFormat.getMediumDateFormat(context).format(Date(info.createdMs))}, " +
@@ -106,6 +111,13 @@ internal fun SourcesColumn(
             if (info != null) SourceCard(state, info)
         }
         if (state.sourcesAddOpen) AddToNote(state, sources, recorder, notices, onClose)
+        if (renaming) {
+            RenameDialog(title, onDismiss = { renaming = false }) { name ->
+                renaming = false
+                title = name
+                actions.onRename(name)
+            }
+        }
     }
 }
 

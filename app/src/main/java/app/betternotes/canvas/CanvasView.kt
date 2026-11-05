@@ -889,10 +889,48 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
         }
         if (action == MotionEvent.ACTION_MOVE) addToStroke(event)
+        trackFingerTap(event)
         strokeStartedInThisEvent = false
         currentEvent = null
         scheduleDeadline()
         return true
+    }
+
+    private var fingerTapPossible = false
+    private var fingerTapDownX = 0f
+    private var fingerTapDownY = 0f
+
+    /** A quick, still touch of one finger. It is what touches a circle drawn for circle to lasso, as the pen does. */
+    private fun trackFingerTap(event: MotionEvent) {
+        val finger = event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                fingerTapPossible = finger
+                fingerTapDownX = event.x
+                fingerTapDownY = event.y
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> fingerTapPossible = false
+            MotionEvent.ACTION_MOVE -> {
+                if (fingerTapPossible && hypot(event.x - fingerTapDownX, event.y - fingerTapDownY) > ViewConfiguration.get(context).scaledTouchSlop) {
+                    fingerTapPossible = false
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                val tapped = fingerTapPossible && event.eventTime - event.downTime <= FINGER_TAP_MS
+                fingerTapPossible = false
+                if (tapped) selectCircleAt(event.x, event.y)
+            }
+            MotionEvent.ACTION_CANCEL -> fingerTapPossible = false
+        }
+    }
+
+    private fun selectCircleAt(x: Float, y: Float) {
+        val current = tool as? CanvasTool.Ink ?: return
+        if (!current.circleToLasso || lastLoop == null) return
+        val editor = editor ?: return
+        val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
+        if (index < 0) return
+        selectLoopAt(index, editor.document.pages[index].id, pageX(x, index), pageY(y, index))
     }
 
     private fun pointerDown(event: MotionEvent, index: Int) {
@@ -1023,7 +1061,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         drawPageIndex = index
         endTextEdit()
         strokeStickyId = null
-        if (kind != PointerKind.STYLUS_ERASER && pressAudio(pointerId, index, page.id, pageX(x, index), pageY(y, index))) return
+        if (kind != PointerKind.STYLUS_ERASER && pressAudio(pointerId, index, page.id, pageX(x, index), pageY(y, index), x, y)) return
         if (kind != PointerKind.STYLUS_ERASER && handlePlacement(index, pageX(x, index), pageY(y, index))) return
 
         val tool = tool
@@ -1078,7 +1116,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return
         }
         if (pointerId == audioPointer) {
-            seekAudio(pageX(x, audioPage))
+            moveAudio(x, y)
             return
         }
         if (pointerId == lassoPointer) {
@@ -1094,7 +1132,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     override fun onDrawEnd(pointerId: Int) {
         if (pointerId == audioPointer) {
-            audioPointer = -1
+            endAudio(cancelled = false)
             return
         }
         if (pointerId == loupeBoxPointer) {
@@ -1140,7 +1178,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     override fun onDrawCancel(pointerId: Int) {
         if (pointerId == audioPointer) {
-            audioPointer = -1
+            endAudio(cancelled = true)
             return
         }
         if (pointerId == loupeBoxPointer) {
@@ -1552,9 +1590,23 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     internal var audio: AudioPlayback? = null
 
     private val audioBars = AudioBarPainter()
+    private enum class AudioTouch { NONE, PENDING, SEEKING, MOVING }
+
     private var audioPointer = -1
     private var audioPage = 0
     private var audioItem: AudioItem? = null
+    private var audioZone = AudioBar.Zone.PLAY
+    private var audioTouch = AudioTouch.NONE
+    private var audioDownX = 0f
+    private var audioDownY = 0f
+    private var audioPenX = 0f
+    private var audioPenY = 0f
+    private val audioHold = Runnable {
+        if (audioTouch == AudioTouch.PENDING) {
+            audioTouch = AudioTouch.MOVING
+            overlay.invalidate()
+        }
+    }
 
     private fun drawAudioBars(canvas: Canvas) {
         val open = editor ?: return
@@ -1577,15 +1629,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     if (wave == null && AudioBar.isOpen(item.frame)) {
                         open.assetFile(item.assetId)?.let { file -> Waveforms.request(item.assetId, file) { overlay.postInvalidate() } }
                     }
+                    val carried = audioTouch == AudioTouch.MOVING && audioItem?.id == item.id
                     audioBars.draw(
                         canvas,
                         item,
-                        viewport.toScreenX(ox + item.frame.left),
-                        viewport.toScreenY(oy + item.frame.top),
+                        if (carried) audioPenX - item.frame.width * scale / 2f else viewport.toScreenX(ox + item.frame.left),
+                        if (carried) audioPenY - item.frame.height * scale / 2f else viewport.toScreenY(oy + item.frame.top),
                         scale,
                         isPlaying,
                         if (isPlaying) playback?.fraction(item.id) ?: 0f else 0f,
                         wave,
+                        android.graphics.Color.luminance(backdropColor) < 0.5f,
                     )
                 }
             }
@@ -1593,13 +1647,74 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (playing) overlay.postInvalidateOnAnimation()
     }
 
-    /** A pen touch on a recording's bar. Returns true if it was on one and has been dealt with. */
-    private fun pressAudio(pointerId: Int, pageIndex: Int, pageId: Long, x: Float, y: Float): Boolean {
+    /**
+     * A pen touch on a recording's bar. Returns true if it was on one. What it means waits for the pen: a
+     * quick lift presses the control under it, holding still picks the bar up to move it, and dragging along
+     * the waveform seeks.
+     */
+    private fun pressAudio(pointerId: Int, pageIndex: Int, pageId: Long, x: Float, y: Float, screenX: Float, screenY: Float): Boolean {
         if (tool is CanvasTool.Eraser || tool is CanvasTool.Lasso) return false
-        val (at, item) = topItemOfType<AudioItem>(pageId, x, y) ?: return false
-        if (!AudioBar.isPlaced(item.frame)) return false
-        val playback = audio ?: return false
-        when (AudioBar.zoneAt(item.frame, x, y) ?: return false) {
+        val (_, item) = topItemOfType<AudioItem>(pageId, x, y) ?: return false
+        if (!AudioBar.isPlaced(item.frame) || audio == null) return false
+        audioZone = AudioBar.zoneAt(item.frame, x, y) ?: return false
+        audioPointer = pointerId
+        audioPage = pageIndex
+        audioItem = item
+        audioTouch = AudioTouch.PENDING
+        audioDownX = screenX
+        audioDownY = screenY
+        audioPenX = screenX
+        audioPenY = screenY
+        postDelayed(audioHold, AUDIO_HOLD_MS)
+        return true
+    }
+
+    private fun moveAudio(x: Float, y: Float) {
+        val item = audioItem ?: return
+        audioPenX = x
+        audioPenY = y
+        when (audioTouch) {
+            AudioTouch.PENDING -> {
+                val slop = HOLD_SLOP_DP * resources.displayMetrics.density
+                if (hypot(x - audioDownX, y - audioDownY) > slop) {
+                    removeCallbacks(audioHold)
+                    if (audioZone == AudioBar.Zone.WAVE) {
+                        audioTouch = AudioTouch.SEEKING
+                    } else {
+                        audioTouch = AudioTouch.NONE
+                    }
+                }
+            }
+            AudioTouch.SEEKING -> audio?.seek(item, AudioBar.fractionAt(item.frame, pageX(x, audioPage)))
+            AudioTouch.MOVING -> Unit
+            AudioTouch.NONE -> Unit
+        }
+        overlay.invalidate()
+    }
+
+    private fun endAudio(cancelled: Boolean) {
+        removeCallbacks(audioHold)
+        val item = audioItem
+        val touch = audioTouch
+        audioPointer = -1
+        audioTouch = AudioTouch.NONE
+        audioItem = null
+        if (item != null && !cancelled) {
+            when (touch) {
+                AudioTouch.PENDING -> tapAudio(item)
+                AudioTouch.MOVING -> placeAudio(item.id, audioPenX, audioPenY)
+                else -> Unit
+            }
+        }
+        overlay.invalidate()
+    }
+
+    private fun tapAudio(item: AudioItem) {
+        val playback = audio ?: return
+        val pageId = editor?.document?.pages?.getOrNull(audioPage)?.id ?: return
+        val at = indexOfItem(pageId, item.id)
+        if (at < 0) return
+        when (audioZone) {
             AudioBar.Zone.PLAY -> {
                 // Pressing play on a collapsed bar opens it.
                 if (!AudioBar.isOpen(item.frame)) replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, true)))
@@ -1607,21 +1722,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             AudioBar.Zone.COLLAPSE -> replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, false)))
             AudioBar.Zone.EXPAND -> replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, true)))
-            AudioBar.Zone.WAVE -> {
-                audioPointer = pointerId
-                audioPage = pageIndex
-                audioItem = item
-                playback.seek(item, AudioBar.fractionAt(item.frame, x))
-            }
+            AudioBar.Zone.WAVE -> playback.seek(item, AudioBar.fractionAt(item.frame, audioDownX.let { pageX(it, audioPage) }))
         }
-        overlay.invalidate()
-        return true
-    }
-
-    private fun seekAudio(x: Float) {
-        val item = audioItem ?: return
-        audio?.seek(item, AudioBar.fractionAt(item.frame, x))
-        overlay.invalidate()
     }
 
     private fun replaceAudio(pageId: Long, index: Int, item: AudioItem) {
@@ -2267,6 +2369,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
         /** How far a held pen can wander and still count as still. */
         const val HOLD_SLOP_DP = 3f
+        const val AUDIO_HOLD_MS = 400L
+        const val FINGER_TAP_MS = 300L
         const val MIN_HOLD_CHECK_MS = 8L
         const val PLACED_SHARE_OF_VIEW = 0.6f
         const val EMOJI_BOX_OF_SIZE = 1.5f

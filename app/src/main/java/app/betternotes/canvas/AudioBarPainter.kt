@@ -41,7 +41,10 @@ internal class AudioBarPainter {
     private val path = Path()
 
     /** [left] and [top] are where the bar starts on screen, and [scale] is pixels per point. */
-    fun draw(canvas: Canvas, item: AudioItem, left: Float, top: Float, scale: Float, playing: Boolean, fraction: Float, wave: FloatArray?) {
+    fun draw(canvas: Canvas, item: AudioItem, left: Float, top: Float, scale: Float, playing: Boolean, fraction: Float, wave: FloatArray?, dark: Boolean) {
+        fill.color = if (dark) 0xFF2B2E36.toInt() else 0xFFF4F5F8.toInt()
+        edge.color = if (dark) 0xFF4D525E.toInt() else 0xFFC9CDD6.toInt()
+        arrow.color = if (dark) 0xFFB4BAC6.toInt() else 0xFF6B7280.toInt()
         val frame = item.frame
         val width = frame.width * scale
         val height = frame.height * scale
@@ -101,7 +104,7 @@ internal class AudioBarPainter {
         for (i in 0 until count) {
             val x = start + (i + 0.5f) * step
             val level = wave?.get(i) ?: FLAT_LEVEL
-            bar.color = if ((i + 0.5f) / count <= fraction) ACCENT else 0xFFB6BBC7.toInt()
+            bar.color = if ((i + 0.5f) / count <= fraction) ACCENT else if (dark) 0xFF6B7180.toInt() else 0xFFB6BBC7.toInt()
             canvas.drawLine(x, cy - level * maxHalf, x, cy + level * maxHalf, bar)
         }
     }
