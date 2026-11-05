@@ -36,7 +36,7 @@ object ShapeTips {
 
     /** The tip's length, along the shape. */
     fun length(kind: ShapeKind, w: Float, h: Float, tipLength: Float): Float {
-        if (tipLength > 0f) return tipLength
+        if (tipLength > 0f || tipLength != 0f && isBubble(kind)) return tipLength
         return when (kind) {
             ShapeKind.ARROW -> min(w * 0.25f, ARROW_HEAD_MAX)
             ShapeKind.AXES -> min(w, h) * 0.1f
@@ -54,7 +54,7 @@ object ShapeTips {
 
     /** The tip's full width, across the shape. */
     fun width(kind: ShapeKind, w: Float, h: Float, tipLength: Float, tipWidth: Float): Float {
-        if (tipWidth > 0f) return tipWidth
+        if (tipWidth > 0f || tipWidth != 0f && isBubble(kind)) return tipWidth
         return when (kind) {
             ShapeKind.ARROW -> length(kind, w, h, tipLength) * ARROW_SPREAD * 2f
             ShapeKind.AXES -> length(kind, w, h, tipLength) * 2f
@@ -64,6 +64,9 @@ object ShapeTips {
             else -> 0f
         }
     }
+
+    /** A speech or thought bubble keeps its tail's tip as a point of its frame, which may lie anywhere around it, outside the frame too. */
+    fun isBubble(kind: ShapeKind) = kind == ShapeKind.SPEECH_ROUND || kind == ShapeKind.THOUGHT
 
     /** The point where a speech or thought bubble's tail ends, in its frame. */
     fun speechTip(item: ShapeItem): FloatArray {
@@ -116,11 +119,11 @@ object ShapeTips {
                     item.copy(frame = item.frame.copy(height = height), tipLength = height - top)
                 }
                 ShapeKind.SPEECH_ROUND -> {
-                    val tip = outsideEllipse(w / 2f, h * SPEECH_ELLIPSE / 2f, w / 2f, h * SPEECH_ELLIPSE / 2f, x.coerceIn(0f, w), y.coerceIn(0f, h))
+                    val tip = outsideEllipse(w / 2f, h * SPEECH_ELLIPSE / 2f, w / 2f, h * SPEECH_ELLIPSE / 2f, x.coerceIn(-TAIL_REACH * w, (1f + TAIL_REACH) * w), y.coerceIn(-TAIL_REACH * h, (1f + TAIL_REACH) * h))
                     item.copy(tipLength = tip[0], tipWidth = tip[1])
                 }
                 ShapeKind.THOUGHT -> {
-                    val tip = outsideEllipse(w * 0.52f, h * 0.36f, w * 0.48f, h * 0.36f, x.coerceIn(0f, w), y.coerceIn(0f, h))
+                    val tip = outsideEllipse(w * 0.52f, h * 0.36f, w * 0.48f, h * 0.36f, x.coerceIn(-TAIL_REACH * w, (1f + TAIL_REACH) * w), y.coerceIn(-TAIL_REACH * h, (1f + TAIL_REACH) * h))
                     item.copy(tipLength = tip[0], tipWidth = tip[1])
                 }
                 ShapeKind.CYLINDER -> item.copy(tipLength = (y / 2f).coerceIn(MIN_TIP_PT, h * 0.4f))
@@ -141,6 +144,8 @@ object ShapeTips {
         return floatArrayOf(cx + nx * scale * rx, cy + ny * scale * ry)
     }
 
+    /** How far outside its frame, in frames, a bubble's tail may be dragged. */
+    const val TAIL_REACH = 2f
     const val PIE_BITE_DEGREES = 90f
     const val MIN_BITE_DEGREES = 15f
     const val WEDGE_BODY = 0.7f

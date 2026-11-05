@@ -84,4 +84,20 @@ class ShapeTipsTest {
         val dy = (inside.tipWidth - 37.5f) / 37.5f
         assertTrue(dx * dx + dy * dy >= 1f)
     }
+
+    @Test
+    fun aBubbleTailCanBeDraggedToAnySideOfTheBubble() {
+        for (kind in listOf(ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT)) {
+            val bubble = ShapeItem(2L, Frame(100f, 100f, 200f, 120f), kind)
+            // To the upper left, outside the frame, then straight up and to the right.
+            for ((x, y) in listOf(-80f to -60f, 100f to -90f, 330f to 20f, -50f to 60f, 100f to 300f)) {
+                val dragged = ShapeTips.dragged(bubble, ShapeParam.TIP_LENGTH, x, y)
+                val tip = ShapeTips.speechTip(dragged)
+                assertEquals("$kind tip x for ($x, $y)", x, tip[0], 0.5f)
+                assertEquals("$kind tip y for ($x, $y)", y, tip[1], 0.5f)
+                // The tail is part of the item, so it is painted, selected and found where it reaches.
+                assertTrue(dragged.bounds.contains(100f + x, 100f + y))
+            }
+        }
+    }
 }

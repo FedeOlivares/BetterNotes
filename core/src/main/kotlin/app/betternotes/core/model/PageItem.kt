@@ -3,6 +3,7 @@ package app.betternotes.core.model
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Frame
+import app.betternotes.core.tools.ShapeTips
 
 /** Makes ids for items, pages and documents. Random ids need no counter that a crash could rewind. */
 fun interface IdSource {
@@ -142,7 +143,17 @@ data class ShapeItem(
     val tipLength: Float = 0f,
     val tipWidth: Float = 0f,
 ) : PageItem {
-    override val bounds get() = frame.bounds.outset(strokeWidth / 2f)
+    /** The frame, and for a speech or thought bubble also the tail, which can reach out of it in any direction. */
+    override val bounds: Bounds
+        get() {
+            val box = frame.bounds.outset(strokeWidth / 2f)
+            if (!ShapeTips.isBubble(kind) || frame.width <= 0f || frame.height <= 0f) return box
+            val tip = ShapeTips.speechTip(this)
+            val x = frame.worldX(tip[0] / frame.width, tip[1] / frame.height)
+            val y = frame.worldY(tip[0] / frame.width, tip[1] / frame.height)
+            val pad = strokeWidth / 2f + 0.06f * maxOf(frame.width, frame.height)
+            return Bounds(minOf(box.left, x - pad), minOf(box.top, y - pad), maxOf(box.right, x + pad), maxOf(box.bottom, y + pad))
+        }
 
     val isFilled get() = fillColor ushr 24 != 0
 
