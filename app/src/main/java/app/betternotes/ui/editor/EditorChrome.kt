@@ -1,5 +1,22 @@
 package app.betternotes.ui.editor
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -411,14 +428,20 @@ private fun LaserRow(state: EditorState, modifier: Modifier) {
 private fun BoxScope.PositionControls(state: EditorState) {
     val colors = LocalEditorColors.current
     var visible by remember { mutableStateOf(false) }
+    var entering by remember { mutableStateOf(false) }
     val moves = state.viewMoves
-    LaunchedEffect(moves) {
+    LaunchedEffect(moves, entering) {
+        if (entering) {
+            visible = true
+            return@LaunchedEffect
+        }
         if (moves <= 1) return@LaunchedEffect
         visible = true
         delay(POSITION_VISIBLE_MS)
         visible = false
     }
     if (!visible) return
+    if (entering) PageEntry(state) { entering = false }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -433,7 +456,10 @@ private fun BoxScope.PositionControls(state: EditorState) {
             .tappable(radius = 60.dp, onClick = state::zoomToRealSize)
             .padding(horizontal = 12.dp),
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(46.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.width(46.dp).clickable(role = Role.Button) { entering = true },
+        ) {
             Text("${state.currentPage + 1}", color = colors.title, fontSize = 12.sp, lineHeight = 14.sp)
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.pillDivider))
             Text("${state.pageCount}", color = colors.label, fontSize = 12.sp, lineHeight = 14.sp)
@@ -447,10 +473,20 @@ private fun BoxScope.PositionControls(state: EditorState) {
             modifier = Modifier.padding(horizontal = 8.dp),
         )
     }
+    val fraction = state.scrollFraction
     Column(
         modifier = Modifier
-            .align(Alignment.CenterEnd)
+            .align(Alignment.TopEnd)
+            .fillMaxHeight()
+            .wrapContentHeight(Alignment.CenterVertically)
             .padding(end = 2.dp)
+            // The buttons ride along the edge with the page's position, as a scroll handle does.
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minHeight = 0))
+                val room = (constraints.maxHeight - placeable.height).coerceAtLeast(0)
+                val top = if (fraction == null) room / 2 else (room * fraction).roundToInt()
+                layout(placeable.width, constraints.maxHeight) { placeable.place(0, top) }
+            }
             .masksInk(state, "page-buttons")
             .shadow(4.dp, CircleShape, clip = false)
             .clip(CircleShape)
@@ -590,3 +626,40 @@ private const val WIDTH_GLYPH_DP_PER_UNIT = 0.34f
 private const val LASER_MIDDLE_GLYPH = 6
 private const val LASER_THICK_GLYPH = 12
 private const val POSITION_VISIBLE_MS = 2000L
+
+
+/** A small box to type a page number into, opened by tapping the page readout. */
+@Composable
+private fun PageEntry(state: EditorState, close: () -> Unit) {
+    val colors = LocalEditorColors.current
+    var text by remember { mutableStateOf(TextFieldValue("${state.currentPage + 1}", TextRange(0, "${state.currentPage + 1}".length))) }
+    val focus = remember { FocusRequester() }
+    val go = {
+        text.text.toIntOrNull()?.let { state.goToPageNumber(it.coerceIn(1, state.pageCount.coerceAtLeast(1))) }
+        close()
+    }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Dialog(onDismissRequest = close) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(colors.pill)
+                .border(1.dp, colors.pillBorder, RoundedCornerShape(18.dp))
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+        ) {
+            BasicTextField(
+                value = text,
+                onValueChange = { v -> if (v.text.length <= 5 && v.text.all(Char::isDigit)) text = v },
+                singleLine = true,
+                textStyle = TextStyle(color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+                cursorBrush = SolidColor(colors.accent),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { go() }),
+                modifier = Modifier.width(72.dp).focusRequester(focus),
+            )
+            Text("/ ${state.pageCount}", color = colors.label, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp, end = 14.dp))
+            Text("Go", color = colors.accent, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clickable(role = Role.Button) { go() }.padding(8.dp))
+        }
+    }
+}

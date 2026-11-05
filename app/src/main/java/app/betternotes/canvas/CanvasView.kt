@@ -3,6 +3,7 @@ package app.betternotes.canvas
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import app.betternotes.pdf.PdfThumbnails
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -272,6 +273,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             if (width == 0) return 0
             val index = layout.pageIndexAt(viewport.toWorldX(width / 2f), viewport.toWorldY(height / 2f))
             return if (index >= 0) index else lastCurrentPage
+        }
+
+    /** How far down the scrollable range the view is, 0 at the top and 1 at the bottom, or null if it cannot scroll. */
+    val scrollFraction: Float?
+        get() {
+            val layout = layout ?: return null
+            if (layout.isInfinite || width == 0) return null
+            val scale = viewport.pxPerPt
+            val max = layout.maxPanY(scale, height, pageMarginPx)
+            val min = layout.minPanY(scale, height, pageMarginPx)
+            return if (max - min < 1f) null else ((max - viewport.panY) / (max - min)).coerceIn(0f, 1f)
         }
 
     val pageCount get() = editor?.document?.pages?.size ?: 0
@@ -1572,6 +1584,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         drawing.scale(scale, scale)
         paint.paintPage(drawing, page, Bounds(0f, 0f, size.widthPt, size.heightPt), scale)
         return bitmap
+    }
+
+    /** The PDF's own picture of a page, or null if it is not a PDF page. Rendered in the background and cached. */
+    suspend fun pdfThumbnail(pageId: Long, widthPx: Int): Bitmap? {
+        val open = editor ?: return null
+        val source = open.document.pages.firstOrNull { it.id == pageId }?.source as? PageSource.PdfPage ?: return null
+        return PdfThumbnails.cached(open.store, source, widthPx)
     }
 
     // ---- Recordings ----
