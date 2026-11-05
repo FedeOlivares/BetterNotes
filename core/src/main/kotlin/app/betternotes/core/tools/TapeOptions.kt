@@ -21,6 +21,8 @@ data class TapeOptions(
     val opacity: Float = 1f,
     val pattern: TapePattern = TapePattern.PLAIN,
     /** A tiny shadow, which the panel can change. Distance is in points and the angle is on the page. */
+    /** The master switch of the shadow. Off, the sliders keep their values for when it is turned on again. */
+    val shadowOn: Boolean = true,
     val shadowDistance: Float = DEFAULT_SHADOW_DISTANCE,
     val shadowAngle: Float = DEFAULT_SHADOW_ANGLE,
     val shadowOpacity: Float = DEFAULT_SHADOW_OPACITY,
@@ -28,7 +30,7 @@ data class TapeOptions(
     /** How long the pen must stay still to straighten tape, in the HOLD mode. */
     val holdMs: Int = DEFAULT_HOLD_MS,
 ) {
-    val shadow get() = TapeShadow(shadowDistance, shadowAngle, shadowOpacity)
+    val shadow get() = if (shadowOn) TapeShadow(shadowDistance, shadowAngle, shadowOpacity) else TapeShadow.NONE
 
     val width get() = widths[selectedWidth]
 

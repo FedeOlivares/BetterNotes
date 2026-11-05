@@ -208,6 +208,7 @@ internal class ToolStore(context: Context) {
             selectedColor = json.getInt("selectedColor"),
             opacity = json.optDouble("opacity", 1.0).toFloat(),
             pattern = TapePattern.entries.firstOrNull { it.name == json.optString("pattern") } ?: TapePattern.PLAIN,
+            shadowOn = json.optBoolean("shadowOn", true),
             shadowDistance = json.optDouble("shadowDistance", TapeOptions.DEFAULT_SHADOW_DISTANCE.toDouble()).toFloat(),
             shadowAngle = json.optDouble("shadowAngle", TapeOptions.DEFAULT_SHADOW_ANGLE.toDouble()).toFloat(),
             shadowOpacity = json.optDouble("shadowOpacity", TapeOptions.DEFAULT_SHADOW_OPACITY.toDouble()).toFloat(),
@@ -224,6 +225,7 @@ internal class ToolStore(context: Context) {
             put("selectedColor", options.selectedColor)
             put("opacity", options.opacity.toDouble())
             put("pattern", options.pattern.name)
+            put("shadowOn", options.shadowOn)
             put("shadowDistance", options.shadowDistance.toDouble())
             put("shadowAngle", options.shadowAngle.toDouble())
             put("shadowOpacity", options.shadowOpacity.toDouble())

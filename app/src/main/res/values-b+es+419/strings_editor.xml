@@ -123,6 +123,7 @@
     <string name="panel_hold_options">Opciones de mantener</string>
     <string name="editor_tape_pattern">Patrón de la cinta</string>
     <string name="editor_tape_line_mode">Cinta recta: siempre, al mantener o nunca</string>
+    <string name="panel_shadow">Sombra</string>
     <string name="panel_shadow_distance">Distancia de la sombra</string>
     <string name="panel_shadow_angle">Ángulo de la sombra</string>
     <string name="panel_shadow_opacity">Opacidad de la sombra</string>

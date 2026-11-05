@@ -2,6 +2,10 @@ package app.betternotes.ui.editor
 
 import android.widget.MediaController
 import android.widget.VideoView
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.font.FontWeight
@@ -108,24 +112,35 @@ internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modif
             onFinished = {},
         )
         PanelDivider()
-        LabeledRow(R.string.panel_shadow_distance) { ValuePill { ValueText("%.1f".format(options.shadowDistance)) } }
-        PanelSlider(
-            fraction = options.shadowDistance / TapeOptions.MAX_SHADOW_DISTANCE,
-            onChange = { f -> state.updateTape { it.copy(shadowDistance = f * TapeOptions.MAX_SHADOW_DISTANCE) } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
-        )
-        LabeledRow(R.string.panel_shadow_angle) { ValuePill { ValueText("${options.shadowAngle.roundToInt()}°") } }
-        PanelSlider(
-            fraction = options.shadowAngle / 360f,
-            onChange = { f -> state.updateTape { it.copy(shadowAngle = f * 360f) } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
-        )
-        LabeledRow(R.string.panel_shadow_opacity) { ValuePill { ValueText("${(options.shadowOpacity * 100).roundToInt()}%") } }
-        PanelSlider(
-            fraction = options.shadowOpacity,
-            onChange = { f -> state.updateTape { it.copy(shadowOpacity = f) } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
-        )
+        // The shadow's settings stay folded away until asked for, behind a switch that turns the shadow on or off.
+        var shadowOpen by remember { mutableStateOf(false) }
+        LabeledRow(R.string.panel_shadow) {
+            PanelSwitch(options.shadowOn, stringResource(R.string.panel_shadow)) { on -> state.updateTape { it.copy(shadowOn = on) } }
+            PanelIconButton(
+                if (shadowOpen) EditorIcons.ChevronUp else EditorIcons.ChevronDown,
+                stringResource(R.string.panel_shadow),
+            ) { shadowOpen = !shadowOpen }
+        }
+        if (shadowOpen) {
+            LabeledRow(R.string.panel_shadow_distance) { ValuePill { ValueText("%.1f".format(options.shadowDistance)) } }
+            PanelSlider(
+                fraction = options.shadowDistance / TapeOptions.MAX_SHADOW_DISTANCE,
+                onChange = { f -> state.updateTape { it.copy(shadowDistance = f * TapeOptions.MAX_SHADOW_DISTANCE) } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            )
+            LabeledRow(R.string.panel_shadow_angle) { ValuePill { ValueText("${options.shadowAngle.roundToInt()}°") } }
+            PanelSlider(
+                fraction = options.shadowAngle / 360f,
+                onChange = { f -> state.updateTape { it.copy(shadowAngle = f * 360f) } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            )
+            LabeledRow(R.string.panel_shadow_opacity) { ValuePill { ValueText("${(options.shadowOpacity * 100).roundToInt()}%") } }
+            PanelSlider(
+                fraction = options.shadowOpacity,
+                onChange = { f -> state.updateTape { it.copy(shadowOpacity = f) } },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            )
+        }
         PanelDivider()
         LabeledRow(R.string.panel_hold_time) { ValuePill { ValueText("%.1f s".format(options.holdMs / 1000f)) } }
         PanelSlider(
