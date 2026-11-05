@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -41,7 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.library.LibraryPreferences
 import app.betternotes.ui.settings.SettingsOverlay
+import app.betternotes.ui.theme.ThemeMode
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
@@ -61,6 +64,7 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
     val colors = LocalEditorColors.current
     val info = remember { actions.documentInfo() }
     var renaming by remember { mutableStateOf(false) }
+    val dark = LibraryPreferences.get(androidx.compose.ui.platform.LocalContext.current).theme == ThemeMode.DARK
     Box(
         Modifier
             .fillMaxSize()
@@ -124,10 +128,7 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
                 onClose()
                 actions.onZoomToRealSize()
             }
-            Entry(EditorIcons.Sun, R.string.menu_theme) {
-                onClose()
-                actions.onToggleTheme()
-            }
+            ToggleEntry(EditorIcons.Sun, R.string.menu_theme, dark, actions.onToggleTheme)
             actions.onTogglePerfReadout?.let { toggle ->
                 Entry(EditorIcons.Sliders, R.string.menu_perf) {
                     onClose()
@@ -206,6 +207,24 @@ private fun Entry(icon: ImageVector, label: Int, onClick: () -> Unit) {
         Icon(icon, null, tint = colors.icon, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(18.dp))
         Text(stringResource(label), color = colors.title, fontSize = 16.sp)
+    }
+}
+
+/** A row with a switch. The menu stays open so the change shows at once. */
+@Composable
+private fun ToggleEntry(icon: ImageVector, label: Int, checked: Boolean, onToggle: () -> Unit) {
+    val colors = LocalEditorColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Switch, onClick = onToggle)
+            .padding(start = 20.dp, end = 16.dp, top = 5.dp, bottom = 5.dp),
+    ) {
+        Icon(icon, null, tint = colors.icon, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(18.dp))
+        Text(stringResource(label), color = colors.title, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = { onToggle() })
     }
 }
 

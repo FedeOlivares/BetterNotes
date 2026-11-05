@@ -21,7 +21,7 @@
 
     <string name="menu_delete_selection">Eliminar la selección</string>
     <string name="menu_real_size">Zoom a tamaño real</string>
-    <string name="menu_theme">Cambiar entre tema claro y oscuro</string>
+    <string name="menu_theme">Modo oscuro</string>
     <string name="menu_scratch_kind">Cambiar entre nota y lienzo de prueba</string>
     <string name="menu_perf">Mostrar datos de rendimiento</string>
 

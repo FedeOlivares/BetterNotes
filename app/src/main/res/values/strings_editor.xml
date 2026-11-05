@@ -20,7 +20,7 @@
 
     <string name="menu_delete_selection">Delete selection</string>
     <string name="menu_real_size">Zoom to real size</string>
-    <string name="menu_theme">Switch light or dark theme</string>
+    <string name="menu_theme">Dark mode</string>
     <string name="menu_scratch_kind">Switch scratch note or canvas</string>
     <string name="menu_perf">Show performance readout</string>
 
