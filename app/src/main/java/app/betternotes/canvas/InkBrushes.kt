@@ -45,7 +45,6 @@ internal object InkBrushes {
     private const val EPSILON_PT = 0.003f
 
     private const val TWO_PI = 6.2831855f
-    private const val STAMP_LOOP_MS = 1000L
     private const val PENCIL_GRAIN_PT = 5f
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
@@ -161,11 +160,6 @@ internal object InkBrushes {
         BrushPaint.TextureLayer.Wrap.REPEAT,
         BrushPaint.TextureLayer.Wrap.REPEAT,
         BrushPaint.TextureLayer.BlendMode.MODULATE,
-    )
-
-    /** A picture stamped once for each particle. A sheet of several shows one at random, chosen by the stroke's behaviours. */
-    private fun stamped(id: String, frames: Int = 1, columns: Int = 1, rows: Int = 1) = BrushPaint.StampingTexture(
-        id, BrushPaint.TextureLayer.BlendMode.MODULATE, frames, rows, columns, STAMP_LOOP_MS, BrushPaint.AnimationRepeatMode.RESTART,
     )
 
     /** A coat drawn at a fixed fraction of the stroke's opacity. The paint does this, so no behaviour is involved. */
