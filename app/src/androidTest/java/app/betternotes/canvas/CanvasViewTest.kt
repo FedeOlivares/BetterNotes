@@ -705,8 +705,8 @@ class CanvasViewTest {
     @Test
     fun aLineWithinThreeDegreesOfAReferenceAngleSnapsToIt() {
         onMain { canvas.tool = CanvasTool.Shape(app.betternotes.core.tools.ShapeOptions(kind = app.betternotes.core.model.ShapeKind.LINE)) }
-        // About 2 degrees off horizontal.
-        stylusStroke(worldToScreen(100f, 400f), worldToScreen(300f, 393f))
+        // About 1 degree off horizontal.
+        stylusStroke(worldToScreen(100f, 400f), worldToScreen(300f, 396f))
         waitUntil { pageContent().size == 1 }
         val line = onMain { pageContent()[0] as app.betternotes.core.model.ShapeItem }
         assertEquals("snapped onto 0 degrees", 0f, line.frame.rotation, 0.05f)

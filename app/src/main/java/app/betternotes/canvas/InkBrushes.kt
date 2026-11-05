@@ -51,6 +51,8 @@ internal object InkBrushes {
     private const val OIL_RUN_STAGGER = 0.2f
     private const val CALLIGRAPHY_DEPTH = 0.12f
     private const val CALLIGRAPHY_MIN_WIDTH = 0.1f
+    private const val CALLIGRAPHY_POINT = 0.04f
+    private const val CALLIGRAPHY_TAPER = 1.6f
 
     private val pressurePen by lazy { StockBrushes.pressurePen(PressurePenVersion.V1) }
     /** The pressure pen, with its width and opacity wavering by a few percent along the line, as ink from a real pen does. */
@@ -86,6 +88,9 @@ internal object InkBrushes {
                         .setCornerRounding(0.3f)
                         .addBehavior(aimedAtDirection())
                         .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_MIN_WIDTH, 1f, ResponseNode(calligraphyWidth, SourceNode(SourceNode.Source.DIRECTION_IN_RADIANS, 0f, TWO_PI)))))
+                        // The stroke starts and ends in a point: it grows over its first line widths and shrinks over its last.
+                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_POINT, 1f, SourceNode(SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, CALLIGRAPHY_TAPER))))
+                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_POINT, 1f, SourceNode(SourceNode.Source.DISTANCE_REMAINING_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, CALLIGRAPHY_TAPER))))
                         .build(),
                 ),
             )

@@ -24,16 +24,16 @@ class AngleGuideTest {
 
     @Test
     fun aLineWithinThreeDegreesSnapsAndKeepsItsLength() {
-        // About 2 degrees above horizontal.
-        val end = AngleGuide.snap(0f, 0f, 100f, -3.5f)
+        // About 1 degree above horizontal.
+        val end = AngleGuide.snap(0f, 0f, 100f, -1.7f)
         assertEquals(0f, end[1], 0.001f)
-        assertEquals(Math.hypot(100.0, 3.5).toFloat(), end[0], 0.01f)
-        // About 5 degrees off is left alone.
-        val loose = AngleGuide.snap(0f, 0f, 100f, -8.8f)
+        assertEquals(Math.hypot(100.0, 1.7).toFloat(), end[0], 0.01f)
+        // About 2 degrees off is left alone.
+        val loose = AngleGuide.snap(0f, 0f, 100f, -3.5f)
         assertEquals(100f, loose[0], 0.001f)
-        assertEquals(-8.8f, loose[1], 0.001f)
+        assertEquals(-3.5f, loose[1], 0.001f)
         // A diagonal snaps onto exactly 45.
-        val diagonal = AngleGuide.snap(10f, 10f, 70f, -48f)
+        val diagonal = AngleGuide.snap(10f, 10f, 70f, -49f)
         assertEquals(45f, AngleGuide.angle(10f, 10f, diagonal[0], diagonal[1]), 0.01f)
     }
 

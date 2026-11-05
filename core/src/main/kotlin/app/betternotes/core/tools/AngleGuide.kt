@@ -10,10 +10,10 @@ import kotlin.math.sin
 
 /**
  * The reference angles for straight lines: 0, 45, 90 and on round to 315, counted anticlockwise from the right as on a
- * protractor. A line within [SNAP_DEGREES] of one is turned onto it, and one within [SHOW_DEGREES] gets its centerline shown.
+ * protractor. A line within [SNAP_DEGREES] (1.5) of one is turned onto it, and one within [SHOW_DEGREES] gets its centerline shown.
  */
 object AngleGuide {
-    const val SNAP_DEGREES = 3f
+    const val SNAP_DEGREES = 1.5f
     const val SHOW_DEGREES = 10f
     private const val STEP = 45f
 

@@ -61,6 +61,27 @@ class CalligraphyWidthTest {
     }
 
     @Test
+    fun aStrokeStartsAndEndsInAPoint() {
+        // A vertical stroke is widest; near either end it is much narrower than in the middle.
+        val bitmap = Bitmap.createBitmap(600, 600, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.WHITE)
+        val batch = MutableStrokeInputBatch()
+        for (i in 0..40) batch.add(StrokeInput().apply { update(75f, 20f + i * 3f, i * 8L, InputToolType.STYLUS, 1f / 0.3527778f, 1f) })
+        val style = InkStyle(tool = InkTool.PEN, penType = PenType.CALLIGRAPHY, width = 12f, color = Color.BLACK)
+        val matrix = Matrix().apply { setScale(4f, 4f) }
+        canvas.save()
+        canvas.concat(matrix)
+        CanvasStrokeRenderer.create().draw(canvas, Stroke(InkBrushes.brush(style), batch), matrix)
+        canvas.restore()
+        fun rowWidth(y: Float): Int = (0 until 600).count { Color.red(bitmap.getPixel(it, (y * 4f).toInt())) < 128 }
+        val middle = rowWidth(80f)
+        assertTrue("middle $middle is wide", middle > 20)
+        assertTrue("near the start ${rowWidth(22f)} is narrower than the middle $middle", rowWidth(22f) < middle * 0.6f)
+        assertTrue("near the end ${rowWidth(138f)} is narrower than the middle $middle", rowWidth(138f) < middle * 0.6f)
+    }
+
+    @Test
     fun widthFollowsTheDirectionOfTheLine() {
         val vertical = widthAt(90.0)
         val horizontal = widthAt(0.0)

@@ -15,7 +15,7 @@ Version 1.0 (`versionCode 100`). Later requests count as 1.1. Rules are in `CLAU
 - **Color bar**: more favorites, remove, rearrange, accept and discard (up to 12 colors).
 - **Tape**: patterns (dots, lines, crosshatch), a shadow, thickness and opacity, always/hold/never straight, and tape that follows the pen
   (`TapePathItem`, stripes bend with the path). Straight lines (pen hold-to-line, line and arrow shapes, straight tape) show an angle tool
-  and snap within 3 degrees of 0, 45, 90 and on (`core/tools/AngleGuide.kt`, `canvas/AngleGuidePainter.kt`).
+  and snap within 1.5 degrees of 0, 45, 90 and on (`core/tools/AngleGuide.kt`, `canvas/AngleGuidePainter.kt`).
 - **Bubbles**: the tail of a speech or thought bubble can go all the way around.
 - Page files are at format version 4. `CodecTest` golden bytes are unchanged.
 
