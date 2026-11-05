@@ -115,4 +115,24 @@ class PageContentTest {
         assertEquals(start, seen)
         assertTrue(seen.isNotEmpty())
     }
+
+    @Test
+    fun aStampedBrushReachesTilesPastItsBoundsAndRedrawsThem() {
+        val points = StrokePointsBuilder().apply { add(100f, 100f); add(110f, 100f) }.build()
+        val stroke = StrokeItem(1, InkStyle(tool = InkTool.PENCIL, brush = BrushKind.OIL, width = 10f), points)
+        val pen = StrokeItem(2, InkStyle(width = 10f), points)
+        val content = PageContent(listOf(stroke, pen))
+
+        // 20 points below the line: past both strokes' bounds, which reach 7 points, but within the stamps' reach.
+        val below = Bounds(90f, 120f, 120f, 130f)
+        val inBounds = ArrayList<Long>()
+        val painting = ArrayList<Long>()
+        content.forEachIntersecting(below) { _, item -> inBounds += item.id }
+        content.forEachPaintingIn(below) { _, item -> painting += item.id }
+        assertEquals(emptyList<Long>(), inBounds)
+        assertEquals(listOf(1L), painting)
+
+        content.splice(intArrayOf(0), IntArray(0), emptyList())
+        assertEquals(stroke.paintBounds.bottom, content.takeDirtyBounds()!!.bottom, 0f)
+    }
 }

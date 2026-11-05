@@ -126,7 +126,7 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
 
     private fun paintItems(canvas: Canvas, content: PageContent, region: Bounds, scale: Float) {
         strokeToTile.setScale(scale, scale)
-        content.forEachIntersecting(region) { _, item ->
+        content.forEachPaintingIn(region) { _, item ->
             if (item is StrokeItem) {
                 ink.draw(canvas, source.mesh(item), strokeToTile)
             } else {

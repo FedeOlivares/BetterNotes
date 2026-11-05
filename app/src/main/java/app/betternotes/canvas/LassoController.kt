@@ -550,10 +550,7 @@ internal class LassoController(
 
     private fun recordDragNode(selected: Selection, scale: Float): Boolean {
         val editor = editor ?: return false
-        val bounds = selected.bounds ?: return false
-        // Stamped brushes reach past a stroke's bounds, by up to a line width.
-        val margin = selected.items.maxOf { (it as? StrokeItem)?.style?.width ?: 0f } * DRAG_MARGIN_OF_WIDTH + 2f
-        val box = Bounds(bounds.left - margin, bounds.top - margin, bounds.right + margin, bounds.bottom + margin)
+        val box = selected.items.map { it.paintBounds }.reduceOrNull(Bounds::union) ?: return false
         val width = ceil(box.width * scale).toInt().coerceAtLeast(1)
         val height = ceil(box.height * scale).toInt().coerceAtLeast(1)
         if (width > MAX_DRAG_NODE_PX || height > MAX_DRAG_NODE_PX || width.toLong() * height > MAX_DRAG_NODE_AREA) return false
@@ -685,8 +682,6 @@ internal class LassoController(
     }
 
     private companion object {
-        /** A stamp can reach this many line widths past the stroke's bounds. */
-        const val DRAG_MARGIN_OF_WIDTH = 2f
         const val MAX_DRAG_NODE_PX = 8192
         const val MAX_DRAG_NODE_AREA = 24_000_000L
         const val MARQUEE_COLOR = 0xFF4A9BF5.toInt()

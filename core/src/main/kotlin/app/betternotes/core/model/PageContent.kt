@@ -18,6 +18,9 @@ class PageContent(initial: List<PageItem> = emptyList()) {
     @PublishedApi
     internal var boxes = FloatArray(items.size * BOX_STRIDE)
 
+    @PublishedApi
+    internal var paintBoxes = FloatArray(items.size * BOX_STRIDE)
+
     var size = 0
         private set
 
@@ -42,6 +45,19 @@ class PageContent(initial: List<PageItem> = emptyList()) {
      */
     inline fun forEachIntersecting(region: Bounds, action: (index: Int, item: PageItem) -> Unit) {
         val box = boxes
+        for (i in 0 until size) {
+            val offset = i * 4
+            if (box[offset] <= region.right && region.left <= box[offset + 2] &&
+                box[offset + 1] <= region.bottom && region.top <= box[offset + 3]
+            ) {
+                action(i, items[i]!!)
+            }
+        }
+    }
+
+    /** Calls [action] for each item that can paint inside [region], in paint order. See [PageItem.paintBounds]. */
+    inline fun forEachPaintingIn(region: Bounds, action: (index: Int, item: PageItem) -> Unit) {
+        val box = paintBoxes
         for (i in 0 until size) {
             val offset = i * 4
             if (box[offset] <= region.right && region.left <= box[offset + 2] &&
@@ -109,12 +125,18 @@ class PageContent(initial: List<PageItem> = emptyList()) {
         boxes[offset + 1] = box.top
         boxes[offset + 2] = box.right
         boxes[offset + 3] = box.bottom
+        val painted = item.paintBounds
+        paintBoxes[offset] = painted.left
+        paintBoxes[offset + 1] = painted.top
+        paintBoxes[offset + 2] = painted.right
+        paintBoxes[offset + 3] = painted.bottom
     }
 
     private fun move(from: Int, to: Int, count: Int) {
         if (count == 0 || from == to) return
         System.arraycopy(items, from, items, to, count)
         System.arraycopy(boxes, from * BOX_STRIDE, boxes, to * BOX_STRIDE, count * BOX_STRIDE)
+        System.arraycopy(paintBoxes, from * BOX_STRIDE, paintBoxes, to * BOX_STRIDE, count * BOX_STRIDE)
     }
 
     private fun ensureCapacity(needed: Int) {
@@ -122,10 +144,11 @@ class PageContent(initial: List<PageItem> = emptyList()) {
         val capacity = maxOf(needed, items.size * 2)
         items = items.copyOf(capacity)
         boxes = boxes.copyOf(capacity * BOX_STRIDE)
+        paintBoxes = paintBoxes.copyOf(capacity * BOX_STRIDE)
     }
 
     private fun markDirty(item: PageItem) {
-        dirty = dirty?.union(item.bounds) ?: item.bounds
+        dirty = dirty?.union(item.paintBounds) ?: item.paintBounds
     }
 
     private fun checkIndex(index: Int): Int {

@@ -202,7 +202,9 @@ class SearchExportPomodoroTest {
         val thumbnail = DocumentExporter(store, "T", listOf(a4)).thumbnail(0, 100)
         assertEquals(100, thumbnail.width)
         assertEquals(142, thumbnail.height)
-        assertTrue("ink missing", Color.red(pixel(thumbnail, 34, 34)) < 120)
+        // The line lands wherever the scale puts it, so look at the rows around it rather than at one pixel.
+        val darkest = (28..40).minOf { y -> Color.red(pixel(thumbnail, 34, y)) }
+        assertTrue("ink missing, darkest $darkest", darkest < 120)
         assertTrue("paper missing", Color.red(pixel(thumbnail, 50, 100)) > 240)
     }
 

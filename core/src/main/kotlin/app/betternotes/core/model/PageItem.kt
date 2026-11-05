@@ -61,6 +61,9 @@ sealed interface PageItem {
     /** A box containing everything the item paints, in the coordinates of its page. */
     val bounds: Bounds
 
+    /** A box containing every pixel the item can paint, which for a stamped brush is wider than [bounds]. */
+    val paintBounds: Bounds get() = bounds
+
     /** A copy moved and scaled by [t], which must not flip. */
     fun transformed(t: Affine): PageItem
 }
@@ -77,6 +80,9 @@ data class StrokeItem(
     // Square tips reach further on the diagonal, and sqrt(2) / 2 of the width covers them too.
     override val bounds = points.bounds().outset(style.width * SQUARE_TIP_REACH)
 
+    // The creative brushes throw stamps and particles well past the line. Selection boxes and hit tests keep to bounds.
+    override val paintBounds = if (style.tool == InkTool.PENCIL) points.bounds().outset(style.width * CREATIVE_BRUSH_REACH) else bounds
+
     override fun transformed(t: Affine): StrokeItem {
         val factor = t.meanScale
         val scaledStyle = style.copy(width = style.width * factor, line = style.line.scaled(factor))
@@ -85,6 +91,7 @@ data class StrokeItem(
 
     private companion object {
         const val SQUARE_TIP_REACH = 0.7072f
+        const val CREATIVE_BRUSH_REACH = 2.5f
     }
 }
 
