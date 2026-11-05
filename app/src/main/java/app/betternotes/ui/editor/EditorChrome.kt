@@ -1,5 +1,7 @@
 package app.betternotes.ui.editor
 
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.text.BasicTextField
@@ -474,6 +476,7 @@ private fun BoxScope.PositionControls(state: EditorState) {
         )
     }
     val fraction = state.scrollFraction
+    val travel = remember { mutableFloatStateOf(1f) }
     Column(
         modifier = Modifier
             .align(Alignment.TopEnd)
@@ -484,10 +487,25 @@ private fun BoxScope.PositionControls(state: EditorState) {
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints.copy(minHeight = 0))
                 val room = (constraints.maxHeight - placeable.height).coerceAtLeast(0)
+                travel.floatValue = room.toFloat()
                 val top = if (fraction == null) room / 2 else (room * fraction).roundToInt()
                 layout(placeable.width, constraints.maxHeight) { placeable.place(0, top) }
             }
             .masksInk(state, "page-buttons")
+            .pointerInput(Unit) {
+                // Dragging the pair along the edge scrolls the document to match, the way a scrubber does.
+                // The pair moves under the finger, so each step is only what the finger moved over it.
+                var at = 0f
+                detectDragGestures(
+                    onDragStart = { at = state.scrollFraction ?: 0f },
+                    onDragEnd = { state.scrubTo(at, true) },
+                    onDragCancel = { state.scrubTo(at, true) },
+                ) { change, drag ->
+                    change.consume()
+                    at = (at + drag.y / travel.floatValue.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                    state.scrubTo(at, false)
+                }
+            }
             .shadow(4.dp, CircleShape, clip = false)
             .clip(CircleShape)
             .background(colors.pill)

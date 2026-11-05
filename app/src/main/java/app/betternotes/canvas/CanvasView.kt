@@ -314,6 +314,22 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             overlay.laserColor = value
         }
 
+    /** Moves the view to [fraction] of the scrollable range, as a scrubber does. [last] lets the page settle sharp. */
+    fun scrollToFraction(fraction: Float, last: Boolean) {
+        val layout = layout ?: return
+        if (layout.isInfinite || width == 0) return
+        stopFling()
+        val scale = viewport.pxPerPt
+        val max = layout.maxPanY(scale, height, pageMarginPx)
+        val min = layout.minPanY(scale, height, pageMarginPx)
+        viewport.panY = max - fraction.coerceIn(0f, 1f) * (max - min)
+        clampPan()
+        if (last) settlePan()
+        tiles.invalidate()
+        onViewMoved()
+        overlay.invalidate()
+    }
+
     /** Brings a page to the view at the current zoom. */
     fun goToPage(index: Int) {
         val layout = layout ?: return
