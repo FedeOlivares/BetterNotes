@@ -633,6 +633,30 @@ class CanvasViewTest {
         assertEquals(1, pageContent().size)
     }
 
+    @Test
+    fun aFingerTappingJustOutsideACircleDrawnWithCircleToLassoStillSelectsIt() {
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle(), circleToLasso = true) }
+        var requested = false
+        onMain { canvas.onLassoRequested = { requested = true } }
+        stylusStroke(worldToScreen(190f, 200f), worldToScreen(210f, 200f))
+        waitUntil { pageContent().size == 1 }
+        val circle = (0..60).map { i ->
+            val angle = 2.0 * Math.PI * 1.05 * i / 60
+            worldToScreen((200 + 60 * Math.cos(angle)).toFloat(), (200 + 60 * Math.sin(angle)).toFloat())
+        }
+        stylusPath(circle)
+        waitUntil { pageContent().size == 2 }
+        // 4.5 mm from the line, which is still within the half centimetre a finger may be off by.
+        val edge = worldToScreen(260f, 200f)
+        val outside = edge.first + 4.5f * canvas.resources.displayMetrics.xdpi / 25.4f to edge.second
+        val tool = MotionEvent.TOOL_TYPE_FINGER
+        val down = SystemClock.uptimeMillis()
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(outside)))
+        send(event(down, down + 40, MotionEvent.ACTION_UP, tool, listOf(outside)))
+        waitUntil { onMain { requested } }
+        assertEquals(1, pageContent().size)
+    }
+
     /** Draws a circle round a stroke with circle to lasso and touches it, as the editor does, then lets the lasso tool take over. */
     private fun lassoFromCircle(): () -> Int {
         onMain { canvas.tool = CanvasTool.Ink(InkStyle(), circleToLasso = true) }

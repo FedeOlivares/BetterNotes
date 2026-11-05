@@ -2321,8 +2321,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val editor = editor ?: return false
         if (loop.pageId != pageId) return false
         // A finger is blunter than the pen, so it may also touch inside the circle.
-        val reachDp = if (byFinger) FINGER_LOOP_REACH_DP else LOOP_TAP_REACH_DP
-        val reach = reachDp * resources.displayMetrics.density / viewport.pxPerPt
+        val reach = if (byFinger) {
+            // Measured from the edge of the line, so half its width comes on top of the millimetres.
+            FINGER_LOOP_REACH_MM * resources.displayMetrics.xdpi / MM_PER_INCH / viewport.pxPerPt + loop.item.style.width / 2f
+        } else {
+            LOOP_TAP_REACH_DP * resources.displayMetrics.density / viewport.pxPerPt
+        }
         val touched = StrokeGestures.isNearLine(loop.item.points, x, y, reach) ||
             byFinger && StrokeGestures.isInside(loop.item.points, x, y)
         if (!touched) return false
@@ -2592,7 +2596,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val MINIMAP_ZOOM_OUT = 0.25f
         const val SCRIBBLE_REACH_PT = 2f
         const val LOOP_TAP_REACH_DP = 14f
-        const val FINGER_LOOP_REACH_DP = 28f
+        /** How far from the edge of a circle's line a finger may land and still touch it, in millimetres on the glass. */
+        const val FINGER_LOOP_REACH_MM = 5f
+        private const val MM_PER_INCH = 25.4f
         const val FINGER_BUTTON_REACH_DP = 30f
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
