@@ -45,7 +45,6 @@ internal object InkBrushes {
     private const val EPSILON_PT = 0.003f
 
     private const val TWO_PI = 6.2831855f
-    private const val PENCIL_GRAIN_PT = 5f
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
     private const val CALLIGRAPHY_NIB_RATIO = 0.25f
@@ -147,18 +146,22 @@ internal object InkBrushes {
         .setInputModel(BrushFamily.InputModel.SlidingWindowModel())
         .build()
 
-    /** A picture tiled over the stroke, fixed to the page so that it does not slide as the pen moves. */
+    /**
+     * A picture tiled over the stroke. It mirrors at its edges, so there is no seam. [width] is along the page's x
+     * axis and [height] along y, in multiples of the brush size, so the picture grows with the pen's width.
+     */
     private fun tiled(
         id: String,
-        size: Float,
-        unit: BrushPaint.TextureLayer.SizeUnit = BrushPaint.TextureLayer.SizeUnit.STROKE_COORDINATES,
+        width: Float,
+        height: Float,
         degrees: Float = 0f,
+        wrapX: BrushPaint.TextureLayer.Wrap = BrushPaint.TextureLayer.Wrap.MIRROR,
     ) = BrushPaint.TilingTexture(
-        id, size, size, 0f, 0f, degrees,
-        unit,
+        id, width, height, 0f, 0f, degrees,
+        BrushPaint.TextureLayer.SizeUnit.BRUSH_SIZE,
         BrushPaint.TilingTexture.Origin.STROKE_SPACE_ORIGIN,
-        BrushPaint.TextureLayer.Wrap.REPEAT,
-        BrushPaint.TextureLayer.Wrap.REPEAT,
+        wrapX,
+        BrushPaint.TextureLayer.Wrap.MIRROR,
         BrushPaint.TextureLayer.BlendMode.MODULATE,
     )
 
@@ -179,7 +182,7 @@ internal object InkBrushes {
                         setCornerRounding(1f)
                         addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.55f, 0.8f, noise(1, 0.3f)))
                     },
-                    tiled(BrushTextures.GRAIN, PENCIL_GRAIN_PT),
+                    tiled(BrushTextures.GRAIN, 13.8f, 1f),
                 ),
             )
             // Nine thin bristles on one faint bleed that spans the line (the glow trick, smaller). Each bristle runs
@@ -212,7 +215,7 @@ internal object InkBrushes {
                             setScaleY(1.7f)
                             addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.35f, 0.6f, noise(10 + c, 0.4f)))
                         },
-                        tiled(BrushTextures.WASH, 2.6f - 0.7f * c, BrushPaint.TextureLayer.SizeUnit.BRUSH_SIZE, 37f * c),
+                        tiled(BrushTextures.WASH, 14f - 4f * c, 1.7f - 0.5f * c, 90f * c),
                     )
                 },
             )
@@ -279,7 +282,7 @@ internal object InkBrushes {
                         setScaleX(3.2f)
                         setScaleY(3.2f)
                     },
-                    tiled(BrushTextures.LEAVES, 4.4f, BrushPaint.TextureLayer.SizeUnit.BRUSH_SIZE),
+                    tiled(BrushTextures.LEAVES, 13.6f, 3.2f, wrapX = BrushPaint.TextureLayer.Wrap.REPEAT),
                 ),
             )
             BrushKind.CROSS -> brushFamily(
