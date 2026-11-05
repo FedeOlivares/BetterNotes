@@ -9,6 +9,11 @@ import androidx.core.graphics.createBitmap
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.model.PageSource
 import kotlin.math.roundToInt
+import android.util.LruCache
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.withContext
 
 /** One-off renders of a whole PDF page, for the library's tiles and the page switcher. */
 object PdfThumbnails {
@@ -29,4 +34,23 @@ object PdfThumbnails {
             }
         }
     }
+
+    private val cache = object : LruCache<String, Bitmap>(CACHE_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    }
+
+    /** One at a time and off the main thread, so a long document's thumbnails never compete with the canvas. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val worker: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+
+    /** A cached [render], produced in the background. The bitmap is shared, so never recycle it. */
+    suspend fun cached(store: DocumentStore, source: PageSource.PdfPage, widthPx: Int): Bitmap {
+        val key = "${source.assetId}:${source.pageIndex}:$widthPx"
+        cache.get(key)?.let { return it }
+        return withContext(worker) {
+            cache.get(key) ?: render(store, source, widthPx).also { cache.put(key, it) }
+        }
+    }
+
+    private const val CACHE_BYTES = 24 * 1024 * 1024
 }

@@ -156,6 +156,7 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
         yield()
         value = state.thumbnail(page.id, THUMBNAIL_PX)
     }
+    val pdf by produceState<Bitmap?>(null, page.id) { value = state.pdfThumbnail(page.id, THUMBNAIL_PX) }
     val size = page.size
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
         Box(
@@ -167,6 +168,7 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
                 .then(if (isCurrent || isDragged) Modifier.border(2.dp, colors.accent, shape) else Modifier)
                 .clickable(role = Role.Button) { state.goToPage(index) },
         ) {
+            pdf?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
             thumbnail?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
         }
         Box {
