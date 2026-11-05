@@ -702,6 +702,41 @@ class CanvasViewTest {
         assertEquals(1f, onMain { tape().opacity }, 0.001f)
     }
 
+    private fun tapeItems() = pageContent().let { c -> (0 until c.size).map { c[it] } }
+
+    @Test
+    fun tapeFollowsThePenWhenItIsNeverStraight() {
+        onMain { canvas.tool = CanvasTool.Tape(app.betternotes.core.tools.TapeOptions(lineMode = app.betternotes.core.tools.TapeLineMode.NEVER)) }
+        val wave = (0..30).map { i -> worldToScreen(100f + i * 8f, 300f + Math.sin(i / 4.0).toFloat() * 40f) }
+        stylusPath(wave)
+        waitUntil { tapeItems().any { it is app.betternotes.core.model.TapePathItem } }
+        val strip = onMain { tapeItems().filterIsInstance<app.betternotes.core.model.TapePathItem>().single() }
+        assertTrue("the strip keeps the bends", strip.pointCount > 5)
+        assertTrue(onMain { tapeItems().none { it is app.betternotes.core.model.ShapeItem } })
+    }
+
+    @Test
+    fun tapeStraightensWhenThePenIsHeldInTheHoldMode() {
+        onMain {
+            canvas.tool = CanvasTool.Tape(
+                app.betternotes.core.tools.TapeOptions(lineMode = app.betternotes.core.tools.TapeLineMode.HOLD, holdMs = app.betternotes.core.tools.TapeOptions.MIN_HOLD_MS),
+            )
+        }
+        val tool = MotionEvent.TOOL_TYPE_STYLUS
+        val down = SystemClock.uptimeMillis()
+        val a = worldToScreen(100f, 300f)
+        val b = worldToScreen(180f, 340f)
+        val c = worldToScreen(260f, 300f)
+        send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(a), 1f))
+        send(event(down, down + 10, MotionEvent.ACTION_MOVE, tool, listOf(b), 1f))
+        send(event(down, down + 20, MotionEvent.ACTION_MOVE, tool, listOf(c), 1f))
+        // Held still past the hold time.
+        SystemClock.sleep(600)
+        send(event(down, down + 640, MotionEvent.ACTION_UP, tool, listOf(c), 1f))
+        waitUntil { tapeItems().any { it is app.betternotes.core.model.ShapeItem } }
+        assertTrue(onMain { tapeItems().none { it is app.betternotes.core.model.TapePathItem } })
+    }
+
     @Test
     fun theToolIsGivenBackWhenAnOutsideTouchEndsTheSelectionMadeFromACircle() {
         val dropped = lassoFromCircle()

@@ -7,6 +7,7 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
@@ -41,6 +42,7 @@ val PageItem.kind: ItemKind
         is TextItem -> ItemKind.TEXT
         is StickyNoteItem -> ItemKind.STICKY_NOTE
         is AudioItem -> ItemKind.AUDIO
+        is TapePathItem -> ItemKind.TAPE
     }
 
 /** Ink and shapes, since a stray eraser pass should not destroy anything harder to make again. */

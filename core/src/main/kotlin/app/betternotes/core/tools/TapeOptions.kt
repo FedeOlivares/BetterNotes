@@ -3,6 +3,7 @@ package app.betternotes.core.tools
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.TapePattern
 import app.betternotes.core.model.TapeShadow
 import kotlin.math.atan2
@@ -51,6 +52,10 @@ data class TapeOptions(
         return if (at >= 0) copy(selectedColor = at) else copy(colors = colors + tape, selectedColor = colors.size)
     }
 
+    /** A strip laid along [points], packed x,y pairs along the pen's path. */
+    fun pathItem(id: Long, points: FloatArray): TapePathItem =
+        TapePathItem(id, points, width.toFloat(), color, opacity, pattern, shadow)
+
     /** A strip torn off between two points on the page. */
     fun item(id: Long, x0: Float, y0: Float, x1: Float, y1: Float): ShapeItem {
         val length = hypot(x1 - x0, y1 - y0)
@@ -91,4 +96,44 @@ data class TapeOptions(
 fun ShapeItem.withTape(thickness: Float?, opacity: Float?): ShapeItem {
     val newFrame = if (thickness == null) frame else Frame(frame.centerX - frame.width / 2f, frame.centerY - thickness / 2f, frame.width, thickness, frame.rotation)
     return copy(frame = newFrame, opacity = opacity ?: this.opacity)
+}
+
+/** A strip of tape that follows the pen with a new thickness and/or opacity. Null leaves a value as it is. */
+fun TapePathItem.withTape(thickness: Float?, opacity: Float?): TapePathItem =
+    copy(width = thickness ?: width, opacity = opacity ?: this.opacity)
+
+/**
+ * The pen's path for tape that follows it: samples closer than [minGap] to the one before are dropped, and the
+ * rest are averaged with their neighbours so a shaky hand does not make the edges ragged. The ends stay where they were.
+ */
+fun smoothTapePath(raw: FloatArray, minGap: Float = 3f): FloatArray {
+    val kept = ArrayList<Float>()
+    var i = 0
+    while (i < raw.size) {
+        val x = raw[i]
+        val y = raw[i + 1]
+        val last = kept.size
+        if (last == 0 || hypot(x - kept[last - 2], y - kept[last - 1]) >= minGap) {
+            kept += x
+            kept += y
+        }
+        i += 2
+    }
+    // The last sample is the end of the strip, whether or not it is far from the one before it.
+    if (raw.size >= 2 && (kept[kept.size - 2] != raw[raw.size - 2] || kept[kept.size - 1] != raw[raw.size - 1])) {
+        kept += raw[raw.size - 2]
+        kept += raw[raw.size - 1]
+    }
+    val count = kept.size / 2
+    val out = FloatArray(kept.size)
+    for (p in 0 until count) {
+        if (p == 0 || p == count - 1) {
+            out[p * 2] = kept[p * 2]
+            out[p * 2 + 1] = kept[p * 2 + 1]
+        } else {
+            out[p * 2] = (kept[p * 2 - 2] + 2f * kept[p * 2] + kept[p * 2 + 2]) / 4f
+            out[p * 2 + 1] = (kept[p * 2 - 1] + 2f * kept[p * 2 + 1] + kept[p * 2 + 3]) / 4f
+        }
+    }
+    return out
 }

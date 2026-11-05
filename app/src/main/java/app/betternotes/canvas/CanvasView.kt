@@ -60,6 +60,7 @@ import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VideoItem
@@ -87,6 +88,7 @@ import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
+import app.betternotes.core.tools.TapeLineMode
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.tools.cellAt
 import app.betternotes.core.tools.typedText
@@ -597,6 +599,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         strokeWidth = LOUPE_BOX_WIDTH_DP * resources.displayMetrics.density
     }
     private var shapePointer = -1
+    private var tapeHoldMs = 0L
+
+    /** The pen has been held still while laying tape in the hold mode: the strip straightens. */
+    private val tapeHold = Runnable { shapes.straightenTape() }
 
     private val shapes by lazy {
         ShapeController(
@@ -611,7 +617,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), item))
                     syncChanges()
                     // A new shape is selected, with its handles showing. Tape has none and stays on the tool.
-                    if (item.kind != ShapeKind.TAPE) selectLast(pageId)
+                    if (item !is TapePathItem && !(item is ShapeItem && item.kind == ShapeKind.TAPE)) selectLast(pageId)
                 }
             },
         )
@@ -1143,7 +1149,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
         } else if (tool is CanvasTool.Tape) {
             shapePointer = pointerId
-            shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
+            if (tool.options.lineMode == TapeLineMode.ALWAYS) {
+                shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
+            } else {
+                // Never straight, or straight once the pen is held: the tape follows the pen.
+                shapes.startTape(index, pageX(x, index), pageY(y, index), tool.options)
+                tapeHoldMs = if (tool.options.lineMode == TapeLineMode.HOLD) tool.options.holdMs.toLong() else 0L
+                if (tapeHoldMs > 0L) postDelayed(tapeHold, tapeHoldMs)
+            }
         } else if (tool is CanvasTool.Ink) {
             if (tool.circleToLasso && selectLoopAt(index, page.id, pageX(x, index), pageY(y, index))) return
             drawStyle = tool.style
@@ -1184,7 +1197,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return
         }
         if (pointerId == shapePointer) {
-            shapes.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+            if (shapes.isLayingTape) {
+                val slop = HOLD_SLOP_DP * resources.displayMetrics.density / viewport.pxPerPt
+                if (shapes.moveTape(pageX(x, drawPageIndex), pageY(y, drawPageIndex), slop) && tapeHoldMs > 0L) {
+                    removeCallbacks(tapeHold)
+                    postDelayed(tapeHold, tapeHoldMs)
+                }
+            } else {
+                shapes.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+            }
             return
         }
         if (erase != null) eraseAt(x, y)
@@ -1212,6 +1233,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (pointerId == shapePointer) {
             shapePointer = -1
+            removeCallbacks(tapeHold)
             if (areaKind != AreaKind.NONE) finishAreaDrag() else shapes.end()
             return
         }
@@ -1258,6 +1280,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (pointerId == shapePointer) {
             shapePointer = -1
+            removeCallbacks(tapeHold)
             areaKind = AreaKind.NONE
             shapes.cancel()
             return

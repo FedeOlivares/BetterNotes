@@ -18,6 +18,7 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.tools.withTape
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.ResizeHandle
@@ -408,8 +409,11 @@ internal class LassoController(
 
     /** The thickness and opacity of the first strip of tape in the selection, or null if it holds none. */
     fun selectedTape(): TapeLook? {
-        val tape = selection?.items?.firstOrNull { it is ShapeItem && it.kind == ShapeKind.TAPE } as? ShapeItem ?: return null
-        return TapeLook(tape.frame.height, tape.opacity)
+        for (item in selection?.items ?: return null) {
+            if (item is ShapeItem && item.kind == ShapeKind.TAPE) return TapeLook(item.frame.height, item.opacity)
+            if (item is TapePathItem) return TapeLook(item.width, item.opacity)
+        }
+        return null
     }
 
     /**
@@ -420,7 +424,13 @@ internal class LassoController(
         val selected = selection ?: return
         val page = pageContent() ?: return
         if (adjustFrom == null) adjustFrom = selected.items
-        val changed = selected.items.map { item -> if (item is ShapeItem && item.kind == ShapeKind.TAPE) item.withTape(thickness, opacity) else item }
+        val changed = selected.items.map { item ->
+            when {
+                item is ShapeItem && item.kind == ShapeKind.TAPE -> item.withTape(thickness, opacity)
+                item is TapePathItem -> item.withTape(thickness, opacity)
+                else -> item
+            }
+        }
         page.splice(selected.indices, selected.indices, changed)
         selection = Selection(selected.pageId, selected.indices, changed)
         redraw()

@@ -33,6 +33,11 @@ class TapeGalleryTest {
         // Warning tape, and a slanted strip with a stronger shadow.
         painter.paint(canvas, TapeOptions(selectedColor = TapeOptions().colors.size, pattern = TapePattern.DOTS, opacity = 0.5f).withWidth(28).item(id++, 20f, y, 300f, y))
         painter.paint(canvas, TapeOptions(selectedColor = 1, pattern = TapePattern.LINES, shadowDistance = 4f, shadowOpacity = 0.5f).withWidth(24).item(id++, 40f, 245f, 280f, 190f))
+        // Tape that follows a curve, warning and patterned.
+        val curve = FloatArray(80) { i -> if (i % 2 == 0) 30f + (i / 2) * 6.5f else 120f + Math.sin((i / 2) / 5.0).toFloat() * 30f }
+        painter.paint(canvas, TapeOptions(selectedColor = TapeOptions().colors.size).withWidth(22).pathItem(id++, curve))
+        val curve2 = FloatArray(80) { i -> if (i % 2 == 0) 30f + (i / 2) * 6.5f else 200f + Math.cos((i / 2) / 5.0).toFloat() * 25f }
+        painter.paint(canvas, TapeOptions(selectedColor = 3, pattern = TapePattern.CROSSHATCH).withWidth(22).pathItem(id++, curve2))
         File(context.getExternalFilesDir(null), "tapes.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

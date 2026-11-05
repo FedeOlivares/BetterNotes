@@ -13,6 +13,7 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.TapePattern
 import app.betternotes.core.model.TapeShadow
 import app.betternotes.core.model.TextStyle
@@ -41,6 +42,7 @@ private const val TAG_AUDIO = 7
 private const val TAG_STYLED_TEXT = 8
 private const val TAG_STYLED_TABLE = 9
 private const val TAG_VIDEO = 10
+private const val TAG_TAPE_PATH = 11
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -162,6 +164,20 @@ private fun ByteWriter.item(item: PageItem) {
                 float(item.shadow.opacity)
             }
         }
+        is TapePathItem -> {
+            require(version >= 4) { "Tape that follows the pen needs page format 4" }
+            byte(TAG_TAPE_PATH)
+            long(item.id)
+            float(item.width)
+            int(item.fillColor)
+            float(item.opacity)
+            TAPE_PATTERNS.write(this, item.pattern)
+            float(item.shadow.distance)
+            float(item.shadow.angleDegrees)
+            float(item.shadow.opacity)
+            varint(item.pointCount)
+            for (value in item.points) float(value)
+        }
         is ImageItem -> {
             byte(TAG_IMAGE)
             long(item.id)
@@ -276,6 +292,16 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         pattern = if (version >= 4) TAPE_PATTERNS.read(this) else TapePattern.PLAIN,
         shadow = if (version >= 4) TapeShadow(float(), float(), float()) else TapeShadow.NONE,
     )
+    TAG_TAPE_PATH -> {
+        val id = long()
+        val width = float()
+        val color = int()
+        val opacity = float()
+        val pattern = TAPE_PATTERNS.read(this)
+        val shadow = TapeShadow(float(), float(), float())
+        val count = count(2 * Float.SIZE_BYTES)
+        TapePathItem(id, floats(count * 2), width, color, opacity, pattern, shadow)
+    }
     TAG_IMAGE -> ImageItem(
         id = long(),
         frame = frame(),

@@ -18,6 +18,7 @@ import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.TapePattern
 import app.betternotes.core.model.TapeShadow
 import app.betternotes.core.model.StickyNoteItem
@@ -77,6 +78,15 @@ class CodecTest {
             fillColor = 0xB3A8D8FF.toInt(),
             pattern = TapePattern.CROSSHATCH,
             shadow = TapeShadow(2.5f, 120f, 0.4f),
+        ),
+        TapePathItem(
+            23,
+            floatArrayOf(10f, 10f, 40f, 30f, 80f, 25f, 120f, 60f),
+            width = 18f,
+            fillColor = 0xB3F6A9A0.toInt(),
+            opacity = 0.8f,
+            pattern = TapePattern.LINES,
+            shadow = TapeShadow(1.5f, 45f, 0.3f),
         ),
         ImageItem(3, frame, "photo-ñ.jpg", ImageShape.ELLIPSE, 8f, 0xFF00FF00.toInt(), 2f),
         TextItem(4, frame, "Hola, ¿qué tal? 日本語 🙂", 14f, 0xFF0000FF.toInt()),

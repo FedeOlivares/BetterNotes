@@ -27,6 +27,7 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.SHADOW_SOFTNESS
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.TapePattern
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.model.StickyNoteItem
@@ -61,6 +62,7 @@ internal class ItemPainter(
         when (item) {
             is StrokeItem -> paintStroke(canvas, item)
             is ShapeItem -> inFrame(canvas, item.frame) { paintShape(canvas, item) }
+            is TapePathItem -> paintTapePath(canvas, item)
             is TableItem -> inFrame(canvas, item.frame) { paintTable(canvas, item) }
             is TextItem -> inFrame(canvas, item.frame) {
                 paintText(canvas, item.text, item.textSize, item.color, item.frame.width, item.frame.height, item.style)
@@ -139,6 +141,140 @@ internal class ItemPainter(
             canvas.withClip(path) { paintPattern(this, item.pattern, width, height) }
         }
         canvas.restoreToCount(layer)
+    }
+
+    private val geometry = TapePathGeometry()
+    private val spot = FloatArray(2)
+    private val strip = Path()
+    private val band = Path()
+
+    /** Tape laid along a path: its shadow, color or warning stripes, and printed marks, all following the strip's own direction. */
+    private fun paintTapePath(canvas: Canvas, item: TapePathItem) {
+        geometry.build(item.points)
+        if (geometry.count < 2) return
+        val half = item.width / 2f
+        stripOutline(half)
+        val alpha = (item.opacity * OPAQUE).roundToInt()
+        val shadow = item.shadow
+        if (shadow.isVisible) {
+            val radians = Math.toRadians(shadow.angleDegrees.toDouble())
+            fill.color = 0xFF000000.toInt()
+            fill.alpha = (shadow.opacity * alpha).roundToInt().coerceIn(0, 255)
+            canvas.save()
+            canvas.clipOutPath(strip)
+            canvas.translate((shadow.distance * Math.cos(radians)).toFloat(), (shadow.distance * Math.sin(radians)).toFloat())
+            canvas.drawPath(strip, fill)
+            line.pathEffect = null
+            line.style = Paint.Style.STROKE
+            line.color = 0xFF000000.toInt()
+            line.strokeWidth = SHADOW_SOFTNESS
+            line.alpha = (shadow.opacity * alpha * 0.4f).roundToInt().coerceIn(0, 255)
+            canvas.drawPath(strip, line)
+            canvas.restore()
+        }
+        val box = item.bounds
+        val layer = canvas.saveLayerAlpha(box.left, box.top, box.right, box.bottom, alpha)
+        canvas.withClip(strip) {
+            if (item.fillColor == TapeOptions.WARNING_FILL) {
+                fill.color = TapeOptions.WARNING_FILL
+                drawPath(strip, fill)
+                fill.color = TapeOptions.WARNING_STRIPE
+                val stripe = item.width * WARNING_STRIPE_RATIO
+                var a = -item.width
+                while (a < geometry.length) {
+                    // A black band slanted across the strip, bent with it: oblique to the direction of travel at that place.
+                    band.rewind()
+                    for (k in 0..BAND_STEPS) {
+                        val u = -half + item.width * k / BAND_STEPS
+                        geometry.place(a + (u + half), u, spot)
+                        if (k == 0) band.moveTo(spot[0], spot[1]) else band.lineTo(spot[0], spot[1])
+                    }
+                    for (k in BAND_STEPS downTo 0) {
+                        val u = -half + item.width * k / BAND_STEPS
+                        geometry.place(a + stripe + (u + half), u, spot)
+                        band.lineTo(spot[0], spot[1])
+                    }
+                    band.close()
+                    drawPath(band, fill)
+                    a += 2f * stripe
+                }
+            } else {
+                fill.color = item.fillColor
+                drawPath(strip, fill)
+            }
+            if (item.pattern != TapePattern.PLAIN) paintPathPattern(this, item.pattern, item.width)
+        }
+        canvas.restoreToCount(layer)
+    }
+
+    /** The outline of the strip: along one side and back along the other. */
+    private fun stripOutline(half: Float) {
+        strip.rewind()
+        val length = geometry.length
+        var s = 0f
+        while (true) {
+            geometry.place(s, half, spot)
+            if (s == 0f) strip.moveTo(spot[0], spot[1]) else strip.lineTo(spot[0], spot[1])
+            if (s >= length) break
+            s = minOf(s + OUTLINE_STEP, length)
+        }
+        while (true) {
+            geometry.place(s, -half, spot)
+            strip.lineTo(spot[0], spot[1])
+            if (s <= 0f) break
+            s = maxOf(s - OUTLINE_STEP, 0f)
+        }
+        strip.close()
+    }
+
+    /** White marks laid out along the strip, in its own frame, so they bend with it. */
+    private fun paintPathPattern(canvas: Canvas, pattern: TapePattern, width: Float) {
+        mark.color = 0xFFFFFFFF.toInt()
+        mark.alpha = PATTERN_ALPHA
+        val half = width / 2f
+        val gap = maxOf(width * PATTERN_GAP, MIN_PATTERN_GAP)
+        val length = geometry.length
+        when (pattern) {
+            TapePattern.DOTS -> {
+                mark.style = Paint.Style.FILL
+                val radius = maxOf(gap * 0.14f, 0.5f)
+                var row = 0
+                var u = -half + gap / 2f
+                while (u < half) {
+                    var s = if (row % 2 == 0) gap / 2f else gap
+                    while (s < length) {
+                        geometry.place(s, u, spot)
+                        canvas.drawCircle(spot[0], spot[1], radius, mark)
+                        s += gap
+                    }
+                    u += gap * 0.6f
+                    row++
+                }
+            }
+            TapePattern.LINES, TapePattern.CROSSHATCH -> {
+                mark.style = Paint.Style.STROKE
+                mark.strokeWidth = maxOf(gap * 0.09f, 0.4f)
+                var a = -width
+                while (a < length) {
+                    obliqueLine(canvas, a, half, forward = true)
+                    if (pattern == TapePattern.CROSSHATCH) obliqueLine(canvas, a, half, forward = false)
+                    a += gap
+                }
+            }
+            TapePattern.PLAIN -> Unit
+        }
+    }
+
+    /** A line slanted at 45 degrees across the strip from distance [a], bent with the strip. */
+    private fun obliqueLine(canvas: Canvas, a: Float, half: Float, forward: Boolean) {
+        band.rewind()
+        for (k in 0..BAND_STEPS) {
+            val u = -half + 2f * half * k / BAND_STEPS
+            val s = if (forward) a + (u + half) else a + (half - u)
+            geometry.place(s, u, spot)
+            if (k == 0) band.moveTo(spot[0], spot[1]) else band.lineTo(spot[0], spot[1])
+        }
+        canvas.drawPath(band, mark)
     }
 
     /** White marks over a strip: tiny dots, thin slanted lines, or two sets of lines crossing. */
@@ -375,6 +511,8 @@ internal class ItemPainter(
         const val PATTERN_GAP = 0.3f
         const val MIN_PATTERN_GAP = 3f
         const val PATTERN_ALPHA = 210
+        const val BAND_STEPS = 6
+        const val OUTLINE_STEP = 1.5f
         const val DOT_LENGTH = 0.01f
         const val CELL_PADDING = 3f
         const val TEXT_LAYOUT_SCALE = 8f

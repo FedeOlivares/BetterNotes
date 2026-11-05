@@ -350,6 +350,65 @@ fun PageItem.withId(id: Long): PageItem = when (this) {
     is TableItem -> copy(id = id)
     is VideoItem -> copy(id = id)
     is AudioItem -> copy(id = id)
+    is TapePathItem -> copy(id = id)
+}
+
+/**
+ * A strip of tape laid along the pen's path, as wide as [width] and following every bend. [points] are packed
+ * x,y pairs along its middle. A pattern and the warning stripes run along the strip, turning with it.
+ */
+class TapePathItem(
+    override val id: Long,
+    val points: FloatArray,
+    val width: Float,
+    val fillColor: Int,
+    val opacity: Float = 1f,
+    val pattern: TapePattern = TapePattern.PLAIN,
+    val shadow: TapeShadow = TapeShadow.NONE,
+) : PageItem {
+    val pointCount get() = points.size / 2
+
+    override val bounds: Bounds
+        get() {
+            var left = Float.MAX_VALUE
+            var top = Float.MAX_VALUE
+            var right = -Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
+            for (i in points.indices step 2) {
+                left = minOf(left, points[i])
+                right = maxOf(right, points[i])
+                top = minOf(top, points[i + 1])
+                bottom = maxOf(bottom, points[i + 1])
+            }
+            if (left > right) return Bounds(0f, 0f, 0f, 0f)
+            val reach = width / 2f + if (shadow.isVisible) shadow.distance + SHADOW_SOFTNESS else SHADOW_SOFTNESS
+            return Bounds(left - reach, top - reach, right + reach, bottom + reach)
+        }
+
+    override fun transformed(t: Affine): TapePathItem {
+        val moved = FloatArray(points.size)
+        for (i in points.indices step 2) {
+            moved[i] = t.mapX(points[i], points[i + 1])
+            moved[i + 1] = t.mapY(points[i], points[i + 1])
+        }
+        return copy(points = moved, width = width * t.meanScale)
+    }
+
+    fun copy(
+        id: Long = this.id,
+        points: FloatArray = this.points,
+        width: Float = this.width,
+        fillColor: Int = this.fillColor,
+        opacity: Float = this.opacity,
+        pattern: TapePattern = this.pattern,
+        shadow: TapeShadow = this.shadow,
+    ) = TapePathItem(id, points, width, fillColor, opacity, pattern, shadow)
+
+    override fun equals(other: Any?) = other is TapePathItem && id == other.id && width == other.width &&
+        fillColor == other.fillColor && opacity == other.opacity && pattern == other.pattern && shadow == other.shadow &&
+        points.contentEquals(other.points)
+
+    override fun hashCode() = 31 * id.hashCode() + points.contentHashCode()
 }
 
 /** How far the soft edge of a drop shadow reaches beyond its offset, in points. */

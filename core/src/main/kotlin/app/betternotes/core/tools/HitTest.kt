@@ -10,6 +10,7 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePoints
 import app.betternotes.core.model.VideoItem
@@ -41,6 +42,17 @@ internal fun PageItem.touches(probe: Capsule): Boolean = when (this) {
     is TableItem -> frame.touches(probe)
     is AudioItem -> frame.touches(probe)
     is StickyNoteItem -> visibleFrame.touches(probe)
+    is TapePathItem -> touchesPath(probe)
+}
+
+/** A strip of tape is touched where the probe comes within half its width of the line along its middle. */
+private fun TapePathItem.touchesPath(probe: Capsule): Boolean {
+    val margin = width / 2f
+    if (pointCount == 1) return probe.clip(points[0], points[1], points[0], points[1], margin)
+    for (i in 0 until pointCount - 1) {
+        if (probe.clip(points[i * 2], points[i * 2 + 1], points[i * 2 + 2], points[i * 2 + 3], margin)) return true
+    }
+    return false
 }
 
 private fun StrokePoints.touches(probe: Capsule, margin: Float): Boolean {
