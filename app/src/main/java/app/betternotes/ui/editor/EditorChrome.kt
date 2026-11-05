@@ -1,8 +1,10 @@
 package app.betternotes.ui.editor
 
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.fadeIn
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -142,6 +144,31 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
     }
 }
 
+/**
+ * The second row, which turns into the next tool's row when the tool changes: its box grows or shrinks to the new size,
+ * icons that both rows have move to their new place, colors change to the new colors, and icons only one row has grow
+ * from nothing or shrink away.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun ToolRowTransition(state: EditorState, recorder: RecorderState, sources: ImageSources) {
+    SharedTransitionLayout {
+        val shared = this
+        AnimatedContent(
+            targetState = if (recorder.recording) null else state.activeTool,
+            transitionSpec = {
+                (EnterTransition.None togetherWith ExitTransition.None)
+                    .using(SizeTransform(clip = false) { _, _ -> tween(MORPH_MS) })
+            },
+            label = "toolRow",
+        ) { tool ->
+            CompositionLocalProvider(LocalMorph provides MorphScopes(shared, this)) {
+                if (tool == null) RecordingControls(state, recorder, Modifier) else ToolRowFor(tool, state, sources)
+            }
+        }
+    }
+}
+
 /** The second row for [tool]. */
 @Composable
 private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSources) {
@@ -198,16 +225,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                     // row's size while one row gives way to the other. Each row is built from the tool it belongs to, so the one
                     // leaving keeps showing its own tool.
                     Box(Modifier.layoutId(TOOL_ROW).masksInk(state, TOOL_ROW)) {
-                        AnimatedContent(
-                            targetState = if (recorder.recording) null else state.activeTool,
-                            transitionSpec = {
-                                (fadeIn(tween(TOOL_CHANGE_MS)) togetherWith fadeOut(tween(TOOL_CHANGE_MS)))
-                                    .using(SizeTransform(clip = false) { _, _ -> tween(TOOL_CHANGE_MS) })
-                            },
-                            label = "toolRow",
-                        ) { tool ->
-                            if (tool == null) RecordingControls(state, recorder, Modifier) else ToolRowFor(tool, state, sources)
-                        }
+                        ToolRowTransition(state, recorder, sources)
                     }
                 }
             },
@@ -610,12 +628,12 @@ private fun ToolRow(state: EditorState, preset: InkPreset, modifier: Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.horizontalScroll(rememberScrollState()),
         ) {
-            ToolbarCellBox(onClick = { state.update { it.copy(line = it.line.next()) } }) {
+            ToolbarCellBox(morphKey = "line", onClick = { state.update { it.copy(line = it.line.next()) } }) {
                 LineTypeGlyph(preset.line, colors.icon)
             }
             PillDivider()
             preset.widths.forEachIndexed { slot, thickness ->
-                ToolbarCellBox(onClick = { state.update { it.copy(selectedWidth = slot) } }) {
+                ToolbarCellBox(morphKey = "width-$slot", onClick = { state.update { it.copy(selectedWidth = slot) } }) {
                     WidthGlyph(thickness)
                     if (slot == preset.selectedWidth) SelectedDot()
                 }
@@ -626,7 +644,7 @@ private fun ToolRow(state: EditorState, preset: InkPreset, modifier: Modifier) {
                 ColorEditor(state, draft)
             } else {
                 preset.colors.forEachIndexed { slot, color ->
-                    ToolbarCellBox(onClick = { state.update { it.copy(selectedColor = slot) } }) {
+                    ToolbarCellBox(morphKey = "color-$slot", onClick = { state.update { it.copy(selectedColor = slot) } }) {
                         ColorDot(color)
                         if (slot == preset.selectedColor) SelectedDot()
                     }

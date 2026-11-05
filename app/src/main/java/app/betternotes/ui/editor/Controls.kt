@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.core.model.LineKind
+import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
 
 internal val PillHeight = 48.dp
@@ -73,6 +74,7 @@ internal fun Pill(modifier: Modifier = Modifier, content: @Composable RowScope.(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
+            .morphBar()
             .height(PillHeight)
             .shadow(4.dp, PillShape, clip = false)
             .clip(PillShape)
@@ -113,12 +115,15 @@ internal fun ToolbarIcon(
     selected: Boolean = false,
     accent: Boolean = false,
     tintOverride: Color? = null,
+    morphKey: String? = null,
     onClick: () -> Unit,
 ) {
     val colors = LocalEditorColors.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
+            // The settings button stays where it is in every row, so it moves with the row.
+            .morph(morphKey ?: if (icon === EditorIcons.Sliders) "settings" else null)
             .size(ToolbarCell, PillHeight)
             .tappable(radius = 20.dp, enabled = enabled, onClick = onClick),
     ) {
@@ -318,10 +323,11 @@ internal fun rememberNotices(): Notices {
 
 /** A fixed-width cell for a toolbar's glyphs. */
 @Composable
-internal fun ToolbarCellBox(onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+internal fun ToolbarCellBox(morphKey: String? = null, onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
+            .morph(morphKey)
             .width(ToolbarCell)
             .height(PillHeight)
             .tappable(radius = 20.dp, onClick = onClick),
