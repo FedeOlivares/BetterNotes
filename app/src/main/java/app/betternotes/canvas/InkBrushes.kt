@@ -92,21 +92,26 @@ internal object InkBrushes {
         addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1f, ResponseNode(spindle, oilRun(0)))))
     }
 
+    /** The run of bristle [i]: between 1.6 and 1.8 line widths long, so they do not all end together. */
+    private fun oilRunLength(i: Int) = OIL_RUN - 0.05f * ((i * 3) % 5)
+
     private fun oilRun(i: Int) = SourceNode(
         SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE,
         -OIL_RUN_STAGGER * i,
-        OIL_RUN - OIL_RUN_STAGGER * i,
+        oilRunLength(i) - OIL_RUN_STAGGER * i,
         OutOfRange.REPEAT,
     )
 
     private fun oilBristles() = lanes(-0.46f, 0.46f, 0.115f) { lane, i ->
         setCornerRounding(0.6f)
+        // 8% of the line width at most. A bristle starts at 1%, grows, wobbles between 4% and 8%, and thins out.
         setScaleY(0.08f)
         addBehavior(aimedAtDirection())
         addBehavior(lane)
         addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.3f + 0.04f * i)))
         addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 0.8f, noise(50 + i, 0.2f)))
-        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.03f, 1f, ResponseNode(spindle, oilRun(i)))))
+        addBehavior(vary(TargetNode.Target.HEIGHT_MULTIPLIER, 0.5f, 1f, noise(70 + i, 0.15f + 0.02f * i)))
+        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, 0.125f, 1f, ResponseNode(spindle, oilRun(i)))))
     }
 
     private fun aimedAtDirection() = vary(

@@ -28,6 +28,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,15 +102,49 @@ internal fun SourcesColumn(
             }
             if (info != null) {
                 Spacer(Modifier.height(26.dp))
-                Text(
-                    title,
+                val titleStyle = TextStyle(
                     color = colors.title,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 28.sp,
-                    maxLines = 2,
-                    modifier = Modifier.clickable(role = Role.Button) { renaming = true },
                 )
+                if (renaming) {
+                    // The name is edited where it stands. Done, or leaving the field, keeps it.
+                    var text by remember { mutableStateOf(TextFieldValue(title, TextRange(title.length))) }
+                    val focus = remember { FocusRequester() }
+                    var focused by remember { mutableStateOf(false) }
+                    fun commit() {
+                        renaming = false
+                        val name = text.text.trim()
+                        if (name.isNotEmpty() && name != title) {
+                            title = name
+                            actions.onRename(name)
+                        }
+                    }
+                    BasicTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        textStyle = titleStyle,
+                        cursorBrush = SolidColor(colors.title),
+                        maxLines = 2,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done, capitalization = KeyboardCapitalization.Sentences),
+                        keyboardActions = KeyboardActions(onDone = { commit() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focus)
+                            .onFocusChanged {
+                                if (it.isFocused) focused = true else if (focused) commit()
+                            },
+                    )
+                    LaunchedEffect(Unit) { focus.requestFocus() }
+                } else {
+                    Text(
+                        title,
+                        style = titleStyle,
+                        maxLines = 2,
+                        modifier = Modifier.clickable(role = Role.Button) { renaming = true },
+                    )
+                }
                 val context = LocalContext.current
                 val stamp = "${DateFormat.getMediumDateFormat(context).format(Date(info.createdMs))}, " +
                     DateFormat.getTimeFormat(context).format(Date(info.createdMs))
@@ -111,13 +158,6 @@ internal fun SourcesColumn(
             if (info != null) SourceCard(state, info)
         }
         if (state.sourcesAddOpen) AddToNote(state, sources, recorder, notices, onClose)
-        if (renaming) {
-            RenameDialog(title, onDismiss = { renaming = false }) { name ->
-                renaming = false
-                title = name
-                actions.onRename(name)
-            }
-        }
     }
 }
 

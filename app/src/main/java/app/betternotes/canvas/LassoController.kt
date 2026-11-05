@@ -119,9 +119,13 @@ internal class LassoController(
         this.editor = editor
     }
 
+    /** Called when a selection that existed is dropped, whether by a touch elsewhere or a change of tool. */
+    var onSelectionDropped: () -> Unit = {}
+
     /** Drops the selection, which holds positions that the next edit of the page may invalidate. */
     fun clear() {
         if (drag == Drag.MOVE || drag == Drag.RESIZE || drag == Drag.PARAM) cancel()
+        val hadSelection = selection != null
         selection = null
         ants = null
         antsSelection = null
@@ -129,6 +133,7 @@ internal class LassoController(
         drag = Drag.NONE
         polygon.clear()
         redraw()
+        if (hadSelection) onSelectionDropped()
     }
 
     private var ants: FloatArray? = null

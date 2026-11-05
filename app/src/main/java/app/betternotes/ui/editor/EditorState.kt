@@ -151,7 +151,18 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
         canUndo = canvas.canUndo
         canRedo = canvas.canRedo
-        canvas.onLassoRequested = { if (activeTool != ActiveTool.IMAGE && activeTool != ActiveTool.LASSO) select(ActiveTool.LASSO) }
+        canvas.onLassoRequested = {
+            if (activeTool != ActiveTool.IMAGE && activeTool != ActiveTool.LASSO) {
+                toolBeforeLasso = activeTool
+                select(ActiveTool.LASSO)
+            }
+        }
+        // The lasso that a circle or a placed item asked for is lent: it goes back once the selection is let go.
+        canvas.onSelectionDropped = {
+            val back = toolBeforeLasso
+            toolBeforeLasso = null
+            if (back != null && activeTool == ActiveTool.LASSO) select(back)
+        }
         canvas.onTextEdit = { textEdit = it }
         canvas.onPlayVideo = { playingVideo = it }
         canvas.onViewMoved = ::refreshPosition
@@ -160,7 +171,11 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         applyTool()
     }
 
+    /** The tool that was in use when the lasso was brought up by a circle or a placed item. */
+    private var toolBeforeLasso: ActiveTool? = null
+
     fun select(tool: ActiveTool) {
+        if (tool != ActiveTool.LASSO) toolBeforeLasso = null
         if (tool == activeTool) {
             if (tool.hasPanel) panelOpen = !panelOpen
             return

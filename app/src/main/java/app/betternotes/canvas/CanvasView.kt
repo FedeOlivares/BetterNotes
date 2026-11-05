@@ -378,6 +378,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Called when a circle drawn with the pen has been touched and the lasso should take over. */
     var onLassoRequested: () -> Unit = {}
 
+    /** Called when the selection is dropped: a touch outside it, a delete, or a change of tool. */
+    var onSelectionDropped: () -> Unit
+        get() = lasso.onSelectionDropped
+        set(value) {
+            lasso.onSelectionDropped = value
+        }
+
     /** Called whenever the input mode changes, so that the toolbars can follow a shortcut. */
     var onInputModeChanged: (InputMode) -> Unit = {}
 
