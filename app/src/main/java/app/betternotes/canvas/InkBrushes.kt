@@ -84,24 +84,29 @@ internal object InkBrushes {
         listOf(ImmutableVec(0f, 0f), ImmutableVec(0.3f, 1f), ImmutableVec(0.7f, 1f), ImmutableVec(1f, 0f)),
     )
 
-    private fun oilBristles(bleed: Boolean) = lanes(-0.4f, 0.4f, 0.2f) { lane, i ->
+    private fun oilBleed() = tip {
         setCornerRounding(0.6f)
-        setScaleY(if (bleed) 0.2f else 0.08f)
+        setScaleY(1.05f)
+        addBehavior(aimedAtDirection())
+        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.22f, ConstantNode(1f)))
+        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.5f, 1f, ResponseNode(spindle, oilRun(0)))))
+    }
+
+    private fun oilRun(i: Int) = SourceNode(
+        SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE,
+        -OIL_RUN_STAGGER * i,
+        OIL_RUN - OIL_RUN_STAGGER * i,
+        OutOfRange.REPEAT,
+    )
+
+    private fun oilBristles() = lanes(-0.46f, 0.46f, 0.115f) { lane, i ->
+        setCornerRounding(0.6f)
+        setScaleY(0.08f)
         addBehavior(aimedAtDirection())
         addBehavior(lane)
         addBehavior(vary(TargetNode.Target.POSITION_OFFSET_LATERAL_IN_MULTIPLES_OF_BRUSH_SIZE, -0.05f, 0.05f, noise(30 + i, 0.3f + 0.04f * i)))
-        if (bleed) {
-            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0f, 0.28f, ConstantNode(1f)))
-        } else {
-            addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 0.8f, noise(50 + i, 0.2f)))
-        }
-        val run = SourceNode(
-            SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE,
-            -OIL_RUN_STAGGER * i,
-            OIL_RUN - OIL_RUN_STAGGER * i,
-            OutOfRange.REPEAT,
-        )
-        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.03f, 1f, ResponseNode(spindle, run))))
+        addBehavior(vary(TargetNode.Target.OPACITY_MULTIPLIER, 0.7f, 0.8f, noise(50 + i, 0.2f)))
+        addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, 0.03f, 1f, ResponseNode(spindle, oilRun(i)))))
     }
 
     private fun aimedAtDirection() = vary(
@@ -151,11 +156,11 @@ internal object InkBrushes {
                     }
                 },
             )
-            // Five thin bristles, each with a faint bleed around it (the glow trick, smaller). Each bristle runs
-            // 1.8 line widths: it starts at a point, swells to full width, thins to a point and starts again,
-            // and it points along the direction of travel. Ten layers is the ink library's limit, so five
-            // bristles and five bleeds is what fits. The bleeds go first, so every bristle is above them.
-            BrushKind.OIL -> brushFamily(*oilBristles(bleed = true), *oilBristles(bleed = false))
+            // Nine thin bristles on one faint bleed that spans the line (the glow trick, smaller). Each bristle runs
+            // 1.8 line widths: it starts at a point, swells to full width, thins to a point and starts again, and
+            // it points along the direction of travel. Ten layers is the ink library's limit, so the bleed is one
+            // layer under all the bristles, not one per bristle.
+            BrushKind.OIL -> brushFamily(oilBleed(), *oilBristles())
             BrushKind.SPILL -> brushFamily(
                 *Array(2) { c ->
                     tip {
