@@ -1585,20 +1585,23 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     /** A recording goes on the page in view, but has no place on it, as it shows only in the recorder's menu. */
-    fun addAudio(assetId: String, durationMs: Long) {
-        val open = editor ?: return
-        val page = open.document.pages.getOrNull(currentPage) ?: return
+    fun addAudio(assetId: String, durationMs: Long): Long? {
+        val open = editor ?: return null
+        val page = open.document.pages.getOrNull(currentPage) ?: return null
         val item = AudioItem(IdSource.Random.next(), Frame(0f, 0f, 0f, 0f), assetId, durationMs)
         open.perform(ItemsEdit.addOnTop(page.id, open.content(page.id), item))
+        return item.id
     }
 
-    fun importAudio(uri: Uri, failed: () -> Unit) {
+    /** Copies a recording in. With [place], it also lands as a bar in the middle of the view. */
+    fun importAudio(uri: Uri, place: Boolean = false, failed: () -> Unit) {
         val open = editor ?: return
         open.importAsset(context.contentResolver, uri) { assetId ->
             if (assetId == null) {
                 failed()
             } else if (editor === open) {
-                addAudio(assetId, audioDurationMs(open.assetFile(assetId)))
+                val id = addAudio(assetId, audioDurationMs(open.assetFile(assetId)))
+                if (place && id != null) placeAudio(id, width / 2f, height / 2f)
             }
         }
     }
