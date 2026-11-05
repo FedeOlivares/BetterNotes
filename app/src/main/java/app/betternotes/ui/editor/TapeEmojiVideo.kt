@@ -4,6 +4,9 @@ import android.widget.MediaController
 import android.widget.VideoView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -70,6 +73,7 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
 @Composable
 internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modifier) {
     PanelSheet(stringResource(R.string.tool_tape), onClose = { state.panelOpen = false }, modifier = modifier) {
+        TapeColorSection(state, options)
         TapeLookSliders(
             thickness = options.width.toFloat(),
             opacity = options.opacity,
@@ -235,6 +239,44 @@ private fun WarningSwatch() {
             }
             drawPath(slant, Color(TapeOptions.WARNING_STRIPE))
             x += stripe * 2f
+        }
+    }
+}
+
+/** The tape's colors as swatches, with the way to add one, laid out like the ink tools' color section. */
+@Composable
+private fun ColumnScope.TapeColorSection(state: EditorState, options: TapeOptions) {
+    val colors = LocalEditorColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth().height(49.dp).padding(start = PanelPadding, end = PanelPadding - 6.dp),
+    ) {
+        Text(
+            stringResource(R.string.panel_color),
+            color = colors.label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 0.4.sp,
+        )
+        Spacer(Modifier.weight(1f))
+        PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_add_swatch)) { state.colorTarget = ColorTarget.TAPE }
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PanelPadding - 8.dp, end = PanelPadding - 8.dp, bottom = 10.dp)
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        options.colors.forEachIndexed { slot, color ->
+            ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
+                ColorDot(color or OPAQUE, diameter = 26.dp)
+                if (slot == options.selectedColor) SelectedDot()
+            }
+        }
+        ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = options.colors.size) } }) {
+            WarningSwatch()
+            if (options.selectedColor >= options.colors.size) SelectedDot()
         }
     }
 }

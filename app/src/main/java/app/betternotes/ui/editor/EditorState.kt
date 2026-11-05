@@ -51,7 +51,7 @@ internal enum class ActiveTool(val ink: InkTool?) {
 private val ActiveTool.hasPanel get() = true
 
 /** What the color wheel's result is for. */
-internal enum class ColorTarget { CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, LASER }
+internal enum class ColorTarget { TAPE, CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, LASER }
 
 /** What the toolbars show, and the one place that passes their choices on to the canvas. */
 @Stable
@@ -355,6 +355,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.CUSTOM_SLOT -> update { it.withCustomColor(color) }
             ColorTarget.SELECTED_SLOT -> update { it.withSlotColor(color) }
             ColorTarget.PALETTE -> update { it.withPaletteColor(color).pickColor(color) }
+            ColorTarget.TAPE -> updateTape { it.withColor(color) }
             ColorTarget.SHAPE_BORDER -> updateShape { it.withColor(color) }
             ColorTarget.SHAPE_FILL -> updateShape { it.copy(fillColor = color) }
             ColorTarget.NOTE -> updateNote { it.withColor(color) }

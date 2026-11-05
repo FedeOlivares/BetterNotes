@@ -22,6 +22,13 @@ data class TapeOptions(
     /** The slot after the last color is the warning tape: yellow and red stripes, drawn by the painter. */
     val color get() = colors.getOrElse(selectedColor) { WARNING_FILL }
 
+    /** Adds [argb] to the colors as see-through tape, as the other colors are, and selects it. */
+    fun withColor(argb: Int): TapeOptions {
+        val tape = (argb and 0xFFFFFF) or WASHI_ALPHA
+        val at = colors.indexOf(tape)
+        return if (at >= 0) copy(selectedColor = at) else copy(colors = colors + tape, selectedColor = colors.size)
+    }
+
     /** A strip torn off between two points on the page. */
     fun item(id: Long, x0: Float, y0: Float, x1: Float, y1: Float): ShapeItem {
         val length = hypot(x1 - x0, y1 - y0)
@@ -31,6 +38,7 @@ data class TapeOptions(
     }
 
     companion object {
+        const val WASHI_ALPHA = 0xB3000000.toInt()
         const val MIN_THICKNESS = 4
         const val MAX_THICKNESS = 80
         const val MIN_OPACITY = 0.1f
