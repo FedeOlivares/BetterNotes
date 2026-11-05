@@ -441,6 +441,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     }
 
     private fun applyTool() {
+        canvas.circleLasso = CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly, lasso.anyPortion)
         val current = preset
         canvas.tool = when {
             current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs, current.scribbleToErase, current.circleToLasso, current.stabilization)

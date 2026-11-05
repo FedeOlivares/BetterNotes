@@ -656,6 +656,30 @@ class CanvasViewTest {
     }
 
     @Test
+    fun aCircleToLassoPicksWhatItSurroundsAsTheLassoIsSetTo() {
+        onMain {
+            canvas.tool = CanvasTool.Ink(InkStyle(), circleToLasso = true)
+            canvas.circleLasso = CanvasTool.Lasso(rectangle = false, kinds = app.betternotes.core.tools.ALL_ITEM_KINDS, fullOnly = false, anyPortion = true)
+        }
+        // One stroke inside the circle and one that only crosses it, mostly outside.
+        stylusStroke(worldToScreen(190f, 200f), worldToScreen(210f, 200f))
+        stylusStroke(worldToScreen(200f, 160f), worldToScreen(420f, 160f))
+        waitUntil { pageContent().size == 2 }
+        val circle = (0..60).map { i ->
+            val angle = 2.0 * Math.PI * 1.05 * i / 60
+            worldToScreen((200 + 60 * Math.cos(angle)).toFloat(), (200 + 60 * Math.sin(angle)).toFloat())
+        }
+        stylusPath(circle)
+        waitUntil { pageContent().size == 3 }
+        val onLine = worldToScreen(260f, 200f)
+        stylusStroke(onLine, onLine.first to onLine.second + 1f)
+        waitUntil { onMain { canvas.hasSelection } }
+        onMain { canvas.deleteSelection() }
+        // "Anything touched" took both strokes, and the circle's own line was taken off the page.
+        waitUntil { pageContent().size == 0 }
+    }
+
+    @Test
     fun theToolIsGivenBackWhenAnOutsideTouchEndsTheSelectionMadeFromACircle() {
         val dropped = lassoFromCircle()
         assertEquals(0, onMain { dropped() })

@@ -392,6 +392,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Called when a circle drawn with the pen has been touched and the lasso should take over. */
     var onLassoRequested: () -> Unit = {}
 
+    /** How a circle drawn for circle to lasso picks what it surrounds: the same as the lasso tool is set to. */
+    var circleLasso = CanvasTool.Lasso(rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
+
     /** Called when the selection is dropped: a touch outside it, a delete, or a change of tool. */
     var onSelectionDropped: () -> Unit
         get() = lasso.onSelectionDropped
@@ -2236,7 +2239,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         // The circle itself is the lasso: its line is taken off the page and what it surrounds is selected.
         val content = editor.content(pageId)
         val own = (0 until content.size).firstOrNull { content[it].id == loop.item.id } ?: return false
-        val inside = selectWithLasso(pageId, content, StrokeGestures.polygon(loop.item.points), ALL_ITEM_KINDS, false)
+        val inside = selectWithLasso(
+            pageId,
+            content,
+            StrokeGestures.polygon(loop.item.points),
+            circleLasso.kinds,
+            circleLasso.fullOnly,
+            circleLasso.anyPortion,
+        )
         val picked = inside.indices.indices.filter { inside.indices[it] != own }
         if (picked.isEmpty()) return false
         editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
