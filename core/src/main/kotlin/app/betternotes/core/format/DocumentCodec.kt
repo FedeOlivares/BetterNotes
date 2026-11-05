@@ -34,6 +34,7 @@ private const val ELEMENT_LINE = 0
 private const val ELEMENT_RECTANGLE = 1
 private const val ELEMENT_TABLE = 2
 private const val ELEMENT_RULED = 3
+private const val ELEMENT_STICKY = 4
 
 private const val SOURCE_BLANK = 0
 private const val SOURCE_PDF = 1
@@ -253,6 +254,14 @@ private fun ByteWriter.element(element: LayoutElement) {
             float(element.lineWidth)
             int(element.color)
         }
+        is LayoutElement.Sticky -> {
+            byte(ELEMENT_STICKY)
+            float(element.x)
+            float(element.y)
+            float(element.width)
+            float(element.height)
+            int(element.color)
+        }
     }
 }
 
@@ -261,5 +270,6 @@ private fun ByteReader.element(): LayoutElement = when (val tag = byte()) {
     ELEMENT_RECTANGLE -> LayoutElement.Rectangle(float(), float(), float(), float(), float(), int())
     ELEMENT_TABLE -> LayoutElement.Table(float(), float(), float(), float(), varint(), varint(), float(), int())
     ELEMENT_RULED -> LayoutElement.Ruled(float(), float(), float(), float(), float(), float(), int())
+    ELEMENT_STICKY -> LayoutElement.Sticky(float(), float(), float(), float(), int())
     else -> throw CorruptFileException("Unknown layout element $tag")
 }

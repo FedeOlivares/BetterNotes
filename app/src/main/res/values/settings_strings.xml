@@ -129,6 +129,9 @@
     <string name="layout_name">Name</string>
     <string name="layout_size">Page size</string>
     <string name="layout_add_line">Line</string>
+    <string name="layout_back">Back</string>
+    <string name="layout_tool_select">Select</string>
+    <string name="layout_add_sticky">Sticky note</string>
     <string name="layout_add_box">Box</string>
     <string name="layout_add_table">Table</string>
     <string name="layout_add_ruled">Ruled lines</string>

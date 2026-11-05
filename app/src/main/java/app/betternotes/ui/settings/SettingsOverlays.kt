@@ -81,40 +81,39 @@ private fun TemplateHost(repository: SettingsRepository, canvas: CanvasView, onD
     // A layout being edited: null when not editing, and an empty holder for a new one.
     var editing by remember { mutableStateOf<LayoutEdit?>(null) }
 
+    val edit = editing
+    if (edit != null) {
+        CustomLayoutSheet(
+            edit.layout,
+            onSave = { layout ->
+                repository.update { it.withCustomLayout(layout) }
+                editing = null
+            },
+            onDelete = { name ->
+                repository.update { it.withoutCustomLayout(name) }
+                editing = null
+            },
+            onClose = { editing = null },
+        )
+        return
+    }
     SheetFrame(TemplateSheetWidth, TemplateSheetMargin, TemplateSheetMargin, onDismiss) { modifier ->
-        val edit = editing
-        if (edit != null) {
-            CustomLayoutSheet(
-                edit.layout,
-                onSave = { layout ->
-                    repository.update { it.withCustomLayout(layout) }
-                    editing = null
-                },
-                onDelete = { name ->
-                    repository.update { it.withoutCustomLayout(name) }
-                    editing = null
-                },
-                onClose = { editing = null },
-                modifier = modifier,
-            )
-        } else {
-            TemplateSheet(
-                current = page.background,
-                pageSize = page.size,
-                canResize = page.isResizable,
-                canBeInfinite = document.canBeInfinite,
-                customLayouts = settings.customLayouts,
-                onApply = { background, size, infinite, scope ->
-                    val ids = if (scope == ApplyScope.CURRENT_PAGE) listOf(page.id) else document.pages.map { it.id }
-                    document.changeAppearance(ids, background, size, infinite)?.let(canvas::perform)
-                    onDismiss()
-                },
-                onNewLayout = { editing = LayoutEdit(null) },
-                onEditLayout = { editing = LayoutEdit(it) },
-                onClose = onDismiss,
-                modifier = modifier,
-            )
-        }
+        TemplateSheet(
+            current = page.background,
+            pageSize = page.size,
+            canResize = page.isResizable,
+            canBeInfinite = document.canBeInfinite,
+            customLayouts = settings.customLayouts,
+            onApply = { background, size, infinite, scope ->
+                val ids = if (scope == ApplyScope.CURRENT_PAGE) listOf(page.id) else document.pages.map { it.id }
+                document.changeAppearance(ids, background, size, infinite)?.let(canvas::perform)
+                onDismiss()
+            },
+            onNewLayout = { editing = LayoutEdit(null) },
+            onEditLayout = { editing = LayoutEdit(it) },
+            onClose = onDismiss,
+            modifier = modifier,
+        )
     }
 }
 

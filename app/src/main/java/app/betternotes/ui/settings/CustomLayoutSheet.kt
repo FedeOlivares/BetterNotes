@@ -1,5 +1,6 @@
 package app.betternotes.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -11,7 +12,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -50,6 +53,7 @@ import app.betternotes.core.template.CustomLayoutBuilder
 import app.betternotes.core.template.LayoutElement
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.bounds
+import kotlin.math.abs
 import kotlin.math.min
 
 private const val ELEMENT_COLOR = 0xFF55585F.toInt()
@@ -59,10 +63,33 @@ private const val MIN_ELEMENT_PT = 12f
 private const val TAP_TOLERANCE_PT = 12f
 private val UNITS = listOf(LengthUnit.PX, LengthUnit.CM, LengthUnit.INCH)
 
+private enum class LayoutTool { SELECT, LINE, BOX, STICKY, TABLE, RULED }
+
+private const val STICKY_COLOR = 0xFFFFE680.toInt()
+
+/** The element a drag from (x0, y0) to (x1, y1) makes with this tool, or null when the drag is too small. */
+private fun LayoutTool.draw(x0: Float, y0: Float, x1: Float, y1: Float): LayoutElement? {
+    val left = min(x0, x1)
+    val top = min(y0, y1)
+    val width = abs(x1 - x0)
+    val height = abs(y1 - y0)
+    if (this == LayoutTool.LINE) {
+        return if (width + height < MIN_ELEMENT_PT) null else LayoutElement.Line(x0, y0, x1, y1, DEFAULT_LINE_WIDTH, ELEMENT_COLOR)
+    }
+    if (width < MIN_ELEMENT_PT || height < MIN_ELEMENT_PT) return null
+    return when (this) {
+        LayoutTool.BOX -> LayoutElement.Rectangle(left, top, width, height, DEFAULT_LINE_WIDTH, ELEMENT_COLOR)
+        LayoutTool.STICKY -> LayoutElement.Sticky(left, top, width, height, STICKY_COLOR)
+        LayoutTool.TABLE -> LayoutElement.Table(left, top, width, height, 3, 3, DEFAULT_LINE_WIDTH, ELEMENT_COLOR)
+        LayoutTool.RULED -> LayoutElement.Ruled(left, top, width, height, DEFAULT_SPACING, DEFAULT_LINE_WIDTH, ELEMENT_COLOR)
+        else -> null
+    }
+}
+
 /**
- * Builds a custom layout: a size in px, cm or inches, and lines, boxes, tables and ruled blocks to
- * drag into place. The owner asked for this, but no screenshot of it exists, so it follows the look
- * of the template picker rather than matching a reference.
+ * A full-screen canvas for building a custom template: pick a tool, drag on the page to draw a line, box,
+ * sticky note, table or ruled block, then select, move or adjust it. No Notewise screenshot of this screen
+ * exists, so it follows the template picker's look rather than matching a reference.
  */
 @Composable
 fun CustomLayoutSheet(
@@ -77,126 +104,139 @@ fun CustomLayoutSheet(
     // The builder is not observable, so this counts its changes for Compose to redraw from.
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
+    var tool by remember { mutableStateOf(LayoutTool.SELECT) }
     var name by remember { mutableStateOf(builder.name) }
     var widthText by remember { mutableStateOf(format(builder.width)) }
     var heightText by remember { mutableStateOf(format(builder.height)) }
     fun changed() {
         revision++
     }
-    fun syncSizeFields() {
-        widthText = format(builder.width)
-        heightText = format(builder.height)
-    }
-    fun add(element: LayoutElement) {
-        selected = builder.add(element)
-        changed()
-    }
 
-    SettingsSheet(stringResource(R.string.layout_title), onClose, modifier) {
-        Column(
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 41.dp).padding(bottom = 24.dp),
+    BackHandler(onBack = onClose)
+    Column(modifier.fillMaxSize().background(colors.sheet)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
         ) {
-            SettingRow(stringResource(R.string.layout_name)) { TextBox(name, 300.dp, KeyboardType.Text) { name = it } }
-            Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                for (unit in UNITS) {
-                    ChoiceChip(unitName(unit), builder.unit == unit) {
-                        builder.unit = unit
-                        syncSizeFields()
-                        changed()
-                    }
-                }
-            }
-            SettingRow(stringResource(R.string.layout_size)) {
-                TextBox(widthText, 120.dp, KeyboardType.Decimal) {
-                    widthText = it
-                    it.toFloatOrNull()?.let { value -> builder.setSize(value, builder.height) }
-                    changed()
-                }
-                Text(" x ", color = colors.text, fontSize = 19.5.sp)
-                TextBox(heightText, 120.dp, KeyboardType.Decimal) {
-                    heightText = it
-                    it.toFloatOrNull()?.let { value -> builder.setSize(builder.width, value) }
+            ChoiceChip(stringResource(R.string.layout_back), false, onClose)
+            TextBox(name, 260.dp, KeyboardType.Text) { name = it }
+            for (unit in UNITS) {
+                ChoiceChip(unitName(unit), builder.unit == unit) {
+                    builder.unit = unit
+                    widthText = format(builder.width)
+                    heightText = format(builder.height)
                     changed()
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                val w = builder.size.widthPt
-                val h = builder.size.heightPt
-                ChoiceChip(stringResource(R.string.layout_add_line), false) {
-                    add(LayoutElement.Line(w * 0.1f, h * 0.5f, w * 0.9f, h * 0.5f, DEFAULT_LINE_WIDTH, ELEMENT_COLOR))
-                }
-                ChoiceChip(stringResource(R.string.layout_add_box), false) {
-                    add(LayoutElement.Rectangle(w * 0.25f, h * 0.25f, w * 0.5f, h * 0.25f, DEFAULT_LINE_WIDTH, ELEMENT_COLOR))
-                }
-                ChoiceChip(stringResource(R.string.layout_add_table), false) {
-                    add(LayoutElement.Table(w * 0.15f, h * 0.2f, w * 0.7f, h * 0.3f, 3, 3, DEFAULT_LINE_WIDTH, ELEMENT_COLOR))
-                }
-                ChoiceChip(stringResource(R.string.layout_add_ruled), false) {
-                    add(LayoutElement.Ruled(w * 0.1f, h * 0.1f, w * 0.8f, h * 0.3f, DEFAULT_SPACING, DEFAULT_LINE_WIDTH, ELEMENT_COLOR))
-                }
+            TextBox(widthText, 90.dp, KeyboardType.Decimal) {
+                widthText = it
+                it.toFloatOrNull()?.let { value -> builder.setSize(value, builder.height) }
+                changed()
             }
-
-            // Reads the revision so that the preview redraws after the builder changes.
-            val preview = remember(revision) { builder.build() }
-            LayoutPreview(
-                preview,
-                selected,
-                onTap = { x, y ->
-                    selected = builder.elementAt(x, y, TAP_TOLERANCE_PT)
-                    changed()
-                },
-                onDrag = { dx, dy ->
-                    if (selected in builder.elements.indices) {
-                        builder.moveBy(selected, dx, dy)
-                        changed()
-                    }
-                },
-            )
-
-            if (selected in builder.elements.indices) {
-                ElementControls(builder.elements[selected], builder.unit, onChange = {
-                    builder.update(selected, it)
-                    changed()
-                }, onRemove = {
-                    builder.remove(selected)
-                    selected = -1
-                    changed()
-                })
+            Text("x", color = colors.text, fontSize = 19.5.sp)
+            TextBox(heightText, 90.dp, KeyboardType.Decimal) {
+                heightText = it
+                it.toFloatOrNull()?.let { value -> builder.setSize(builder.width, value) }
+                changed()
             }
-
-            Row(horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                if (initial != null) {
-                    Text(
-                        stringResource(R.string.layout_delete),
-                        color = colors.danger,
-                        fontSize = 19.5.sp,
-                        modifier = Modifier.padding(16.dp).pointerInput(Unit) { detectTapGestures { onDelete(initial.name) } },
-                    )
-                    Spacer(Modifier.weight(1f))
-                }
-                val canSave = name.isNotBlank()
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .height(60.dp)
-                        .clip(RoundedCornerShape(30.dp))
-                        .background(if (canSave) colors.accent else colors.sliderIdle)
-                        .pointerInput(canSave) {
-                            if (!canSave) return@pointerInput
-                            detectTapGestures {
-                                builder.name = name.trim()
-                                onSave(builder.build())
-                            }
+            Spacer(Modifier.weight(1f))
+            if (initial != null) {
+                Text(
+                    stringResource(R.string.layout_delete),
+                    color = colors.danger,
+                    fontSize = 19.5.sp,
+                    modifier = Modifier.padding(12.dp).pointerInput(Unit) { detectTapGestures { onDelete(initial.name) } },
+                )
+            }
+            val canSave = name.isNotBlank()
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .height(52.dp)
+                    .clip(RoundedCornerShape(26.dp))
+                    .background(if (canSave) colors.accent else colors.sliderIdle)
+                    .pointerInput(canSave) {
+                        if (!canSave) return@pointerInput
+                        detectTapGestures {
+                            builder.name = name.trim()
+                            onSave(builder.build())
                         }
-                        .padding(horizontal = 40.dp),
-                ) {
-                    Text(stringResource(R.string.layout_save), color = colors.onAccent, fontSize = 19.5.sp)
+                    }
+                    .padding(horizontal = 32.dp),
+            ) {
+                Text(stringResource(R.string.layout_save), color = colors.onAccent, fontSize = 19.5.sp)
+            }
+        }
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 8.dp).width(150.dp),
+            ) {
+                for ((entry, label) in toolLabels()) {
+                    ChoiceChip(label, tool == entry) { tool = entry }
+                }
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().padding(end = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // Reads the revision so that the page redraws after the builder changes.
+                val preview = remember(revision) { builder.build() }
+                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    LayoutPreview(
+                        preview,
+                        selected,
+                        drawing = tool != LayoutTool.SELECT,
+                        onTap = { x, y ->
+                            selected = if (tool == LayoutTool.SELECT) builder.elementAt(x, y, TAP_TOLERANCE_PT) else -1
+                            changed()
+                        },
+                        onDraw = { x0, y0, x1, y1 ->
+                            tool.draw(x0, y0, x1, y1)?.let {
+                                selected = builder.add(it)
+                                tool = LayoutTool.SELECT
+                                changed()
+                            }
+                        },
+                        onDrag = { dx, dy ->
+                            if (selected in builder.elements.indices) {
+                                builder.moveBy(selected, dx, dy)
+                                changed()
+                            }
+                        },
+                        onPress = { x, y ->
+                            val hit = builder.elementAt(x, y, TAP_TOLERANCE_PT)
+                            if (hit >= 0 && hit != selected) {
+                                selected = hit
+                                changed()
+                            }
+                        },
+                    )
+                }
+                if (selected in builder.elements.indices) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).heightIn(max = 220.dp)) {
+                        ElementControls(builder.elements[selected], builder.unit, onChange = {
+                            builder.update(selected, it)
+                            changed()
+                        }, onRemove = {
+                            builder.remove(selected)
+                            selected = -1
+                            changed()
+                        })
+                    }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun toolLabels() = listOf(
+    LayoutTool.SELECT to stringResource(R.string.layout_tool_select),
+    LayoutTool.LINE to stringResource(R.string.layout_add_line),
+    LayoutTool.BOX to stringResource(R.string.layout_add_box),
+    LayoutTool.STICKY to stringResource(R.string.layout_add_sticky),
+    LayoutTool.TABLE to stringResource(R.string.layout_add_table),
+    LayoutTool.RULED to stringResource(R.string.layout_add_ruled),
+)
 
 @Composable
 private fun unitName(unit: LengthUnit) = stringResource(
@@ -225,16 +265,30 @@ private fun TextBox(value: String, width: androidx.compose.ui.unit.Dp, keyboard:
     )
 }
 
-/** Draws the layout on a sheet of paper, with the selected element in the accent color. Drags move it. */
+/**
+ * Draws the layout on a sheet of paper, with the selected element in the accent color. With [drawing] off a
+ * drag moves the element under the finger, with it on a drag draws a new element from where it began to
+ * where it ended.
+ */
 @Composable
-private fun LayoutPreview(layout: CustomLayout, selected: Int, onTap: (Float, Float) -> Unit, onDrag: (Float, Float) -> Unit) {
+private fun LayoutPreview(
+    layout: CustomLayout,
+    selected: Int,
+    drawing: Boolean,
+    onTap: (Float, Float) -> Unit,
+    onPress: (Float, Float) -> Unit,
+    onDraw: (Float, Float, Float, Float) -> Unit,
+    onDrag: (Float, Float) -> Unit,
+) {
     val colors = LocalSettingsColors.current
     val ratio = layout.size.widthPt / layout.size.heightPt
-    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val height = minOf(maxWidth / ratio, PREVIEW_MAX_HEIGHT)
+    var start by remember { mutableStateOf(Offset.Zero) }
+    var end by remember { mutableStateOf<Offset?>(null) }
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val fitted = if (maxWidth / maxHeight > ratio) maxHeight * ratio else maxWidth
         Canvas(
             Modifier
-                .height(height)
+                .width(fitted)
                 .aspectRatio(ratio)
                 .background(Color.White)
                 .pointerInput(layout.size) {
@@ -243,11 +297,25 @@ private fun LayoutPreview(layout: CustomLayout, selected: Int, onTap: (Float, Fl
                         onTap(offset.x * factor, offset.y * factor)
                     }
                 }
-                .pointerInput(layout.size) {
-                    detectDragGestures { change, drag ->
+                .pointerInput(layout.size, drawing) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val factor = layout.size.widthPt / size.width
+                            start = offset
+                            end = offset
+                            if (!drawing) onPress(offset.x * factor, offset.y * factor)
+                        },
+                        onDragEnd = {
+                            val factor = layout.size.widthPt / size.width
+                            val last = end
+                            if (drawing && last != null) onDraw(start.x * factor, start.y * factor, last.x * factor, last.y * factor)
+                            end = null
+                        },
+                        onDragCancel = { end = null },
+                    ) { change, drag ->
                         change.consume()
                         val factor = layout.size.widthPt / size.width
-                        onDrag(drag.x * factor, drag.y * factor)
+                        if (drawing) end = change.position else onDrag(drag.x * factor, drag.y * factor)
                     }
                 },
         ) {
@@ -264,11 +332,17 @@ private fun LayoutPreview(layout: CustomLayout, selected: Int, onTap: (Float, Fl
                     style = Stroke(2.dp.toPx()),
                 )
             }
+            end?.takeIf { drawing }?.let {
+                drawRect(
+                    colors.accent,
+                    Offset(min(start.x, it.x), min(start.y, it.y)),
+                    Size(abs(it.x - start.x), abs(it.y - start.y)),
+                    style = Stroke(1.dp.toPx()),
+                )
+            }
         }
     }
 }
-
-private val PREVIEW_MAX_HEIGHT = 560.dp
 
 @Composable
 private fun ElementControls(element: LayoutElement, unit: LengthUnit, onChange: (LayoutElement) -> Unit, onRemove: () -> Unit) {
@@ -276,6 +350,7 @@ private fun ElementControls(element: LayoutElement, unit: LengthUnit, onChange: 
     Column(Modifier.fillMaxWidth()) {
         when (element) {
             is LayoutElement.Line -> Unit
+            is LayoutElement.Sticky -> SizeRow(element.width, element.height, unit) { w, h -> onChange(element.copy(width = w, height = h)) }
             is LayoutElement.Rectangle -> SizeRow(element.width, element.height, unit) { w, h -> onChange(element.copy(width = w, height = h)) }
             is LayoutElement.Table -> {
                 SizeRow(element.width, element.height, unit) { w, h -> onChange(element.copy(width = w, height = h)) }

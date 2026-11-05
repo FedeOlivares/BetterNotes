@@ -212,4 +212,13 @@ sealed interface LayoutElement {
     ) : LayoutElement {
         init { require(spacing >= PageTemplate.MIN_SPACING) { "Spacing too small: $spacing" } }
     }
+
+    /** A filled note with a darker edge. [color] is the fill. */
+    data class Sticky(
+        val x: Float,
+        val y: Float,
+        val width: Float,
+        val height: Float,
+        val color: Int,
+    ) : LayoutElement
 }
