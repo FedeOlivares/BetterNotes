@@ -56,6 +56,27 @@ class LassoTest {
     }
 
     @Test
+    fun `any portion catches whatever the lasso touches, even only by crossing`() {
+        fill(
+            // Mostly outside, with its end in the lasso.
+            stroke(1, 90f, 50f, 150f, 50f, 200f, 50f),
+            // Passing right through with no sample inside.
+            stroke(2, -50f, 50f, 150f, 50f),
+            // Not touching.
+            stroke(3, 300f, 300f, 310f, 310f),
+            // An image whose box overlaps a corner, and one that surrounds the lasso.
+            ImageItem(4, Frame(90f, 90f, 40f, 40f), "overlaps"),
+            ImageItem(5, Frame(-50f, -50f, 300f, 300f), "surrounds"),
+            ImageItem(6, Frame(400f, 400f, 30f, 30f), "away"),
+        )
+        val ids = selectWithLasso(pageId, content, square, anyPortion = true).items.map { it.id }
+        assertEquals(listOf(1L, 2L, 4L, 5L), ids)
+        // Without it, only what is mostly inside or centered inside is caught.
+        val plain = selectWithLasso(pageId, content, square).items.map { it.id }
+        assertTrue(1L !in plain && 2L !in plain && 4L !in plain)
+    }
+
+    @Test
     fun `a concave lasso excludes what its notch leaves out`() {
         val notched = floatArrayOf(0f, 0f, 100f, 0f, 100f, 100f, 50f, 20f, 0f, 100f)
         fill(stroke(1, 50f, 60f, 51f, 61f), stroke(2, 50f, 10f, 51f, 11f))

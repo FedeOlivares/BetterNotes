@@ -49,6 +49,7 @@ internal class LassoController(
     private var pageIndex = -1
     private var kinds: Set<ItemKind> = emptySet()
     private var fullOnly = false
+    private var anyPortion = false
 
     private var selection: Selection? = null
     private var handle = ResizeHandle.BOTTOM_RIGHT
@@ -180,9 +181,10 @@ internal class LassoController(
         redraw()
     }
 
-    fun start(pageIndex: Int, x: Float, y: Float, rectangle: Boolean, kinds: Set<ItemKind>, fullOnly: Boolean) {
+    fun start(pageIndex: Int, x: Float, y: Float, rectangle: Boolean, kinds: Set<ItemKind>, fullOnly: Boolean, anyPortion: Boolean = false) {
         this.kinds = kinds
         this.fullOnly = fullOnly
+        this.anyPortion = anyPortion
         startX = x
         startY = y
         currentX = x
@@ -328,6 +330,7 @@ internal class LassoController(
         selection = null
         editor?.perform(selected.deleteEdit())
         redraw()
+        onSelectionDropped()
     }
 
     /** Draws in view pixels, over everything on the page. */
@@ -393,8 +396,10 @@ internal class LassoController(
         val editor = editor
         if (page == null || editor == null) return
         val pageId = editor.document.pages[pageIndex].id
-        val found = selectWithLasso(pageId, page, points, kinds, fullOnly)
+        val found = selectWithLasso(pageId, page, points, kinds, fullOnly, anyPortion)
         selection = if (found.isEmpty) null else found
+        // A touch outside the old selection that picks up nothing leaves no selection at all.
+        if (found.isEmpty) onSelectionDropped()
     }
 
     private fun finishParam() {

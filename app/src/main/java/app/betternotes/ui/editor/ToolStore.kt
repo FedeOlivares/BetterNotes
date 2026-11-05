@@ -73,6 +73,7 @@ internal class ToolStore(context: Context) {
             lockedToo = json.getBoolean("lockedToo"),
             takeScreenshot = json.getBoolean("takeScreenshot"),
             fullSelectionOnly = json.getBoolean("fullSelectionOnly"),
+            anyPortion = json.optBoolean("anyPortion", false),
             kinds = json.getJSONArray("kinds").kinds(),
         )
     }
@@ -83,6 +84,7 @@ internal class ToolStore(context: Context) {
             put("lockedToo", options.lockedToo)
             put("takeScreenshot", options.takeScreenshot)
             put("fullSelectionOnly", options.fullSelectionOnly)
+            put("anyPortion", options.anyPortion)
             put("kinds", JSONArray(options.kinds.map { it.name }))
         }
         prefs.edit { putString(KEY_LASSO, json.toString()) }

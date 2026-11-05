@@ -128,6 +128,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private set
 
     /** Bumped each time the page moves, which shows the indicator for a while. */
+    /** See [CanvasView.scrollFraction]. */
+    var scrollFraction by mutableStateOf<Float?>(null)
+
     var viewMoves by mutableIntStateOf(0)
         private set
     var canUndo by mutableStateOf(false)
@@ -299,6 +302,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     fun thumbnail(pageId: Long, maxPx: Int) = canvas.thumbnail(pageId, maxPx)
 
+    suspend fun pdfThumbnail(pageId: Long, widthPx: Int) = canvas.pdfThumbnail(pageId, widthPx)
+
     fun goToPage(index: Int) {
         canvas.goToPage(index)
         pagesOpen = false
@@ -406,6 +411,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.laserColor = color
     }
 
+    fun goToPageNumber(number: Int) = canvas.goToPage(number - 1)
+
     fun previousPage() = canvas.goToPage(canvas.currentPage - 1)
 
     fun nextPage() = canvas.goToPage(canvas.currentPage + 1)
@@ -417,6 +424,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         currentPage = canvas.currentPage
         pageCount = canvas.pageCount
         zoom = canvas.viewport.zoom
+        scrollFraction = canvas.scrollFraction
         viewMoves++
     }
 
@@ -433,11 +441,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     }
 
     private fun applyTool() {
+        canvas.circleLasso = CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly, lasso.anyPortion)
         val current = preset
         canvas.tool = when {
             current != null -> CanvasTool.Ink(current.style(), current.holdToLineMs, current.scribbleToErase, current.circleToLasso, current.stabilization)
             activeTool == ActiveTool.LASER -> CanvasTool.Laser
-            activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly)
+            activeTool == ActiveTool.LASSO -> CanvasTool.Lasso(lasso.rectangle, lasso.kinds, lasso.fullSelectionOnly, lasso.anyPortion)
             activeTool == ActiveTool.SHAPE -> CanvasTool.Shape(shape)
             activeTool == ActiveTool.STICKY -> CanvasTool.Sticky(note)
             activeTool == ActiveTool.TEXT -> CanvasTool.Text(note)

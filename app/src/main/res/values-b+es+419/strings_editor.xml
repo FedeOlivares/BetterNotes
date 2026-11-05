@@ -111,6 +111,7 @@
     <string name="panel_select_locked">Seleccionar objetos bloqueados</string>
     <string name="panel_take_screenshot">Tomar captura</string>
     <string name="panel_full_selection">Solo selección completa</string>
+    <string name="panel_any_portion">Seleccionar todo lo que toque</string>
     <string name="panel_select_following">Seleccionar lo siguiente</string>
     <string name="panel_thickness">Grosor</string>
     <string name="panel_thinner">Más delgado</string>
@@ -132,6 +133,7 @@
 
     <string name="info_not_built_setting">Se guarda, pero todavía no hace nada.</string>
     <string name="info_full_selection">Solo selecciona lo que queda completamente dentro de la selección.</string>
+    <string name="info_any_portion">Selecciona cualquier elemento con una parte dentro de la selección, aunque el lazo solo lo cruce.</string>
     <string name="info_hold_shape">Mantén el lápiz quieto al final de un trazo para convertirlo en una línea recta.</string>
     <string name="info_scribble">Se guarda, pero todavía no hace nada.</string>
     <string name="info_circle">Se guarda, pero todavía no hace nada.</string>

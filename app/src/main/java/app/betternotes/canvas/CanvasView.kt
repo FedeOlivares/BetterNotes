@@ -3,6 +3,7 @@ package app.betternotes.canvas
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
+import app.betternotes.pdf.PdfThumbnails
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -116,7 +117,7 @@ sealed interface CanvasTool {
     data object Laser : CanvasTool
 
     /** Selects items and moves or resizes the selection. */
-    data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean) : CanvasTool
+    data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean, val anyPortion: Boolean = false) : CanvasTool
 
     /** Drags out a new shape. */
     data class Shape(val options: ShapeOptions) : CanvasTool
@@ -275,6 +276,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return if (index >= 0) index else lastCurrentPage
         }
 
+    /** How far down the scrollable range the view is, 0 at the top and 1 at the bottom, or null if it cannot scroll. */
+    val scrollFraction: Float?
+        get() {
+            val layout = layout ?: return null
+            if (layout.isInfinite || width == 0) return null
+            val scale = viewport.pxPerPt
+            val max = layout.maxPanY(scale, height, pageMarginPx)
+            val min = layout.minPanY(scale, height, pageMarginPx)
+            return if (max - min < 1f) null else ((max - viewport.panY) / (max - min)).coerceIn(0f, 1f)
+        }
+
     val pageCount get() = editor?.document?.pages?.size ?: 0
 
     /** How thick the laser's tail is, relative to its middle setting. */
@@ -380,6 +392,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Called when a circle drawn with the pen has been touched and the lasso should take over. */
     var onLassoRequested: () -> Unit = {}
+
+    /** How a circle drawn for circle to lasso picks what it surrounds: the same as the lasso tool is set to. */
+    var circleLasso = CanvasTool.Lasso(rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
 
     /** Called when the selection is dropped: a touch outside it, a delete, or a change of tool. */
     var onSelectionDropped: () -> Unit
@@ -1092,7 +1107,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 syncChanges()
                 return
             }
-            lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly)
+            lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly, tool.anyPortion)
             syncChanges()
         } else if (tool is CanvasTool.Shape) {
             shapePointer = pointerId
@@ -1573,6 +1588,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         drawing.scale(scale, scale)
         paint.paintPage(drawing, page, Bounds(0f, 0f, size.widthPt, size.heightPt), scale)
         return bitmap
+    }
+
+    /** The PDF's own picture of a page, or null if it is not a PDF page. Rendered in the background and cached. */
+    suspend fun pdfThumbnail(pageId: Long, widthPx: Int): Bitmap? {
+        val open = editor ?: return null
+        val source = open.document.pages.firstOrNull { it.id == pageId }?.source as? PageSource.PdfPage ?: return null
+        return PdfThumbnails.cached(open.store, source, widthPx)
     }
 
     // ---- Recordings ----
@@ -2218,7 +2240,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         // The circle itself is the lasso: its line is taken off the page and what it surrounds is selected.
         val content = editor.content(pageId)
         val own = (0 until content.size).firstOrNull { content[it].id == loop.item.id } ?: return false
-        val inside = selectWithLasso(pageId, content, StrokeGestures.polygon(loop.item.points), ALL_ITEM_KINDS, false)
+        val inside = selectWithLasso(
+            pageId,
+            content,
+            StrokeGestures.polygon(loop.item.points),
+            circleLasso.kinds,
+            circleLasso.fullOnly,
+            circleLasso.anyPortion,
+        )
         val picked = inside.indices.indices.filter { inside.indices[it] != own }
         if (picked.isEmpty()) return false
         editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
