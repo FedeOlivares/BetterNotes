@@ -15,6 +15,8 @@ import app.betternotes.core.model.TipShape
 import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.ImageOptions
 import app.betternotes.core.tools.InkPreset
+import app.betternotes.core.tools.ToolbarEntries
+import app.betternotes.core.tools.ToolbarGroups
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.NoteOptions
@@ -31,6 +33,34 @@ import org.json.JSONObject
 internal class ToolStore(context: Context) {
     private val prefs = context.getSharedPreferences("editor_tools", Context.MODE_PRIVATE)
 
+    init {
+        addFillKind()
+    }
+
+    /**
+     * Paint bucket fills arrived after the eraser and the lasso had saved which kinds of item they act on, so those lists lack them, and a
+     * lasso round a drawing left its colors behind. Once, the fill is added to both lists. After that the owner's choice stands.
+     */
+    private fun addFillKind() {
+        if (prefs.getBoolean(KEY_FILL_KIND_ADDED, false)) return
+        prefs.edit {
+            for (key in listOf(KEY_ERASER, KEY_LASSO)) {
+                val saved = prefs.getString(key, null) ?: continue
+                try {
+                    val json = JSONObject(saved)
+                    val kinds = json.getJSONArray("kinds")
+                    if ((0 until kinds.length()).none { kinds.getString(it) == ItemKind.FILL.name }) {
+                        kinds.put(ItemKind.FILL.name)
+                        putString(key, json.toString())
+                    }
+                } catch (_: JSONException) {
+                    // A list that cannot be read is replaced by the default, which has the fill.
+                }
+            }
+            putBoolean(KEY_FILL_KIND_ADDED, true)
+        }
+    }
+
     fun preset(tool: InkTool): InkPreset {
         val saved = prefs.getString(tool.name, null) ?: return InkPreset.defaults(tool)
         return try {
@@ -44,6 +74,86 @@ internal class ToolStore(context: Context) {
 
     fun save(preset: InkPreset) {
         prefs.edit { putString(preset.tool.name, encode(preset).toString()) }
+    }
+
+    /** The color of the toolbars, or null when the owner has not chosen one. */
+    fun toolbarColor(): Int? = if (prefs.contains(KEY_TOOLBAR_COLOR)) prefs.getInt(KEY_TOOLBAR_COLOR, 0) else null
+
+    fun saveToolbarColor(color: Int?) {
+        prefs.edit { if (color == null) remove(KEY_TOOLBAR_COLOR) else putInt(KEY_TOOLBAR_COLOR, color) }
+    }
+
+    /** Which screen edge the toolbars sit on. */
+    fun toolbarEdge(): ToolbarEdge = ToolbarEdge.entries.firstOrNull { it.name == prefs.getString(KEY_TOOLBAR_EDGE, null) } ?: ToolbarEdge.TOP
+
+    fun saveToolbarEdge(edge: ToolbarEdge) {
+        prefs.edit { putString(KEY_TOOLBAR_EDGE, edge.name) }
+    }
+
+    /** The arrangement of the strip's tools, as their keys with groups in it, and the keys of the ones the owner hid. Empty until chosen. */
+    fun toolLayout(): ToolbarEntries = ToolbarGroups.decode(prefs.getString(KEY_TOOL_ORDER, null))
+
+    fun saveToolLayout(layout: ToolbarEntries) {
+        prefs.edit { putString(KEY_TOOL_ORDER, ToolbarGroups.encode(layout)) }
+    }
+
+    fun hiddenTools(): Set<String> = prefs.getString(KEY_TOOLS_HIDDEN, null).orEmpty().split(',').filter { it.isNotEmpty() }.toSet()
+
+    fun saveHiddenTools(hidden: Set<String>) {
+        prefs.edit { putString(KEY_TOOLS_HIDDEN, hidden.joinToString(",")) }
+    }
+
+    fun moveToolbar(): Boolean = prefs.getBoolean(KEY_MOVE_TOOLBAR, false)
+
+    fun saveMoveToolbar(on: Boolean) {
+        prefs.edit { putBoolean(KEY_MOVE_TOOLBAR, on) }
+    }
+
+    /** The grid overlay: whether it is on, and which of its two patterns show. */
+    fun grid(): GridOptions = GridOptions(
+        on = prefs.getBoolean(KEY_GRID_ON, false),
+        cross = prefs.getBoolean(KEY_GRID_CROSS, true),
+        thirds = prefs.getBoolean(KEY_GRID_THIRDS, false),
+    )
+
+    fun saveGrid(grid: GridOptions) {
+        prefs.edit {
+            putBoolean(KEY_GRID_ON, grid.on)
+            putBoolean(KEY_GRID_CROSS, grid.cross)
+            putBoolean(KEY_GRID_THIRDS, grid.thirds)
+        }
+    }
+
+    /** The paint bucket's color and opacity. */
+    fun fillColor(): Int = prefs.getInt(KEY_FILL_COLOR, DEFAULT_FILL_COLOR)
+
+    fun fillOpacity(): Float = prefs.getFloat(KEY_FILL_OPACITY, 1f)
+
+    /** Whether the paint bucket gives the tool in use before back after a while, and how long that is, in tenths of a second. */
+    fun fillReturn(): Boolean = prefs.getBoolean(KEY_FILL_RETURN, true)
+
+    fun fillReturnDelay(): Int = prefs.getInt(KEY_FILL_RETURN_DELAY, DEFAULT_FILL_RETURN_DELAY)
+
+    fun saveFillReturn(on: Boolean, delayTenths: Int) {
+        prefs.edit {
+            putBoolean(KEY_FILL_RETURN, on)
+            putInt(KEY_FILL_RETURN_DELAY, delayTenths)
+        }
+    }
+
+    /** The colors on the paint bucket's bar, in the order the owner arranged them. */
+    fun fillColors(): List<Int> = prefs.getString(KEY_FILL_COLORS, null)?.split(',')?.mapNotNull { it.toIntOrNull() }?.takeIf { it.isNotEmpty() }
+        ?: DEFAULT_FILL_COLORS
+
+    fun saveFillColors(colors: List<Int>) {
+        prefs.edit { putString(KEY_FILL_COLORS, colors.joinToString(",")) }
+    }
+
+    fun saveFill(color: Int, opacity: Float) {
+        prefs.edit {
+            putInt(KEY_FILL_COLOR, color)
+            putFloat(KEY_FILL_OPACITY, opacity)
+        }
     }
 
     fun eraser(): EraserOptions = read(KEY_ERASER, EraserOptions()) { json ->
@@ -136,6 +246,7 @@ internal class ToolStore(context: Context) {
                 align = HorizontalAlign.valueOf(json.getString("align")),
                 verticalAlign = VerticalAlign.valueOf(json.getString("verticalAlign")),
             ),
+            keepOpen = json.optBoolean("keepOpen", false),
         )
     }
 
@@ -150,6 +261,7 @@ internal class ToolStore(context: Context) {
             put("strike", options.style.strikethrough)
             put("align", options.style.align.name)
             put("verticalAlign", options.style.verticalAlign.name)
+            put("keepOpen", options.keepOpen)
         }
         prefs.edit { putString(KEY_NOTE, json.toString()) }
     }
@@ -261,8 +373,10 @@ internal class ToolStore(context: Context) {
         put("holdDelayMs", preset.holdDelayMs)
         put("scribbleToErase", preset.scribbleToErase)
         put("circleToLasso", preset.circleToLasso)
-        put("stabilization", preset.stabilization)
+        put("stabilizationLevel", preset.stabilization)
         put("brush", preset.brush.name)
+        put("noOverlap", preset.noOverlap)
+        put("pressure", preset.pressure)
     }
 
     private fun decode(tool: InkTool, json: JSONObject) = InkPreset(
@@ -280,8 +394,11 @@ internal class ToolStore(context: Context) {
         holdDelayMs = json.getInt("holdDelayMs"),
         scribbleToErase = json.getBoolean("scribbleToErase"),
         circleToLasso = json.getBoolean("circleToLasso"),
-        stabilization = json.getInt("stabilization"),
+        // Saved tools from before the 0 to 10 scale have the old 1 to 5 under "stabilization".
+        stabilization = if (json.has("stabilizationLevel")) json.getInt("stabilizationLevel") else (json.optInt("stabilization", 1) - 1) * 2,
         brush = BrushKind.entries.firstOrNull { it.name == json.optString("brush") } ?: BrushKind.PENCIL,
+        noOverlap = json.optBoolean("noOverlap", false),
+        pressure = json.optBoolean("pressure", false),
     )
 
     private fun JSONArray.ints() = List(length()) { getInt(it) }
@@ -296,5 +413,31 @@ internal class ToolStore(context: Context) {
         const val KEY_IMAGE = "image"
         const val KEY_TAPE = "tape"
         const val KEY_TABLE = "table"
+        const val KEY_TOOLBAR_COLOR = "toolbar_color"
+        const val KEY_FILL_KIND_ADDED = "fill_kind_added"
+        const val KEY_FILL_COLOR = "fill_color"
+        const val KEY_FILL_COLORS = "fill_colors"
+        const val KEY_FILL_OPACITY = "fill_opacity"
+        val DEFAULT_FILL_COLOR = 0xFFFFD54F.toInt()
+        val DEFAULT_FILL_COLORS = listOf(
+            0xFFE57373.toInt(),
+            0xFFFFB74D.toInt(),
+            0xFFFFD54F.toInt(),
+            0xFF81C784.toInt(),
+            0xFF64B5F6.toInt(),
+            0xFFBA68C8.toInt(),
+            0xFF90A4AE.toInt(),
+            0xFF25282D.toInt(),
+        )
+        const val KEY_TOOLBAR_EDGE = "toolbar_edge"
+        const val KEY_FILL_RETURN = "fill_return"
+        const val KEY_FILL_RETURN_DELAY = "fill_return_delay"
+        const val DEFAULT_FILL_RETURN_DELAY = 20
+        const val KEY_TOOL_ORDER = "tool_order"
+        const val KEY_TOOLS_HIDDEN = "tools_hidden"
+        const val KEY_MOVE_TOOLBAR = "toolbar_move"
+        const val KEY_GRID_ON = "grid_on"
+        const val KEY_GRID_CROSS = "grid_cross"
+        const val KEY_GRID_THIRDS = "grid_thirds"
     }
 }

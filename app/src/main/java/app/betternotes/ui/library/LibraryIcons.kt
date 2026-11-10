@@ -49,6 +49,7 @@ internal object LibraryIcons {
         outline = "M5 4.5h14a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2z" +
             "M7.500 16c1.500-3.500 3.500-7.500 4.500-7c.8.4-.5 3.500-1.500 6.500c1.500-2 4.500-7 5.500-6.500c.8.4-1 4-1 6.500",
     )
+    val Notebook = icon("notebook", outline = "M6.500 3.500h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1zM9.500 3.500v17M12.500 8h3.500")
     val Microphone = icon(
         "microphone",
         outline = "M12 3a3 3 0 0 1 3 3v5.5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M9 21h6",

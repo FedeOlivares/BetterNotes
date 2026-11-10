@@ -107,7 +107,9 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
             val bitmap = createBitmap(frame.outputWidth, frame.outputHeight)
             try {
                 paint(Canvas(bitmap), pages[index], frame, frame.scale, options.invert)
-                val name = exportFileName(title, options.format.extension, index + 1, pages.size)
+                // The cover, when there is one, is page 0 and the others count from 1, as in the editor.
+                val offset = if (pages.firstOrNull()?.isCover == true) 1 else 0
+                val name = exportFileName(title, options.format.extension, index + 1 - offset, pages.size - offset)
                 open(name).use { out ->
                     if (!bitmap.compress(format, options.quality, out)) throw IOException("Could not encode $name")
                 }
@@ -197,6 +199,8 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
         override fun contentOrLoad(pageId: Long) = content.takeIf { pageId == this.pageId }
 
         override fun mesh(item: StrokeItem): Stroke = item.toInkStroke()
+
+        override fun opaqueMesh(item: StrokeItem): Stroke = item.toInkStroke(opaque = true)
     }
 
     private companion object {

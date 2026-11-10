@@ -2,10 +2,11 @@ package app.betternotes.core.export
 
 /**
  * Pages typed as a range, such as "2-5, 8". Counts from 1 as people do, and gives back indices from 0.
+ * [firstNumber] is the number the first page has: 0 in a notebook whose cover is page 0.
  * Returns null if the text isn't a range, or names a page the document doesn't have. Blank text is no
  * pages at all, so that a half-typed range never selects everything by accident.
  */
-fun parsePageRange(text: String, pageCount: Int): List<Int>? {
+fun parsePageRange(text: String, pageCount: Int, firstNumber: Int = 1): List<Int>? {
     val parts = text.split(',', ';').map { it.trim() }.filter { it.isNotEmpty() }
     if (parts.isEmpty()) return if (text.isBlank()) emptyList() else null
     val pages = LinkedHashSet<Int>()
@@ -17,8 +18,8 @@ fun parsePageRange(text: String, pageCount: Int): List<Int>? {
             2 -> ends[1].toIntOrNull() ?: return null
             else -> return null
         }
-        if (first < 1 || last < first || last > pageCount) return null
-        for (page in first..last) pages += page - 1
+        if (first < firstNumber || last < first || last > pageCount - 1 + firstNumber) return null
+        for (page in first..last) pages += page - firstNumber
     }
     return pages.sorted()
 }

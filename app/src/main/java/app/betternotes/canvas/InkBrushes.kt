@@ -49,10 +49,8 @@ internal object InkBrushes {
     private const val STAMP_LOOP_MS = 1000L
     private const val OIL_RUN = 1.8f
     private const val OIL_RUN_STAGGER = 0.2f
-    private const val CALLIGRAPHY_DEPTH = 0.12f
-    private const val CALLIGRAPHY_MIN_WIDTH = 0.1f
-    private const val CALLIGRAPHY_POINT = 0.04f
-    private const val CALLIGRAPHY_TAPER = 1.6f
+    private const val CALLIGRAPHY_POINT = 0.08f
+    private const val CALLIGRAPHY_TAPER = 1.4f
 
     private val pressurePen by lazy { StockBrushes.pressurePen(PressurePenVersion.V1) }
     /** The pressure pen, with its width and opacity wavering by a few percent along the line, as ink from a real pen does. */
@@ -66,42 +64,39 @@ internal object InkBrushes {
     }
     private val marker by lazy { StockBrushes.marker(MarkerVersion.V1) }
     private val highlighter by lazy { StockBrushes.highlighter(version = HighlighterVersion.V1) }
-    /** The stock highlighter, but ending in a half circle. Its tip has square corners rounded off. */
+    /**
+     * The stock highlighter, with a round tip: a circle as wide as the stock tip is long, so the line is as thick but starts and ends in a
+     * half circle whatever way it runs. Rounding the corners of the stock tip is not enough, since that tip is a narrow bar.
+     */
     private val roundHighlighter by lazy {
         val stock = highlighter.coats.first()
-        val tip = stock.tip.toBuilder().setCornerRounding(1f).build()
+        val side = maxOf(stock.tip.scaleX, stock.tip.scaleY)
+        val tip = stock.tip.toBuilder()
+            .setCornerRounding(1f).setScaleX(side).setScaleY(side)
+            .setSlantDegrees(0f).setRotationDegrees(0f)
+            .build()
         BrushFamily.builder().setCoat(stock.copy(tip = tip)).setInputModel(highlighter.inputModel).build()
     }
     private val dashed by lazy { StockBrushes.dashedLine(DashedLineVersion.V1) }
     private val squareNib by lazy { familyOf(BrushTip.builder().setCornerRounding(0f).build()) }
     /**
-     * A broad nib held level: its width across the line follows the line's direction, widest going straight up or
-     * down and thinnest going across, in between in proportion (half way at 45 degrees).
+     * The calligraphy pen: a round nib whose line starts in a point, growing over its first line widths, smoothly into the full width. It is as wide everywhere
+     * else, whatever way the line runs, and ends blunt: a tip that shrinks toward the end of the line cannot be drawn while the line is
+     * still growing, and showed as ink that stopped short of the pen. Pressure, when it is on, makes it thicker or thinner.
      */
     private val calligraphyNib by lazy {
         BrushFamily.builder()
             .setCoat(
                 BrushCoat(
                     BrushTip.builder()
-                        .setScaleX(CALLIGRAPHY_DEPTH)
-                        .setScaleY(1f)
-                        .setCornerRounding(0.3f)
-                        .addBehavior(aimedAtDirection())
-                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_MIN_WIDTH, 1f, ResponseNode(calligraphyWidth, SourceNode(SourceNode.Source.DIRECTION_IN_RADIANS, 0f, TWO_PI)))))
-                        // The stroke starts and ends in a point: it grows over its first line widths and shrinks over its last.
-                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_POINT, 1f, SourceNode(SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, CALLIGRAPHY_TAPER))))
-                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.HEIGHT_MULTIPLIER, CALLIGRAPHY_POINT, 1f, SourceNode(SourceNode.Source.DISTANCE_REMAINING_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, CALLIGRAPHY_TAPER))))
+                        .setCornerRounding(1f)
+                        .addBehavior(BrushBehavior(TargetNode(TargetNode.Target.SIZE_MULTIPLIER, CALLIGRAPHY_POINT, 1f, ResponseNode(EasingFunction.Predefined.EASE_IN_OUT, SourceNode(SourceNode.Source.DISTANCE_TRAVELED_IN_MULTIPLES_OF_BRUSH_SIZE, 0f, CALLIGRAPHY_TAPER)))))
                         .build(),
                 ),
             )
             .setInputModel(BrushFamily.InputModel.SlidingWindowModel())
             .build()
     }
-
-    /** From the direction of travel, over a whole turn, to how wide the nib is: thin at 0 and 180 degrees, full at 90 and 270. */
-    private val calligraphyWidth = EasingFunction.Linear(
-        listOf(ImmutableVec(0f, 0f), ImmutableVec(0.25f, 1f), ImmutableVec(0.5f, 0f), ImmutableVec(0.75f, 1f), ImmutableVec(1f, 0f)),
-    )
 
     // ---- The creative brushes ----
     //
@@ -400,7 +395,92 @@ internal object InkBrushes {
         Brush.createWithColorIntArgb(family(style), colorOf(style), style.width, EPSILON_PT)
     }
 
-    private fun family(style: InkStyle): BrushFamily = when {
+    private val opaqueBrushes = ConcurrentHashMap<InkStyle, Brush>()
+
+    /**
+     * The brush for a finished no-overlap highlighter stroke: fully opaque, so strokes drawn into one layer cover each other
+     * instead of adding up. The layer then gives them the style's see-through look, see [layerAlpha].
+     */
+    fun opaqueBrush(style: InkStyle): Brush = opaqueBrushes.getOrPut(style) {
+        Brush.createWithColorIntArgb(family(style), style.color or OPAQUE_ALPHA, style.width, EPSILON_PT)
+    }
+
+    /** How see-through the layer of no-overlap highlighter strokes is, from 0 to 255, or -1 for any other stroke. */
+    fun layerAlpha(style: InkStyle): Int =
+        if (style.noOverlap && style.tool == InkTool.HIGHLIGHTER) colorOf(style) ushr ALPHA_SHIFT else -1
+
+    private const val OPAQUE_ALPHA = 0xFF000000.toInt()
+    private const val ALPHA_SHIFT = 24
+
+    private fun family(style: InkStyle): BrushFamily {
+        val plain = plainFamily(style)
+        // The natural pen always follows pressure. Dashed lines have no width to vary.
+        val natural = style.tool == InkTool.PEN && style.penType == PenType.NATURAL && style.tip != TipShape.SQUARE
+        return if (style.pressure && !natural && style.line.kind == LineKind.SOLID) withPressure(plain) else plain
+    }
+
+    private val pressureFamilies = ConcurrentHashMap<BrushFamily, BrushFamily>()
+
+    /**
+     * From no pressure at the left to full at the right, to how far between the thinnest and the widest the width is, as straight lines
+     * between: 5% of the width with no pressure, 90% at 35% pressure, the set width at 45%, and 150% at full pressure.
+     */
+    private val pressureCurve = EasingFunction.Linear(
+        listOf(
+            ImmutableVec(0f, 0f),
+            ImmutableVec(0.35f, widthStep(0.9f)),
+            ImmutableVec(0.45f, widthStep(1f)),
+            ImmutableVec(1f, 1f),
+        ),
+    )
+
+    /**
+     * How wide a line drawn at [pressure] comes out as a share of the set width, for a pen that follows pressure, and 1 for one that does
+     * not. The natural pen follows it too, and its own curve is taken to be the same.
+     */
+    fun meanWidthFactor(style: InkStyle, pressure: Float): Float {
+        val natural = style.tool == InkTool.PEN && style.penType == PenType.NATURAL && style.tip != TipShape.SQUARE
+        if (!(style.pressure || natural) || style.line.kind != LineKind.SOLID) return 1f
+        val p = pressure.coerceIn(0f, 1f)
+        val points = listOf(0f to 0f, 0.35f to widthStep(0.9f), 0.45f to widthStep(1f), 1f to 1f)
+        var step = 1f
+        for (i in 1 until points.size) {
+            if (p <= points[i].first) {
+                val (x0, y0) = points[i - 1]
+                val (x1, y1) = points[i]
+                step = y0 + (y1 - y0) * (p - x0) / (x1 - x0)
+                break
+            }
+        }
+        return PRESSURE_THINNEST + (PRESSURE_WIDEST - PRESSURE_THINNEST) * step
+    }
+
+    private const val PRESSURE_THINNEST = 0.05f
+    private const val PRESSURE_WIDEST = 1.5f
+
+    /** Where a width, as a share of the set one, lies between the thinnest and the widest. */
+    private fun widthStep(width: Float) = (width - PRESSURE_THINNEST) / (PRESSURE_WIDEST - PRESSURE_THINNEST)
+
+    /** [family] with the width of every coat following how hard the pen presses. */
+    private fun withPressure(family: BrushFamily): BrushFamily = pressureFamilies.getOrPut(family) {
+        val follow = BrushBehavior(
+            TargetNode(
+                TargetNode.Target.SIZE_MULTIPLIER,
+                PRESSURE_THINNEST,
+                PRESSURE_WIDEST,
+                ResponseNode(pressureCurve, SourceNode(SourceNode.Source.NORMALIZED_PRESSURE, 0f, 1f)),
+            ),
+        )
+        val varied = BrushFamily.builder()
+            .setCoats(family.coats.map { coat -> coat.copy(tip = coat.tip.toBuilder().addBehavior(follow).build()) })
+            .setInputModel(family.inputModel)
+            .build()
+        // A stamped brush has a plain look-alike for canvases that cannot stamp, and that one follows pressure too.
+        standIns[family]?.let { standIns[varied] = withPressure(it) }
+        varied
+    }
+
+    private fun plainFamily(style: InkStyle): BrushFamily = when {
         style.line.kind != LineKind.SOLID -> dashed
         style.tool == InkTool.HIGHLIGHTER -> if (style.tip == TipShape.SQUARE) highlighter else roundHighlighter
         style.tip == TipShape.SQUARE && style.tool != InkTool.PENCIL -> squareNib

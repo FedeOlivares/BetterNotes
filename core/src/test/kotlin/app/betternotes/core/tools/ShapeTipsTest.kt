@@ -43,8 +43,8 @@ class ShapeTipsTest {
     }
 
     @Test
-    fun aRectangleHasOnlyAStrokeHandle() {
-        assertEquals(setOf(ShapeParam.STROKE_WIDTH), ShapeTips.params(ShapeKind.RECTANGLE))
+    fun aRectangleHasAStrokeAndACornerHandle() {
+        assertEquals(setOf(ShapeParam.STROKE_WIDTH, ShapeParam.CORNER_RADIUS), ShapeTips.params(ShapeKind.RECTANGLE))
         assertTrue(ShapeTips.params(ShapeKind.TAPE).isEmpty())
     }
 

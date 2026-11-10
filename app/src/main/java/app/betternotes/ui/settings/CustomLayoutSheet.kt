@@ -216,13 +216,19 @@ fun CustomLayoutSheet(
                                 changed()
                             }
                         },
-                        onLineEnd = { index, end, x, y ->
-                            val line = builder.elements.getOrNull(index) as? LayoutElement.Line
-                            if (line != null) {
-                                val px = x.coerceIn(0f, builder.size.widthPt)
-                                val py = y.coerceIn(0f, builder.size.heightPt)
-                                builder.update(index, if (end == 0) line.copy(x0 = px, y0 = py) else line.copy(x1 = px, y1 = py))
-                                changed()
+                        onHandle = { index, handle, x, y ->
+                            when (val element = builder.elements.getOrNull(index)) {
+                                null -> Unit
+                                is LayoutElement.Line -> {
+                                    val px = x.coerceIn(0f, builder.size.widthPt)
+                                    val py = y.coerceIn(0f, builder.size.heightPt)
+                                    builder.update(index, if (handle == 0) element.copy(x0 = px, y0 = py) else element.copy(x1 = px, y1 = py))
+                                    changed()
+                                }
+                                else -> {
+                                    builder.resizeCorner(index, handle, x, y)
+                                    changed()
+                                }
                             }
                         },
                         onFrameLine = { index, fraction ->

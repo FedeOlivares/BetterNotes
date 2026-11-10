@@ -13,6 +13,8 @@ data class NoteOptions(
     val selectedColor: Int = 1,
     val textSize: Int = 9,
     val style: TextStyle = TextStyle(),
+    /** New sticky notes stay open when the page is tapped elsewhere. */
+    val keepOpen: Boolean = false,
 ) {
     val color get() = colors[selectedColor]
 
@@ -28,6 +30,7 @@ data class NoteOptions(
         frame = Frame(x, y, STICKY_SIZE, STICKY_SIZE),
         color = color,
         isOpen = true,
+        keepOpen = keepOpen,
     )
 
     companion object {

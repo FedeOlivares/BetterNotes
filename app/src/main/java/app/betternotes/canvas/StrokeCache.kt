@@ -26,9 +26,13 @@ internal const val STROKE_UNIT_CM = 2.54f / 72f
  */
 internal class StrokeCache {
     private val meshes = IdentityHashMap<StrokeItem, Stroke>()
+    private val opaqueMeshes = IdentityHashMap<StrokeItem, Stroke>()
     private var sweepAt = MIN_SWEEP_SIZE
 
     fun get(item: StrokeItem): Stroke = meshes.getOrPut(item) { item.toInkStroke() }
+
+    /** The opaque mesh of a no-overlap highlighter stroke, see [InkBrushes.opaqueBrush]. */
+    fun getOpaque(item: StrokeItem): Stroke = opaqueMeshes.getOrPut(item) { item.toInkStroke(opaque = true) }
 
     fun put(item: StrokeItem, stroke: Stroke) {
         meshes[item] = stroke
@@ -44,6 +48,7 @@ internal class StrokeCache {
             }
         }
         meshes.keys.retainAll { it in live }
+        opaqueMeshes.keys.retainAll { it in live }
         sweepAt = maxOf(MIN_SWEEP_SIZE, meshes.size * 2)
     }
 
@@ -103,7 +108,7 @@ internal class InkRenderer {
 }
 
 /** Meshes a saved stroke. Safe from any thread. */
-internal fun StrokeItem.toInkStroke(): Stroke {
+internal fun StrokeItem.toInkStroke(opaque: Boolean = false): Stroke {
     val tool = if (points.pressure(0) == StrokePoints.UNKNOWN) InputToolType.TOUCH else InputToolType.STYLUS
     val batch = MutableStrokeInputBatch()
     for (i in 0 until points.size) {
@@ -123,7 +128,7 @@ internal fun StrokeItem.toInkStroke(): Stroke {
             points.orientation(i),
         )
     }
-    return Stroke(InkBrushes.brush(style), batch)
+    return Stroke(if (opaque) InkBrushes.opaqueBrush(style) else InkBrushes.brush(style), batch)
 }
 
 /** Meshes every stroke among [items], on all cores, since this is most of the time a page takes to open. */

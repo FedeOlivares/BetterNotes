@@ -7,7 +7,7 @@ import android.os.LocaleList
 /** The languages the app's text comes in. A name is shown in its own language. */
 enum class AppLanguage(val tag: String, val nativeName: String) {
     ENGLISH("en", "English"),
-    SPANISH("es-419", "Español (Latinoamérica)");
+    SPANISH("es-419", "Español");
 
     /** Switches the whole app and remembers the choice. The system recreates what is on screen. */
     fun apply(context: Context) {

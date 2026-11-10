@@ -11,6 +11,9 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class PageAppearanceTest {
+    /** Templates with no density or line weight to set. */
+    private val FIXED_LOOK = setOf(TemplateKind.BLANK, TemplateKind.SEMESTER, TemplateKind.MIND_MAP, TemplateKind.WEEK_PLANNER)
+
     private fun note() = Document.newNote("Note", PageSize.A4, PageBackground(), 0L, CountingIds())
     private fun pdf() = Document.fromPdf("PDF", "asset", listOf(PageSize.Letter), 0L, CountingIds())
     private fun canvas() = Document.newCanvas("Canvas", PageBackground(), 0L, CountingIds())
@@ -24,7 +27,7 @@ class PageAppearanceTest {
     fun `density and line weight are read and set for every template that has them`() {
         for (kind in TemplateKind.entries) {
             val template = kind.newTemplate()
-            if (kind == TemplateKind.BLANK) {
+            if (kind in FIXED_LOOK) {
                 assertNull(template.density)
                 assertNull(template.lineWeight)
                 assertEquals(template, template.withDensity(10f))
@@ -46,7 +49,7 @@ class PageAppearanceTest {
     fun `slider steps land on each template and step 7 and 3 are its defaults`() {
         for (kind in TemplateKind.entries) {
             val template = kind.newTemplate()
-            if (kind == TemplateKind.BLANK) continue
+            if (kind in FIXED_LOOK) continue
             assertEquals(7, template.densityLevel)
             assertEquals(3, template.lineWeightLevel)
             for (level in TEMPLATE_LEVELS) {
@@ -238,6 +241,34 @@ class CustomLayoutBuilderTest {
         val index = builder.add(table)
         builder.moveBy(index, -500f, 500f)
         assertEquals(Bounds(0f, 100f, 100f, 200f), builder.elements[index].bounds)
+    }
+
+    @Test
+    fun `dragging a corner resizes a box and keeps the opposite corner`() {
+        val builder = CustomLayoutBuilder("Mine", PageSize(200f, 200f))
+        val box = LayoutElement.Rectangle(50f, 50f, 40f, 40f, 1f, 0)
+        val index = builder.add(box)
+        builder.resizeCorner(index, 2, 150f, 120f)
+        assertEquals(Bounds(50f, 50f, 150f, 120f), builder.elements[index].bounds)
+        builder.resizeCorner(index, 0, 20f, 10f)
+        assertEquals(Bounds(20f, 10f, 150f, 120f), builder.elements[index].bounds)
+    }
+
+    @Test
+    fun `a box dragged past its opposite corner stops at the smallest size, and the page edge`() {
+        val builder = CustomLayoutBuilder("Mine", PageSize(200f, 200f))
+        val index = builder.add(LayoutElement.Sticky(50f, 50f, 40f, 40f, 0))
+        builder.resizeCorner(index, 2, 0f, 0f)
+        assertEquals(Bounds(50f, 50f, 50f + MIN_BOX_PT, 50f + MIN_BOX_PT), builder.elements[index].bounds)
+        builder.resizeCorner(index, 1, 900f, -900f)
+        assertEquals(Bounds(50f, 0f, 200f, 50f + MIN_BOX_PT), builder.elements[index].bounds)
+    }
+
+    @Test
+    fun `every box element has four corners to drag and a line has none`() {
+        assertEquals(4, LayoutElement.Table(0f, 0f, 10f, 10f, 2, 2, 1f, 0).corners.size)
+        assertEquals(4, LayoutElement.Ruled(0f, 0f, 10f, 10f, 4f, 1f, 0).corners.size)
+        assertEquals(0, LayoutElement.Line(0f, 0f, 5f, 5f, 1f, 0).corners.size)
     }
 
     @Test

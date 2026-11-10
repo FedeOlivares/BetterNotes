@@ -14,18 +14,22 @@ class UnsupportedVersionException(val version: Int) : IOException("Unsupported f
 
 internal const val FORMAT_VERSION = 1
 
+/** The library file is at version 2 (release 1.4): a folder gained its own color, opacity and file-preview switch. Version 1 files still open. */
+internal const val LIBRARY_FORMAT_VERSION = 2
+
 /**
  * The document and settings files are at version 2, because they hold custom layouts: a layout gained a paper color,
- * a base pattern and book style (2), and the positions of a frame's movable lines (3). Older files still open, with the defaults.
+ * a base pattern and book style (2), and the positions of a frame's movable lines (3), and a page the angle it is shown at (4), and the cover page's design (5, release 1.4.1), and the planner: a document kind and a page template that holds its page and dates (6, release 1.6). Older files still open, with the defaults.
  * The other files are still at [FORMAT_VERSION].
  */
-internal const val LAYOUT_FORMAT_VERSION = 3
+internal const val LAYOUT_FORMAT_VERSION = 6
 
 /**
  * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).
- * Older pages still open, with the default tips and the pencil brush. The other files are still at [FORMAT_VERSION].
+ * Version 4 added the tape and its shadow; 5 (release 1.3) added a locked flag on every item, a sticky note's keep-open, an image's opacity and the highlighter's no-overlap.
+ * Version 6 (release 1.4) added the paint bucket's fill. Older pages still open, with the defaults. The other files are still at [FORMAT_VERSION].
  */
-internal const val PAGE_FORMAT_VERSION = 4
+internal const val PAGE_FORMAT_VERSION = 6
 
 private const val MAGIC_SIZE = 4
 private const val CRC_SIZE = 4

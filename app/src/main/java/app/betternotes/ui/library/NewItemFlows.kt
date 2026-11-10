@@ -18,6 +18,8 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.betternotes.R
+import app.betternotes.core.format.NotebookArchive
+import kotlinx.coroutines.launch
 import app.betternotes.core.settings.NewNoteName
 import app.betternotes.library.LibraryRepository
 import app.betternotes.library.PhotoLayout
@@ -32,6 +34,9 @@ internal fun showImportFailed(context: Context) {
 
 /** The "+" panel's actions, with the system screens several of them go through first. */
 internal class NewItemFlows(
+    /** The name a new notebook starts with, and what opens a document once it is made. */
+    val notebookTitle: String,
+    val open: (Long) -> Unit,
     val panel: NewItemActions,
     val importPdfWithPassword: (Uri, String) -> Unit,
 )
@@ -43,10 +48,12 @@ internal fun rememberNewItemActions(
     folderId: Long?,
     onOpenDocument: (id: Long, startAction: String?) -> Unit,
     onNewFolder: () -> Unit,
+    onNewNotebook: () -> Unit,
     importPdf: (Uri, String?) -> Unit,
 ): NewItemFlows {
     val context = LocalContext.current
     val resolver = context.contentResolver
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     val naming by settings.settings.collectAsStateWithLifecycle()
     val title = when (naming.newNoteName) {
         NewNoteName.DATED -> stringResource(R.string.settings_note_dated, LocalDate.now().toString())
@@ -78,9 +85,19 @@ internal fun rememberNewItemActions(
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val type = resolver.getType(uri).orEmpty()
+            val isNotebookFile = type == "application/octet-stream" || type == "application/zip" ||
+                uri.lastPathSegment.orEmpty().endsWith("." + NotebookArchive.EXTENSION)
             when {
                 type.startsWith("audio/") -> repository.createFromAudio(resolver, uri, title, folderId, failed, open)
                 type.startsWith("image/") -> addPhotos(listOf(uri), PhotoLayout.ON_PAGE)
+                // A notebook file from another copy of the app: it comes in as a new notebook, with its sources.
+                isNotebookFile -> scope.launch {
+                    if (repository.importNotebookFile(resolver, uri, folderId)) {
+                        Toast.makeText(context, R.string.library_notebook_imported, Toast.LENGTH_SHORT).show()
+                    } else {
+                        failed()
+                    }
+                }
                 else -> importPdf(uri, null)
             }
         }
@@ -93,11 +110,14 @@ internal fun rememberNewItemActions(
     }
 
     return NewItemFlows(
+        notebookTitle = title,
+        open = open,
         panel = NewItemActions(
             text = { repository.createText(title, folderId, open) },
+            notebook = onNewNotebook,
             canvas = { repository.createNote(title, folderId, open) },
             audio = { repository.createNote(title, folderId) { onOpenDocument(it, MainActivity.START_RECORDING) } },
-            fileOrDoc = { filePicker.launch(arrayOf("application/pdf", "audio/*", "image/*")) },
+            fileOrDoc = { filePicker.launch(arrayOf("application/pdf", "audio/*", "image/*", "application/octet-stream", "application/zip")) },
             takePhoto = { openCamera(PhotoLayout.ON_PAGE) },
             scan = { openCamera(PhotoLayout.FILLS_PAGE) },
             photos = {

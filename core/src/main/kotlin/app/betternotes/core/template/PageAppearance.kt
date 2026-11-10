@@ -22,6 +22,9 @@ enum class TemplateKind {
     MUSIC_SCORE,
     GUITAR_TAB,
     GUITAR_SCORE,
+    SEMESTER,
+    MIND_MAP,
+    WEEK_PLANNER,
 }
 
 fun TemplateKind.newTemplate(): PageTemplate = when (this) {
@@ -37,6 +40,9 @@ fun TemplateKind.newTemplate(): PageTemplate = when (this) {
     TemplateKind.LEGAL -> PageTemplate.Legal()
     TemplateKind.MUSIC_SCORE -> PageTemplate.MusicScore()
     TemplateKind.GUITAR_TAB -> PageTemplate.GuitarTab()
+    TemplateKind.SEMESTER -> PageTemplate.Semester
+    TemplateKind.MIND_MAP -> PageTemplate.MindMap
+    TemplateKind.WEEK_PLANNER -> PageTemplate.WeekPlanner
 }
 
 /** Null for a custom layout. */
@@ -54,7 +60,10 @@ val PageTemplate.kind: TemplateKind?
         is PageTemplate.Legal -> TemplateKind.LEGAL
         is PageTemplate.MusicScore -> TemplateKind.MUSIC_SCORE
         is PageTemplate.GuitarTab -> TemplateKind.GUITAR_TAB
-        is PageTemplate.Custom -> null
+        PageTemplate.Semester -> TemplateKind.SEMESTER
+        PageTemplate.MindMap -> TemplateKind.MIND_MAP
+        PageTemplate.WeekPlanner -> TemplateKind.WEEK_PLANNER
+        is PageTemplate.Planner, is PageTemplate.Custom -> null
     }
 
 val DENSITY_RANGE_PT = 4f..96f
@@ -74,7 +83,7 @@ val PageTemplate.density: Float?
         is PageTemplate.Legal -> spacing
         is PageTemplate.MusicScore -> lineGap
         is PageTemplate.GuitarTab -> lineGap
-        PageTemplate.Blank, is PageTemplate.Custom -> null
+        PageTemplate.Blank, PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner, is PageTemplate.Planner, is PageTemplate.Custom -> null
     }
 
 /** Sets [density], kept inside [DENSITY_RANGE_PT]. Templates with none come back unchanged. */
@@ -92,7 +101,7 @@ fun PageTemplate.withDensity(value: Float): PageTemplate {
         is PageTemplate.Legal -> copy(spacing = v)
         is PageTemplate.MusicScore -> copy(lineGap = v)
         is PageTemplate.GuitarTab -> copy(lineGap = v)
-        PageTemplate.Blank, is PageTemplate.Custom -> this
+        PageTemplate.Blank, PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner, is PageTemplate.Planner, is PageTemplate.Custom -> this
     }
 }
 
@@ -110,7 +119,7 @@ val PageTemplate.lineWeight: Float?
         is PageTemplate.Legal -> lineWidth
         is PageTemplate.MusicScore -> lineWidth
         is PageTemplate.GuitarTab -> lineWidth
-        PageTemplate.Blank, is PageTemplate.Custom -> null
+        PageTemplate.Blank, PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner, is PageTemplate.Planner, is PageTemplate.Custom -> null
     }
 
 /** Sets [lineWeight], kept inside [LINE_WEIGHT_RANGE_PT]. Templates with none come back unchanged. */
@@ -128,7 +137,7 @@ fun PageTemplate.withLineWeight(value: Float): PageTemplate {
         is PageTemplate.Legal -> copy(lineWidth = v)
         is PageTemplate.MusicScore -> copy(lineWidth = v)
         is PageTemplate.GuitarTab -> copy(lineWidth = v)
-        PageTemplate.Blank, is PageTemplate.Custom -> this
+        PageTemplate.Blank, PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner, is PageTemplate.Planner, is PageTemplate.Custom -> this
     }
 }
 
@@ -239,7 +248,8 @@ fun Document.applyCustomLayout(pageIds: Collection<Long>, layout: CustomLayout):
 private inline fun Document.pageEdit(pageIds: Collection<Long>, change: (Page) -> Page?): Edit? {
     val edits = pageIds.mapNotNull { id ->
         val before = page(id)
-        change(before)?.takeIf { it != before }?.let { UpdatePage(before, it) }
+        // The cover has its own design and size, which the paper and size pickers leave alone.
+        if (before.isCover) null else change(before)?.takeIf { it != before }?.let { UpdatePage(before, it) }
     }
     return when (edits.size) {
         0 -> null

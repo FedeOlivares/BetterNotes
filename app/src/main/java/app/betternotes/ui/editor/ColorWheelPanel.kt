@@ -67,10 +67,11 @@ internal fun ColorWheelPanel(state: EditorState, modifier: Modifier = Modifier) 
                 saturation = s
             }
         }
-        PanelSlider(
+        StepperSlider(
             fraction = value,
             onChange = { value = it },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            steps = 20,
+            modifier = Modifier.fillMaxWidth(),
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,

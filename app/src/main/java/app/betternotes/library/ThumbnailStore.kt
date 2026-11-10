@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.text.StaticLayout
 import android.text.TextPaint
@@ -18,17 +19,23 @@ import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import app.betternotes.canvas.BrushTextures
 import app.betternotes.canvas.InkBrushes
 import app.betternotes.canvas.CanvasTemplateSink
+import app.betternotes.canvas.ItemPainter
+import app.betternotes.core.model.PathShapeItem
+import app.betternotes.core.model.ShapeItem
 import app.betternotes.canvas.toInkStroke
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.library.LibraryStore
 import app.betternotes.core.model.DocumentKind
+import app.betternotes.core.model.FillItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TextItem
+import app.betternotes.core.template.CoverDesign
+import app.betternotes.ui.theme.templateLanguage
 import app.betternotes.core.template.draw
 import app.betternotes.pdf.PdfThumbnails
 import kotlinx.coroutines.Dispatchers
@@ -97,7 +104,8 @@ class ThumbnailStore(context: Context, private val library: LibraryStore) {
 
     private fun file(key: String) = File(folder, "$key.webp")
 
-    private fun key(id: Long, savedAtMs: Long) = java.lang.Long.toHexString(id) + "-" + savedAtMs
+    /** The last number is the picture's shape (2: square, 3: landscape covers zoomed), so pictures kept from the older shape are drawn again. */
+    private fun key(id: Long, savedAtMs: Long) = java.lang.Long.toHexString(id) + "-" + savedAtMs + "-3"
 
     private companion object {
         const val TAG = "Thumbnails"
@@ -111,7 +119,10 @@ class ThumbnailStore(context: Context, private val library: LibraryStore) {
 internal object ThumbnailRenderer {
     /** A little wider than the widest tile on the Pad 7, with about the same proportions. */
     const val WIDTH_PX = 720
-    const val HEIGHT_PX = 540
+    private const val LANDSCAPE_COVER_ZOOM = 1.15f
+
+    /** The tile's picture is square, as in the reference. */
+    const val HEIGHT_PX = 720
 
     /** How far a sparse canvas may zoom in, in pixels per point, so a single word does not fill the tile. */
     private const val MAX_CANVAS_SCALE = 2f
@@ -127,10 +138,12 @@ internal object ThumbnailRenderer {
         val page = document.pages[0]
         val items = store.readPage(page.id)
         val isPdf = document.kind == DocumentKind.PDF
-        val bitmap = createBitmap(WIDTH_PX, HEIGHT_PX)
+        // A cover is shown across its whole width and cut at the top and bottom around its middle.
+        val heightPx = HEIGHT_PX
+        val bitmap = createBitmap(WIDTH_PX, heightPx)
         bitmap.eraseColor(if (isPdf) WHITE else page.background.color)
         val canvas = Canvas(bitmap)
-        val view = if (page.size == null) canvasView(items) else pageView(page)
+        val view = if (page.size == null) canvasView(items) else pageView(page, heightPx)
         (page.source as? PageSource.PdfPage)?.let { drawPdf(canvas, store, it, view.top) }
         canvas.withTranslation(view.left, view.top) {
             scale(view.scale, view.scale)
@@ -138,9 +151,9 @@ internal object ThumbnailRenderer {
                 -view.left / view.scale,
                 -view.top / view.scale,
                 (WIDTH_PX - view.left) / view.scale,
-                (HEIGHT_PX - view.top) / view.scale,
+                (heightPx - view.top) / view.scale,
             )
-            if (!isPdf && view.scale >= MIN_PATTERN_SCALE) drawPattern(this, page, region)
+            if ((!isPdf || page.isCover) && view.scale >= MIN_PATTERN_SCALE) drawPattern(this, page, region, store.templateLanguage())
             drawItems(this, store, items, view.scale)
         }
         return bitmap
@@ -149,8 +162,14 @@ internal object ThumbnailRenderer {
     private class View(val scale: Float, val left: Float, val top: Float)
 
     /** Fits the page's width and shows its top. A page too short to fill the tile sits in the middle. */
-    private fun pageView(page: Page): View {
+    private fun pageView(page: Page, heightPx: Int): View {
         val size = page.size!!
+        if (page.isCover) {
+            // The cover fills the width, and the picture shows its middle: the top and bottom are cut.
+            // A landscape cover is zoomed in a little, so it fills the picture instead of sitting small in it.
+            val fit = WIDTH_PX / size.widthPt * if (size.widthPt > size.heightPt) LANDSCAPE_COVER_ZOOM else 1f
+            return View(fit, (WIDTH_PX - size.widthPt * fit) / 2f, (heightPx - size.heightPt * fit) / 2f)
+        }
         val scale = WIDTH_PX / size.widthPt
         val height = size.heightPt * scale
         return View(scale, 0f, if (height < HEIGHT_PX) (HEIGHT_PX - height) / 2f else 0f)
@@ -176,10 +195,14 @@ internal object ThumbnailRenderer {
         page.recycle()
     }
 
-    private fun drawPattern(canvas: Canvas, page: Page, region: Bounds) {
+    private fun drawPattern(canvas: Canvas, page: Page, region: Bounds, language: String) {
         val sink = CanvasTemplateSink()
+        sink.languageOverride = language
         sink.canvas = canvas
-        page.background.template.draw(page.size, region, sink)
+        val cover = CoverDesign.byId(page.cover)
+        val size = page.size
+        if (cover != null && size != null) cover.draw(sink, size, page.background.template)
+        else page.background.template.draw(page.size, region, sink, paper = page.background.color)
         sink.flush()
     }
 
@@ -187,14 +210,34 @@ internal object ThumbnailRenderer {
     private fun drawItems(canvas: Canvas, store: DocumentStore, items: List<PageItem>, scale: Float) {
         val renderer = CanvasStrokeRenderer.create(BrushTextures)
         val strokeToBitmap = Matrix().apply { setScale(scale, scale) }
+        // Shapes and paths, such as the items of a cover the owner has made editable, paint as they do on the page.
+        val shapes = ItemPainter()
         for (item in items) {
             when (item) {
                 is StrokeItem -> InkBrushes.draw(renderer, canvas, item.toInkStroke(), strokeToBitmap)
                 is ImageItem -> drawImage(canvas, store, item, scale)
                 is TextItem -> drawText(canvas, item)
+                is FillItem -> drawFill(canvas, item)
+                is ShapeItem, is PathShapeItem -> shapes.paint(canvas, item)
                 else -> Unit
             }
         }
+    }
+
+    /** A paint bucket fill, which lies under the ink, so its place in the order of drawing is the page's own. */
+    private fun drawFill(canvas: Canvas, item: FillItem) {
+        val path = Path().apply { fillType = Path.FillType.EVEN_ODD }
+        for (loop in item.loops) {
+            path.moveTo(loop[0], loop[1])
+            for (i in 2 until loop.size step 2) path.lineTo(loop[i], loop[i + 1])
+            path.close()
+        }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = item.color
+            alpha = (android.graphics.Color.alpha(item.color) * item.opacity).toInt().coerceIn(0, 255)
+        }
+        canvas.drawPath(path, paint)
     }
 
     private fun drawText(canvas: Canvas, item: TextItem) {

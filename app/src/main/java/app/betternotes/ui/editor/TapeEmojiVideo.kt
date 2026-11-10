@@ -11,7 +11,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.produceState
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -30,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -52,7 +64,7 @@ import kotlin.math.roundToInt
 internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifier) {
     Pill(modifier) {
         // The row holds more than fits beside the other pills, so it scrolls, as the pen's row does. The warning tape is last.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        ToolStrip {
             // On the left: what is printed on the tape, and whether it is always a straight strip, straightens on hold, or never does.
             ToolbarIcon(patternIcon(options.pattern), stringResource(R.string.editor_tape_pattern)) {
                 state.updateTape { it.copy(pattern = TapePattern.entries[(it.pattern.ordinal + 1) % TapePattern.entries.size]) }
@@ -123,32 +135,36 @@ internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modif
         }
         if (shadowOpen) {
             LabeledRow(R.string.panel_shadow_distance) { ValuePill { ValueText("%.1f".format(options.shadowDistance)) } }
-            PanelSlider(
+            StepperSlider(
                 fraction = options.shadowDistance / TapeOptions.MAX_SHADOW_DISTANCE,
                 onChange = { f -> state.updateTape { it.copy(shadowDistance = f * TapeOptions.MAX_SHADOW_DISTANCE) } },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+                steps = 16,
+                modifier = Modifier.fillMaxWidth(),
             )
             LabeledRow(R.string.panel_shadow_angle) { ValuePill { ValueText("${options.shadowAngle.roundToInt()}°") } }
-            PanelSlider(
+            StepperSlider(
                 fraction = options.shadowAngle / 360f,
                 onChange = { f -> state.updateTape { it.copy(shadowAngle = f * 360f) } },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+                steps = 36,
+                modifier = Modifier.fillMaxWidth(),
             )
             LabeledRow(R.string.panel_shadow_opacity) { ValuePill { ValueText("${(options.shadowOpacity * 100).roundToInt()}%") } }
-            PanelSlider(
+            StepperSlider(
                 fraction = options.shadowOpacity,
                 onChange = { f -> state.updateTape { it.copy(shadowOpacity = f) } },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+                steps = 20,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         PanelDivider()
         LabeledRow(R.string.panel_hold_time) { ValuePill { ValueText("%.1f s".format(options.holdMs / 1000f)) } }
-        PanelSlider(
+        StepperSlider(
             fraction = (options.holdMs - TapeOptions.MIN_HOLD_MS).toFloat() / (TapeOptions.MAX_HOLD_MS - TapeOptions.MIN_HOLD_MS),
             onChange = { f ->
                 state.updateTape { it.copy(holdMs = TapeOptions.MIN_HOLD_MS + (f * (TapeOptions.MAX_HOLD_MS - TapeOptions.MIN_HOLD_MS)).roundToInt()) }
             },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            steps = (TapeOptions.MAX_HOLD_MS - TapeOptions.MIN_HOLD_MS) / 100,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(18.dp))
     }
@@ -165,18 +181,20 @@ internal fun ColumnScope.TapeLookSliders(
 ) {
     val thicknessRange = TapeOptions.MAX_THICKNESS - TapeOptions.MIN_THICKNESS
     LabeledRow(R.string.panel_thickness) { ValuePill { ValueText(thickness.roundToInt().toString()) } }
-    PanelSlider(
+    StepperSlider(
         fraction = ((thickness - TapeOptions.MIN_THICKNESS) / thicknessRange).coerceIn(0f, 1f),
         onChange = { f -> onThickness(TapeOptions.MIN_THICKNESS + f * thicknessRange) },
+        steps = thicknessRange,
         onChangeFinished = onFinished,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+        modifier = Modifier.fillMaxWidth(),
     )
     LabeledRow(R.string.panel_opacity) { ValuePill { ValueText("${(opacity * 100).roundToInt()}%") } }
-    PanelSlider(
+    StepperSlider(
         fraction = ((opacity - TapeOptions.MIN_OPACITY) / (1f - TapeOptions.MIN_OPACITY)).coerceIn(0f, 1f),
         onChange = { f -> onOpacity(TapeOptions.MIN_OPACITY + f * (1f - TapeOptions.MIN_OPACITY)) },
+        steps = 9,
         onChangeFinished = onFinished,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
@@ -184,7 +202,23 @@ internal fun ColumnScope.TapeLookSliders(
 @Composable
 internal fun EmojiRow(state: EditorState, modifier: Modifier) {
     Pill(modifier) {
-        for (emoji in state.recentEmoji) {
+        if (state.stickerTab) {
+            for (id in state.stickers.take(RECENT_STICKERS)) {
+                ToolbarCellBox(onClick = { state.chooseSticker(id) }, modifier = Modifier.stickerDragSource(state, id, enabled = true)) {
+                    StickerThumb(state, id, 30.dp)
+                    if (id == state.sticker) SelectedDot()
+                }
+            }
+            if (state.stickers.isEmpty()) {
+                Text(
+                    stringResource(R.string.sticker_empty_short),
+                    color = LocalEditorColors.current.label,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                )
+            }
+        }
+        for (emoji in if (state.stickerTab) emptyList() else state.recentEmoji) {
             ToolbarCellBox(onClick = { state.chooseEmoji(emoji) }) {
                 Text(emoji, fontSize = 20.sp)
                 if (emoji == state.emoji) SelectedDot()
@@ -201,6 +235,18 @@ internal fun EmojiRow(state: EditorState, modifier: Modifier) {
 internal fun EmojiPanel(state: EditorState, modifier: Modifier) {
     val colors = LocalEditorColors.current
     PanelSheet(stringResource(R.string.tool_sticker), onClose = { state.panelOpen = false }, modifier = modifier) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 6.dp),
+        ) {
+            // The stickers come first, and the emoji are the second choice.
+            StickerTab(R.string.sticker_tab_stickers, state.stickerTab, Modifier.weight(1f)) { state.showStickerTab(true) }
+            StickerTab(R.string.sticker_tab_emoji, !state.stickerTab, Modifier.weight(1f)) { state.showStickerTab(false) }
+        }
+        if (state.stickerTab) {
+            StickerGrid(state)
+            return@PanelSheet
+        }
         LabeledRow(R.string.panel_size) { ValuePill { ValueText(state.emojiSize.toString()) } }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) { state.resizeEmoji(state.emojiSize - 2) }
@@ -245,6 +291,14 @@ internal fun VideoPlayer(request: VideoPlayRequest, onClose: () -> Unit) {
         Modifier
             .offset { IntOffset(request.left.roundToInt(), request.top.roundToInt()) }
             .size(with(density) { request.width.toDp() }, with(density) { request.height.toDp() })
+            // Turned with the page, about the middle of the screen.
+            .graphicsLayer {
+                rotationZ = request.turnDegrees
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                    (request.pivotX - request.left) / size.width,
+                    (request.pivotY - request.top) / size.height,
+                )
+            }
             .background(Color.Black),
     ) {
         AndroidView(
@@ -348,4 +402,133 @@ private fun ColumnScope.TapeColorSection(state: EditorState, options: TapeOption
             if (options.selectedColor >= options.colors.size) SelectedDot()
         }
     }
+}
+
+private const val RECENT_STICKERS = 5
+private const val STICKERS_PER_ROW = 3
+
+@Composable
+private fun StickerTab(label: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = LocalEditorColors.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .height(40.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(if (selected) colors.accentContainer else colors.field)
+            .clickable(role = Role.Tab, onClick = onClick),
+    ) {
+        Text(
+            stringResource(label),
+            color = if (selected) colors.accent else colors.label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** The saved stickers as a grid of pictures. Pressing one chooses it, and the pen then puts it on the page. */
+@Composable
+private fun StickerGrid(state: EditorState) {
+    val colors = LocalEditorColors.current
+    var removing by remember { mutableStateOf(false) }
+    val pickPack = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree -> if (tree != null) state.importStickerPack(tree) }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button) { pickPack.launch(null) }
+            .padding(horizontal = PanelPadding, vertical = 12.dp),
+    ) {
+        Text(stringResource(R.string.sticker_add_pack), color = colors.accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+    if (state.stickers.isEmpty()) {
+        Text(
+            stringResource(R.string.sticker_empty),
+            color = colors.label,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = PanelPadding, vertical = 8.dp),
+        )
+        return
+    }
+    // Stickers saved from selections come first, then each pack under its name.
+    val groups = state.stickers.groupBy { state.packs[it] }.toList().sortedBy { it.first != null }
+    for ((pack, ids) in groups) {
+        if (pack != null) {
+            Text(pack, color = colors.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = PanelPadding, vertical = 6.dp))
+        }
+        for (row in ids.chunked(STICKERS_PER_ROW)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = PanelPadding - 4.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (id in row) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (id == state.sticker) colors.accentContainer else colors.field)
+                            .clickable(role = Role.Button) { if (removing) state.deleteSticker(id) else state.chooseSticker(id) }
+                            .stickerDragSource(state, id, enabled = !removing)
+                            .padding(8.dp),
+                    ) {
+                        StickerThumb(state, id, 72.dp)
+                        if (removing) {
+                            Box(Modifier.align(Alignment.TopEnd).size(22.dp).background(Color(0xFFE5483F), CircleShape), contentAlignment = Alignment.Center) {
+                                Text("x", color = Color.White, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+                repeat(STICKERS_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button) { removing = !removing }
+            .padding(horizontal = PanelPadding, vertical = 14.dp),
+    ) {
+        Text(
+            stringResource(if (removing) R.string.sticker_done_removing else R.string.sticker_remove),
+            color = colors.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+}
+
+/** A sticker's picture, drawn off the main thread the first time and kept. */
+@Composable
+internal fun StickerThumb(state: EditorState, id: Long, size: androidx.compose.ui.unit.Dp) {
+    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, id) {
+        value = withContext(Dispatchers.IO) { state.stickerStore.thumbnail(id)?.asImageBitmap() }
+    }
+    val image = bitmap ?: return
+    androidx.compose.foundation.Image(
+        image,
+        contentDescription = null,
+        modifier = Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF4F1E8)).padding(3.dp),
+    )
+}
+
+/**
+ * Holding a sticker in the list and dragging it picks it up: it follows the finger over the page, and where it is let go it is put down at
+ * its own size. A plain press still chooses it.
+ */
+@Composable
+private fun Modifier.stickerDragSource(state: EditorState, id: Long, enabled: Boolean): Modifier {
+    if (!enabled) return this
+    val coordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    return this
+        .onGloballyPositioned { coordinates[0] = it }
+        .pointerInput(id) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { start -> coordinates[0]?.localToWindow(start)?.let { state.beginStickerDrag(id, it) } },
+                onDragEnd = state::dropStickerDrag,
+                onDragCancel = state::cancelStickerDrag,
+            ) { change, drag ->
+                change.consume()
+                state.stickerDragPoint = state.stickerDragPoint?.plus(drag)
+            }
+        }
 }

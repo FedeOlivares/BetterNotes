@@ -1,9 +1,11 @@
 package app.betternotes.core.tools
 
 import app.betternotes.core.model.AudioItem
+import app.betternotes.core.model.FillItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StickyNoteItem
@@ -26,6 +28,7 @@ enum class ItemKind {
     TEXT,
     STICKY_NOTE,
     AUDIO,
+    FILL,
 }
 
 val PageItem.kind: ItemKind
@@ -43,9 +46,11 @@ val PageItem.kind: ItemKind
         is StickyNoteItem -> ItemKind.STICKY_NOTE
         is AudioItem -> ItemKind.AUDIO
         is TapePathItem -> ItemKind.TAPE
+        is FillItem -> ItemKind.FILL
+        is PathShapeItem -> ItemKind.SHAPE
     }
 
 /** Ink and shapes, since a stray eraser pass should not destroy anything harder to make again. */
-val DEFAULT_ERASABLE: Set<ItemKind> = setOf(ItemKind.PEN, ItemKind.PENCIL, ItemKind.HIGHLIGHTER, ItemKind.TAPE, ItemKind.SHAPE)
+val DEFAULT_ERASABLE: Set<ItemKind> = setOf(ItemKind.PEN, ItemKind.PENCIL, ItemKind.HIGHLIGHTER, ItemKind.TAPE, ItemKind.SHAPE, ItemKind.FILL)
 
 val ALL_ITEM_KINDS: Set<ItemKind> = ItemKind.entries.toSet()

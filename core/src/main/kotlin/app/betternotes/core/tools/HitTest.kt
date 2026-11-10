@@ -10,6 +10,8 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePoints
@@ -22,14 +24,20 @@ import kotlin.math.sin
 
 private const val ELLIPSE_OUTLINE_SEGMENTS = 24
 
-/** The index of the topmost item at a point, or -1. [tolerance] grows the target for a fingertip. */
+/**
+ * The index of the topmost item at a point, or -1. [tolerance] grows the target for a fingertip. Locked items are a layer below the
+ * others, so one that is not locked wins over a locked one whatever their order.
+ */
 fun PageContent.topItemAt(x: Float, y: Float, tolerance: Float = 0f): Int {
     val probe = Capsule(x, y, x, y, tolerance)
     var top = -1
+    var topLocked = -1
     forEachIntersecting(probe.bounds) { index, item ->
-        if (item.touches(probe)) top = index
+        if (item.touches(probe)) {
+            if (item.locked) topLocked = index else top = index
+        }
     }
-    return top
+    return if (top >= 0) top else topLocked
 }
 
 /** True if the path of [probe] crosses what this item actually paints, not merely its bounds. */
@@ -43,6 +51,21 @@ internal fun PageItem.touches(probe: Capsule): Boolean = when (this) {
     is AudioItem -> frame.touches(probe)
     is StickyNoteItem -> visibleFrame.touches(probe)
     is TapePathItem -> touchesPath(probe)
+    is FillItem -> contains(probe.ax, probe.ay) || contains(probe.bx, probe.by)
+    is PathShapeItem -> touchesPath(probe)
+}
+
+private fun PathShapeItem.touchesPath(probe: Capsule): Boolean {
+    val line = outline()
+    val margin = strokeWidth / 2f
+    val last = if (closed) line.size else line.size - 2
+    var i = 0
+    while (i < last) {
+        val next = (i + 2) % line.size
+        if (probe.clip(line[i], line[i + 1], line[next], line[next + 1], margin)) return true
+        i += 2
+    }
+    return isFilled && polygonContains(line, probe.ax, probe.ay)
 }
 
 /** A strip of tape is touched where the probe comes within half its width of the line along its middle. */

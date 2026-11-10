@@ -9,6 +9,10 @@ class PageRangeTest {
     fun `ranges and single pages read as indices from zero`() {
         assertEquals(listOf(1, 2, 3, 4, 7), parsePageRange("2-5, 8", 10))
         assertEquals(listOf(0), parsePageRange("1", 3))
+        // A notebook whose cover is page 0: the cover is 0, the next page 1, and the last of 3 pages is 2.
+        assertEquals(listOf(0, 1), parsePageRange("0-1", 3, firstNumber = 0))
+        assertEquals(null, parsePageRange("3", 3, firstNumber = 0))
+        assertEquals(null, parsePageRange("0", 3))
         assertEquals(listOf(0, 1, 2), parsePageRange(" 1 - 2 , 2-3 ", 3))
         assertEquals(listOf(4), parsePageRange("5; ", 5))
     }

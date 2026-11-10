@@ -107,6 +107,54 @@ class MlKitRecognizer : HandwritingRecognizer, AutoCloseable {
         return guesses.toList()
     }
 
+    /**
+     * Reads one written word, or a few, with the best guess of the two languages. [preContext] is the text before it.
+     * Null if nothing was read. Scores of ML Kit are lower for a likelier guess; this assumes they compare across languages.
+     */
+    fun readWord(strokes: List<WordStroke>, preContext: String): String? {
+        val ink = Ink.builder()
+        var offsetMs = 0L
+        var left = Float.MAX_VALUE
+        var top = Float.MAX_VALUE
+        var right = -Float.MAX_VALUE
+        var bottom = -Float.MAX_VALUE
+        for (stroke in strokes) {
+            val builder = Ink.Stroke.builder()
+            var lastMs = offsetMs
+            for (i in stroke.x.indices) {
+                lastMs = offsetMs + stroke.timeMs[i]
+                builder.addPoint(Ink.Point.create(stroke.x[i], stroke.y[i], lastMs))
+                left = minOf(left, stroke.x[i])
+                right = maxOf(right, stroke.x[i])
+                top = minOf(top, stroke.y[i])
+                bottom = maxOf(bottom, stroke.y[i])
+            }
+            ink.addStroke(builder.build())
+            offsetMs = lastMs + PAUSE_BETWEEN_STROKES_MS
+        }
+        val context = RecognitionContext.builder()
+            .setPreContext(preContext)
+            .setWritingArea(WritingArea((right - left).coerceAtLeast(1f), (bottom - top).coerceAtLeast(1f)))
+            .build()
+        val built = ink.build()
+        var best: String? = null
+        var bestScore = Float.MAX_VALUE
+        for (client in clients()) {
+            val result = try {
+                await(client.recognize(built, context))
+            } catch (e: MlKitException) {
+                throw IOException("Recognition failed", e)
+            }
+            val top = result.candidates.firstOrNull() ?: continue
+            val score = top.score ?: Float.MAX_VALUE
+            if (best == null || score < bestScore) {
+                best = top.text
+                bestScore = score
+            }
+        }
+        return best?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
     private fun clients() = clients ?: InkModels.LANGUAGE_TAGS.map { tag ->
         DigitalInkRecognition.getClient(DigitalInkRecognizerOptions.builder(InkModels.model(tag)).build())
     }.also { clients = it }
@@ -126,6 +174,9 @@ class MlKitRecognizer : HandwritingRecognizer, AutoCloseable {
         const val GUESSES_PER_LANGUAGE = 3
     }
 }
+
+/** One stroke of a word being written: where the pen was, in the order it was, and when, from the stroke's start. */
+class WordStroke(val x: FloatArray, val y: FloatArray, val timeMs: LongArray)
 
 /**
  * Builds ML Kit's ink. Saved times count from the start of each stroke, while ML Kit expects one clock

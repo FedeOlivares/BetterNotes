@@ -15,6 +15,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.RowScope
@@ -57,7 +59,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import app.betternotes.R
+import app.betternotes.ui.icons.EditorIcons
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.sp
 import app.betternotes.core.model.LineKind
 import app.betternotes.ui.theme.LocalEditorColors
@@ -68,11 +74,15 @@ internal val PillShape = RoundedCornerShape(PillHeight / 2)
 
 /** The dark capsule that every toolbar sits in. */
 @Composable
-internal fun Pill(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+internal fun Pill(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val colors = LocalEditorColors.current
     if (LocalInToolBar.current) {
         // The second toolbar draws its own box, which resizes between tools, so its row brings only its contents.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier, content = content)
+        if (LocalToolbarVertical.current) {
+            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) { content() }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) { content() }
+        }
         return
     }
     Row(
@@ -84,6 +94,71 @@ internal fun Pill(modifier: Modifier = Modifier, content: @Composable RowScope.(
             .background(colors.pill)
             .border(1.dp, colors.pillBorder, PillShape)
             .padding(horizontal = 6.dp),
+    ) { content() }
+}
+
+/** The icons of a tool's row: side by side and scrolling across, or one above the other and scrolling down when the toolbar is upright. */
+@Composable
+internal fun ToolStrip(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    if (LocalToolbarVertical.current) {
+        androidx.compose.foundation.layout.Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()),
+        ) { content() }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) { content() }
+    }
+}
+
+/** The pill as a row, for a strip that scrolls beside fixed buttons and so needs the row's weights. */
+@Composable
+internal fun PillRow(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    val colors = LocalEditorColors.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .height(PillHeight)
+            .shadow(4.dp, PillShape, clip = false)
+            .clip(PillShape)
+            .background(colors.pill)
+            .border(1.dp, colors.pillBorder, PillShape)
+            .padding(horizontal = 6.dp),
+        content = content,
+    )
+}
+
+/** A pill whose contents need no row scope: a row, or a column when the toolbars are on the left or right edge. */
+@Composable
+internal fun PillBox(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val colors = LocalEditorColors.current
+    val decorated = modifier
+        .shadow(4.dp, PillShape, clip = false)
+        .clip(PillShape)
+        .background(colors.pill)
+        .border(1.dp, colors.pillBorder, PillShape)
+    if (LocalToolbarVertical.current) {
+        androidx.compose.foundation.layout.Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = decorated.width(PillHeight).padding(vertical = 6.dp),
+        ) { content() }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = decorated.height(PillHeight).padding(horizontal = 6.dp)) { content() }
+    }
+}
+
+/** The pill as a column, for the toolbars on the left or right edge. */
+@Composable
+internal fun PillColumn(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    val colors = LocalEditorColors.current
+    androidx.compose.foundation.layout.Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .shadow(4.dp, PillShape, clip = false)
+            .clip(PillShape)
+            .background(colors.pill)
+            .border(1.dp, colors.pillBorder, PillShape)
+            .width(PillHeight)
+            .padding(vertical = 6.dp),
         content = content,
     )
 }
@@ -160,12 +235,11 @@ internal fun ToolbarIcon(
 
 @Composable
 internal fun PillDivider() {
-    Box(
-        Modifier
-            .padding(horizontal = 4.dp)
-            .size(2.dp, 28.dp)
-            .background(LocalEditorColors.current.pillDivider),
-    )
+    if (LocalToolbarVertical.current) {
+        Box(Modifier.padding(vertical = 4.dp).size(28.dp, 2.dp).background(LocalEditorColors.current.pillDivider))
+    } else {
+        Box(Modifier.padding(horizontal = 4.dp).size(2.dp, 28.dp).background(LocalEditorColors.current.pillDivider))
+    }
 }
 
 /** The small blue dot that marks the width and color in use. */
@@ -311,6 +385,29 @@ internal fun PanelSlider(
     }
 }
 
+/**
+ * A minus button, a [PanelSlider] and a plus button in one row. The buttons move the slider by one of
+ * [steps] equal parts; the slider's far left is always the control's lowest value.
+ */
+@Composable
+internal fun StepperSlider(
+    fraction: Float,
+    onChange: (Float) -> Unit,
+    steps: Int,
+    modifier: Modifier = Modifier,
+    onChangeFinished: () -> Unit = {},
+) {
+    val step = { direction: Int ->
+        onChange(((fraction * steps).roundToInt() + direction).coerceIn(0, steps).toFloat() / steps)
+        onChangeFinished()
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.padding(horizontal = PanelPadding - 6.dp)) {
+        PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_decrease)) { step(-1) }
+        PanelSlider(fraction, onChange, Modifier.weight(1f), onChangeFinished)
+        PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_increase)) { step(1) }
+    }
+}
+
 /** Says plainly that a control has no behavior yet, or explains one. */
 internal class Notices(private val show: (Int) -> Unit) {
     fun notBuilt() = show(app.betternotes.R.string.editor_not_built)
@@ -326,10 +423,10 @@ internal fun rememberNotices(): Notices {
 
 /** A fixed-width cell for a toolbar's glyphs. */
 @Composable
-internal fun ToolbarCellBox(onClick: () -> Unit, content: @Composable BoxScope.() -> Unit) {
+internal fun ToolbarCellBox(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier
+        modifier = modifier
             .width(ToolbarCell)
             .height(PillHeight)
             .tappable(radius = 20.dp, onClick = onClick),

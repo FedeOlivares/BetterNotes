@@ -17,12 +17,25 @@ class TemplateDrawingTest {
     private class Recorder : TemplateSink {
         val lines = mutableListOf<Line>()
         val dots = mutableListOf<Pair<Float, Float>>()
+        val texts = mutableListOf<String>()
+        val textColors = mutableSetOf<Int>()
+        val fills = mutableListOf<Pair<Float, Float>>()
+        override var language = "en"
         override fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int) {
             lines += Line(x0, y0, x1, y1)
         }
 
         override fun dot(x: Float, y: Float, radius: Float, color: Int) {
             dots += x to y
+        }
+
+        override fun fill(x: Float, y: Float, width: Float, height: Float, color: Int) {
+            fills += x to y
+        }
+
+        override fun text(text: String, x: Float, baseline: Float, size: Float, color: Int, style: TextStyle, align: TextAlign) {
+            texts += text
+            textColors += color
         }
     }
 
@@ -280,5 +293,64 @@ class TemplateDrawingTest {
         assertEquals(5, lines.size)
         assertEquals(0.1f, lines[0].fraction)
         assertEquals(0.1f + 24f / 200f, lines[3].fraction, 0.0001f)
+    }
+
+    private fun PageTemplate.recordWords(language: String = "en", paper: Int = PageBackground.DEFAULT_PAPER_COLOR) =
+        Recorder().also { it.language = language; draw(page, wholePage, it, paper = paper) }
+
+    @Test
+    fun `the planning pages keep every mark on the page`() {
+        for (template in listOf(PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner)) {
+            val recorded = template.recordWords()
+            assertTrue("$template has lines", recorded.lines.size > 20)
+            assertTrue(
+                "$template stays on the page",
+                recorded.lines.all { it.x0 in 0f..100f && it.x1 in 0f..100f && it.y0 in 0f..200f && it.y1 in 0f..200f },
+            )
+        }
+    }
+
+    @Test
+    fun `the planning pages draw nothing on a canvas without edges`() {
+        assertTrue(PageTemplate.Semester.record(p = null).lines.isEmpty())
+        assertTrue(PageTemplate.MindMap.record(p = null).texts.isEmpty())
+    }
+
+    @Test
+    fun `the semester page has its parts and counts`() {
+        val texts = PageTemplate.Semester.recordWords().texts
+        assertEquals("15 breakdown rows, 16 hours, 3 goals", 15 + 16 + 3, texts.count { it.length == 2 && it.all(Char::isDigit) })
+        assertTrue("Semester Overview" in texts)
+        assertEquals(7, texts.count { it in listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") })
+    }
+
+    @Test
+    fun `the mind map has twelve boxes, four sub-topics and a main topic`() {
+        val recorded = PageTemplate.MindMap.recordWords()
+        assertEquals(4, recorded.texts.count { it == "Sub-topic" })
+        assertTrue("MAIN TOPIC" in recorded.texts)
+        assertEquals(12 + 4 + 1, recorded.fills.size)
+    }
+
+    @Test
+    fun `the week planner has a row and a 24 hour ruler for each day`() {
+        val texts = PageTemplate.WeekPlanner.recordWords().texts
+        assertEquals(listOf("MON", "TUE", "WED", "THR", "FRI", "SAT", "SUN"), texts.filter { it.length == 3 })
+        assertEquals(7 * 24, texts.count { it.length <= 2 })
+    }
+
+    @Test
+    fun `the words follow the language`() {
+        val texts = PageTemplate.MindMap.recordWords(language = "es").texts
+        assertTrue("Subtema" in texts)
+        assertTrue("TEMA PRINCIPAL" in texts)
+        assertTrue("LUN" in PageTemplate.WeekPlanner.recordWords(language = "es").texts)
+    }
+
+    @Test
+    fun `the ink changes with the paper so the page reads on dark paper`() {
+        val light = PageTemplate.Semester.recordWords(paper = 0xFFFFFFFF.toInt()).textColors
+        val dark = PageTemplate.Semester.recordWords(paper = 0xFF000000.toInt()).textColors
+        assertTrue(light.intersect(dark).isEmpty())
     }
 }

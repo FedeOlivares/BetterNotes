@@ -10,7 +10,7 @@ import kotlin.math.sin
 import kotlin.math.min
 
 /** What a handle on a selected shape changes. */
-enum class ShapeParam { STROKE_WIDTH, TIP_LENGTH, TIP_WIDTH }
+enum class ShapeParam { STROKE_WIDTH, TIP_LENGTH, TIP_WIDTH, CORNER_RADIUS }
 
 /**
  * The adjustable parts of shapes, which the handles on a selected shape drag. A tip is the head of an
@@ -31,6 +31,7 @@ object ShapeTips {
         ShapeKind.CYLINDER, ShapeKind.CUBE, ShapeKind.PIE, ShapeKind.PRISM, ShapeKind.SPEECH_ROUND, ShapeKind.THOUGHT ->
             setOf(ShapeParam.STROKE_WIDTH, ShapeParam.TIP_LENGTH)
         ShapeKind.TAPE -> emptySet()
+        ShapeKind.RECTANGLE -> setOf(ShapeParam.STROKE_WIDTH, ShapeParam.CORNER_RADIUS)
         else -> setOf(ShapeParam.STROKE_WIDTH)
     }
 
@@ -84,6 +85,10 @@ object ShapeTips {
         val axis = if (item.kind == ShapeKind.AXES) h * AXES_ORIGIN else h / 2f
         return when (param) {
             ShapeParam.STROKE_WIDTH -> floatArrayOf(w / 2f, -item.strokeWidth / 2f)
+            ShapeParam.CORNER_RADIUS -> {
+                val inset = cornerInset(w, h)
+                floatArrayOf(inset + item.cornerRadius.coerceIn(0f, min(w, h) / 2f), inset)
+            }
             ShapeParam.TIP_LENGTH -> when (item.kind) {
                 ShapeKind.PIE -> {
                     val sweep = Math.toRadians((360f - length).toDouble())
@@ -106,6 +111,7 @@ object ShapeTips {
         val axis = if (item.kind == ShapeKind.AXES) h * AXES_ORIGIN else h / 2f
         return when (param) {
             ShapeParam.STROKE_WIDTH -> item.copy(strokeWidth = (-2f * y).coerceIn(MIN_STROKE_PT, MAX_STROKE_PT))
+            ShapeParam.CORNER_RADIUS -> item.copy(cornerRadius = (x - cornerInset(w, h)).coerceIn(0f, min(w, h) / 2f))
             ShapeParam.TIP_LENGTH -> when (item.kind) {
                 ShapeKind.PIE -> {
                     val around = Math.toDegrees(atan2((y - h / 2f) / (h / 2f), (x - w / 2f) / (w / 2f)).toDouble()).toFloat()
@@ -133,6 +139,9 @@ object ShapeTips {
             ShapeParam.TIP_WIDTH -> item.copy(tipWidth = (2f * abs(y - axis)).coerceIn(MIN_TIP_PT, maxOf(h, w * 0.5f)))
         }
     }
+
+    /** The corner handle sits this far in from the corner, so it does not cover the box's own resize handle. */
+    private fun cornerInset(w: Float, h: Float) = (min(w, h) * 0.15f).coerceIn(6f, 16f)
 
     /** A point inside the bubble's ellipse is pushed out to its edge, so the tail always sticks out. */
     private fun outsideEllipse(cx: Float, cy: Float, rx: Float, ry: Float, x: Float, y: Float): FloatArray {

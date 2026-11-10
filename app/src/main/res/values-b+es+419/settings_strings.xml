@@ -114,6 +114,10 @@
     <string name="template_music">Partitura</string>
     <string name="template_guitar_tab">Tablatura de guitarra</string>
     <string name="template_guitar_score">Partitura de guitarra</string>
+    <string name="template_group_planning">Planificación</string>
+    <string name="template_semester">Resumen del semestre</string>
+    <string name="template_mind_map">Mapa mental</string>
+    <string name="template_week_planner">Planificador semanal</string>
     <string name="template_apply_current">Aplicar a la página actual</string>
     <string name="template_apply_all">Aplicar a todas las páginas</string>
     <string name="template_apply_more">Más formas de aplicar</string>
@@ -177,6 +181,8 @@
     <string name="export_as">Exportar como</string>
     <string name="export_pdf">PDF</string>
     <string name="export_image">Imagen</string>
+    <string name="export_notebook">Cuaderno</string>
+    <string name="export_notebook_detail">El cuaderno completo en un solo archivo, con todo editable y sus fuentes. Quien tenga esta app puede abrirlo desde el panel +, en Archivo y documento.</string>
     <string name="export_page_scale">Escala de página</string>
     <string name="export_percent">%1$d%%</string>
     <string name="export_size_mm">%1$d × %2$d mm</string>

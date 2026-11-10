@@ -46,6 +46,7 @@ class NoteEditor(
         override val pages get() = document.pages
         override fun contentOrLoad(pageId: Long) = this@NoteEditor.contentOrLoad(pageId)
         override fun mesh(item: StrokeItem) = strokes.get(item)
+        override fun opaqueMesh(item: StrokeItem) = strokes.getOpaque(item)
         override fun image(assetId: String) = imageOrLoad(assetId)
 
         override fun paintPdfTile(
@@ -227,10 +228,20 @@ class NoteEditor(
         pdf?.close()
     }
 
+    /** Remembers the angle a page is shown at. It is not an edit, so undo does not turn it back. */
+    fun setPageRotation(pageId: Long, degrees: Float) {
+        if (closed) return
+        document.setPageRotation(pageId, degrees)
+        scheduleSave()
+    }
+
     private fun historyStepped() {
         scheduleSave()
         onHistoryChanged()
     }
+
+    /** The picture, decoded here and now if it is not yet. For a background thread, as the bucket's, never the main one. */
+    fun imageNow(assetId: String): Bitmap? = images.cached(assetId) ?: images.decode(assetId)
 
     /** The picture if it is decoded. If it is not, starts decoding it and returns null. */
     fun imageOrLoad(assetId: String): Bitmap? {

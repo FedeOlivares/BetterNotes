@@ -7,6 +7,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
+import app.betternotes.core.library.FolderStyle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -55,8 +61,10 @@ import java.util.Locale
 
 private val CardShape = RoundedCornerShape(25.dp)
 private val RowShape = RoundedCornerShape(18.dp)
-private val HeaderHeight = 92.dp
-private const val CARD_RATIO = 319f / 320f
+private val HeaderHeight = 64.dp
+private val FooterHeight = 52.dp
+/** A tile is a tall rectangle, a fifth shorter than the Goodnotes reference (624 by 900), which is 624 by 720. */
+private const val CARD_RATIO = 624f / 720f
 private const val DAYS_SHOWN_BY_NAME = 7L
 
 /** One thing a tile's "..." menu can do. */
@@ -81,30 +89,32 @@ internal fun DocumentCard(
             .background(colors.surface)
             .clickable(onClick = onClick),
     ) {
+        // As in the Goodnotes reference: the name and the menu on top, the picture in the middle, the date underneath.
         Box(Modifier.fillMaxWidth().height(HeaderHeight)) {
-            Text(
-                formatDate(entry.modifiedAtMs, nowMs),
-                color = colors.secondaryText,
-                fontSize = 16.sp,
-                lineHeight = 20.sp,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 14.dp, top = 12.dp, end = 44.dp),
-            )
             Text(
                 entry.name,
                 color = colors.title,
                 fontSize = 19.sp,
-                lineHeight = 20.sp,
+                lineHeight = 22.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 14.dp, top = 37.dp, end = 44.dp),
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 48.dp),
             )
             if (selected == null) {
-                CardMenu(actions, colors.secondaryText, Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = 4.dp))
+                CardMenu(actions, colors.secondaryText, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
             }
         }
         Thumbnail(entry.id, info, thumbnails, Modifier.fillMaxWidth().weight(1f))
+        Box(Modifier.fillMaxWidth().height(FooterHeight)) {
+            Text(
+                formatDate(entry.modifiedAtMs, nowMs),
+                color = colors.secondaryText,
+                fontSize = 16.sp,
+                maxLines = 1,
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 12.dp),
+            )
+        }
     }
     CardBorder()
     SelectionMark(selected)
@@ -114,11 +124,14 @@ internal fun DocumentCard(
 internal fun FolderCard(
     entry: LibraryEntry,
     itemCount: Int,
+    previews: List<LibraryEntry>,
+    thumbnails: ThumbnailStore,
     selected: Boolean?,
     actions: @Composable () -> List<CardAction>,
     onClick: () -> Unit,
 ) {
     val colors = LocalAppColors.current
+    val look = folderLook(entry.style)
     Box(
         Modifier
             .fillMaxWidth()
@@ -126,20 +139,21 @@ internal fun FolderCard(
             .clip(CardShape)
             .clickable(onClick = onClick),
     ) {
-        FolderArt(Modifier.fillMaxSize())
+        FolderArt(Modifier.fillMaxSize(), entry.style)
+        if (entry.style.previews && previews.isNotEmpty()) FolderPreviews(previews, thumbnails)
         Text(
             pluralStringResource(R.plurals.library_folder_items, itemCount, itemCount),
-            color = colors.folderDim,
+            color = look.dim ?: colors.folderDim,
             fontSize = 16.sp,
             lineHeight = 20.sp,
             modifier = Modifier.padding(start = 14.dp, top = 17.dp),
         )
         if (selected == null) {
-            CardMenu(actions, colors.folderDots, Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp))
+            CardMenu(actions, look.dots ?: colors.folderDots, Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp))
         }
         Text(
             entry.name,
-            color = colors.folderText,
+            color = look.text ?: colors.folderText,
             fontSize = 19.sp,
             lineHeight = 22.sp,
             fontWeight = FontWeight.Medium,
@@ -175,7 +189,7 @@ internal fun LibraryRow(
             .padding(start = 12.dp, end = 8.dp),
     ) {
         val pictureModifier = Modifier.size(68.dp).clip(RoundedCornerShape(10.dp))
-        if (info != null) Thumbnail(entry.id, info, thumbnails, pictureModifier) else FolderArt(pictureModifier)
+        if (info != null) Thumbnail(entry.id, info, thumbnails, pictureModifier) else FolderArt(pictureModifier, entry.style)
         Column(Modifier.padding(start = 16.dp).weight(1f)) {
             Text(entry.name, color = colors.title, fontSize = 19.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
@@ -206,8 +220,10 @@ private fun SelectionMark(selected: Boolean?) {
 
 /** The folder drawn in the tile's own units, 319 wide, then stretched to the tile's real size. */
 @Composable
-private fun FolderArt(modifier: Modifier) {
+private fun FolderArt(modifier: Modifier, style: FolderStyle = FolderStyle.DEFAULT) {
     val colors = LocalAppColors.current
+    val look = folderLook(style)
+    val opacity = style.opacity
     val paper = remember {
         Path().apply {
             moveTo(162f, 67f)
@@ -232,12 +248,16 @@ private fun FolderArt(modifier: Modifier) {
             close()
         }
     }
-    Canvas(modifier.background(colors.folderBack)) {
+    Canvas(modifier) {
         val scale = size.width / 319f
+        // The tile is taller than the folder was drawn for, so the folder stretches down to fill it.
+        val scaleY = if (size.height > size.width * 1.1f) size.height / 330f else scale
+        // The opacity belongs to the folder alone: the pictures of the files in it are drawn over it, at full strength.
+        drawRect((look.back ?: colors.folderBack).copy(alpha = opacity))
         drawContext.canvas.save()
-        drawContext.canvas.scale(scale, scale)
-        drawPath(paper, colors.folderPaper)
-        drawPath(front, colors.folderFront)
+        drawContext.canvas.scale(scale, scaleY)
+        drawPath(paper, (look.paper ?: colors.folderPaper), alpha = opacity)
+        drawPath(front, (look.front ?: colors.folderFront), alpha = opacity)
         drawContext.canvas.restore()
     }
 }
@@ -266,7 +286,8 @@ internal fun Thumbnail(id: Long, info: DocumentInfo, thumbnails: ThumbnailStore,
                 remember(it) { it.asImageBitmap() },
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                alignment = Alignment.TopCenter,
+                // The picture is square like the box, so little is cut; a cover is drawn around its middle.
+                alignment = Alignment.Center,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -329,3 +350,55 @@ private fun formatDate(ms: Long, nowMs: Long): String {
         }
     }
 }
+
+/** The folder's own colors, or null for each one the theme decides. */
+internal class FolderLook(val back: Color?, val front: Color?, val paper: Color?, val text: Color?, val dim: Color?, val dots: Color?)
+
+internal fun folderLook(style: FolderStyle): FolderLook {
+    if (style.color == FolderStyle.DEFAULT_COLOR) return FolderLook(null, null, null, null, null, null)
+    val front = Color(style.color or OPAQUE)
+    val light = front.luminance() > LIGHT_FOLDER
+    val ink = if (light) Color(0xFF1F2328) else Color.White
+    return FolderLook(
+        back = lerp(front, Color.Black, 0.12f),
+        front = front,
+        paper = lerp(front, Color.White, 0.55f),
+        text = ink,
+        dim = ink.copy(alpha = 0.72f),
+        dots = ink,
+    )
+}
+
+private const val OPAQUE = 0xFF000000.toInt()
+private const val LIGHT_FOLDER = 0.55f
+
+/**
+ * Up to three of the folder's documents stacked: the first lies in front and shows whole, and each one behind it shows less, only its
+ * upper edge. Drawn over the folder at full strength, whatever the folder's opacity is.
+ */
+@Composable
+private fun FolderPreviews(documents: List<LibraryEntry>, thumbnails: ThumbnailStore) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val unit = maxWidth / 319f
+        for (position in documents.take(PREVIEWS).indices.reversed()) {
+            val entry = documents[position]
+            val info = entry.document ?: continue
+            val inset = 24f + 14f * position
+            val top = 112f - 14f * position
+            Thumbnail(
+                entry.id,
+                info,
+                thumbnails,
+                Modifier
+                    .offset(unit * inset, unit * top)
+                    .size(unit * (319f - 2 * inset), unit * (242f - top))
+                    .shadow(3.dp, PreviewShape)
+                    .clip(PreviewShape)
+                    .border(1.dp, Color(0x22000000), PreviewShape),
+            )
+        }
+    }
+}
+
+private val PreviewShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
+private const val PREVIEWS = 3

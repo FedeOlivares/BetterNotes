@@ -15,7 +15,31 @@ import kotlin.math.sqrt
 interface TemplateSink {
     fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int)
     fun dot(x: Float, y: Float, radius: Float, color: Int)
+
+    /** Joined segments through [points] (x, y pairs), as one line. A sink that has no path of its own draws them one by one. */
+    fun polyline(points: FloatArray, width: Float, color: Int) {
+        for (i in 0 until points.size / 2 - 1) line(points[2 * i], points[2 * i + 1], points[2 * i + 2], points[2 * i + 3], width, color)
+    }
+
+    /** A filled box. A sink with no fill of its own gets a line as thick as the box, with butt ends. */
+    fun fill(x: Float, y: Float, width: Float, height: Float, color: Int) {
+        line(x, y + height / 2f, x + width, y + height / 2f, height, color)
+    }
+
+    /** A label for the built-in pages that have words on them. [baseline] is the y of the text's baseline. A sink may leave it out. */
+    fun text(text: String, x: Float, baseline: Float, size: Float, color: Int, style: TextStyle, align: TextAlign) = Unit
+
+    /** Text turned [degrees] clockwise about its center ([cx], [cy]), for the side labels and tabs of a planner. A sink may leave it out. */
+    fun turnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int, style: TextStyle) = Unit
+
+    /** The language of the words on a built-in page: "es" or anything else for English. */
+    val language: String get() = "en"
 }
+
+/** How a label looks: a serif title, a wide-set bold heading, or plain small text. */
+enum class TextStyle { TITLE, HEADING, LABEL }
+
+enum class TextAlign { START, CENTER }
 
 private const val LEGAL_MARGIN_GAP_PT = 3f
 private const val STAFF_SIDE_MARGIN_PT = 36f
@@ -37,7 +61,14 @@ private fun shade(argb: Int): Int {
  * [page] is null on an infinite canvas, where only templates with [PageTemplate.tiles] draw
  * anything. Those align to the world origin, so the pattern stays put while the canvas scrolls.
  */
-fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink, frame: List<Float> = emptyList()) {
+fun PageTemplate.draw(
+    page: PageSize?,
+    region: Bounds,
+    sink: TemplateSink,
+    frame: List<Float> = emptyList(),
+    /** The paper color, which the built-in pages with words on them read to pick ink that shows on light or dark paper. */
+    paper: Int = PageBackground.DEFAULT_PAPER_COLOR,
+) {
     val area = if (page == null) region else clipToPage(region, page)
     if (area.width < 0f || area.height < 0f) return
     when (this) {
@@ -60,8 +91,12 @@ fun PageTemplate.draw(page: PageSize?, region: Bounds, sink: TemplateSink, frame
         is PageTemplate.GuitarTab ->
             page?.let { staves(it, GUITAR_STAFF_LINES, lineGap, staffGap, lineWidth, color, sink) }
         is PageTemplate.GuitarScore -> page?.let { guitarScore(it, this, sink) }
+        PageTemplate.Semester -> page?.let { SemesterPage.draw(it, BuiltInInk(paper), sink) }
+        PageTemplate.MindMap -> page?.let { MindMapPage.draw(it, BuiltInInk(paper), sink) }
+        PageTemplate.WeekPlanner -> page?.let { WeekPlannerPage.draw(it, BuiltInInk(paper), sink) }
+        is PageTemplate.Planner -> page?.let { app.betternotes.core.planner.PlannerDrawing.draw(this.page, setup, it, BuiltInInk(paper), sink, null, paper, title, semesters) }
         is PageTemplate.Custom -> if (page != null) {
-            layout.base.draw(page, region, sink, layout.frameLines)
+            layout.base.draw(page, region, sink, layout.frameLines, paper)
             layout.elements.forEach { it.draw(sink) }
         }
     }

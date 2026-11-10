@@ -66,6 +66,13 @@ import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.TEMPLATE_LEVELS
 import app.betternotes.core.template.TemplateKind
 import app.betternotes.core.template.TemplateSink
+import app.betternotes.core.template.TextAlign
+import app.betternotes.core.template.TextStyle
+import app.betternotes.canvas.TemplateText
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import java.util.Locale
 import app.betternotes.core.template.densityLevel
 import app.betternotes.core.template.draw
 import app.betternotes.core.template.kind
@@ -221,10 +228,11 @@ private enum class TemplateGroup(val title: Int, val kinds: List<TemplateKind>) 
         listOf(TemplateKind.HEXAGONAL, TemplateKind.CORNELL_RULED, TemplateKind.CORNELL, TemplateKind.LEGAL, TemplateKind.ENGINEERING),
     ),
     MUSIC(R.string.template_group_music, listOf(TemplateKind.MUSIC_SCORE, TemplateKind.GUITAR_TAB, TemplateKind.GUITAR_SCORE)),
+    PLANNING(R.string.template_group_planning, listOf(TemplateKind.SEMESTER, TemplateKind.MIND_MAP, TemplateKind.WEEK_PLANNER)),
 }
 
 @Composable
-private fun kindName(kind: TemplateKind) = stringResource(
+internal fun kindName(kind: TemplateKind) = stringResource(
     when (kind) {
         TemplateKind.BLANK -> R.string.template_blank
         TemplateKind.LINED -> R.string.template_rule
@@ -238,6 +246,9 @@ private fun kindName(kind: TemplateKind) = stringResource(
         TemplateKind.MUSIC_SCORE -> R.string.template_music
         TemplateKind.GUITAR_TAB -> R.string.template_guitar_tab
         TemplateKind.GUITAR_SCORE -> R.string.template_guitar_score
+        TemplateKind.SEMESTER -> R.string.template_semester
+        TemplateKind.MIND_MAP -> R.string.template_mind_map
+        TemplateKind.WEEK_PLANNER -> R.string.template_week_planner
     },
 )
 
@@ -405,21 +416,21 @@ internal fun TemplatePreview(template: PageTemplate, paper: Int, page: PageSize,
         drawRect(Color(paper))
         val factor = size.width / page.widthPt
         scale(factor, factor, Offset.Zero) {
-            TemplatePainter.paint(this, template, page, minLine = 1f / factor)
+            TemplatePainter.paint(this, template, page, minLine = 1f / factor, paper = paper)
         }
     }
 }
 
 internal object TemplatePainter {
     /** [minLine] keeps a layout's dark lines visible when small, while faint ruling stays faint, as in the reference. */
-    fun paint(scope: DrawScope, template: PageTemplate, page: PageSize, minLine: Float = 0f) {
-        template.draw(page, Bounds(0f, 0f, page.widthPt, page.heightPt), PreviewSink(scope, minLine))
+    fun paint(scope: DrawScope, template: PageTemplate, page: PageSize, minLine: Float = 0f, paper: Int = PageBackground.DEFAULT_PAPER_COLOR) {
+        template.draw(page, Bounds(0f, 0f, page.widthPt, page.heightPt), PreviewSink(scope, minLine), paper = paper)
     }
 }
 
 private const val DARK_LINE_LUMINANCE = 0.3f
 
-private class PreviewSink(private val scope: DrawScope, private val minLine: Float) : TemplateSink {
+internal class PreviewSink(private val scope: DrawScope, private val minLine: Float) : TemplateSink {
     override fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int) {
         val paint = Color(color)
         val drawn = if (paint.luminance() < DARK_LINE_LUMINANCE) maxOf(width, minLine) else width
@@ -429,6 +440,18 @@ private class PreviewSink(private val scope: DrawScope, private val minLine: Flo
     override fun dot(x: Float, y: Float, radius: Float, color: Int) {
         scope.drawCircle(Color(color), radius, Offset(x, y))
     }
+
+    override fun fill(x: Float, y: Float, width: Float, height: Float, color: Int) {
+        scope.drawRect(Color(color), Offset(x, y), Size(width, height))
+    }
+
+    override fun text(text: String, x: Float, baseline: Float, size: Float, color: Int, style: TextStyle, align: TextAlign) {
+        scope.drawIntoCanvas { words.draw(it.nativeCanvas, text, x, baseline, size, color, style, align) }
+    }
+
+    override val language: String get() = app.betternotes.ui.theme.TemplateText.code()
+
+    private val words = TemplateText()
 }
 
 @Composable

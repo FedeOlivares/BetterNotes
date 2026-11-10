@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stickers -->
+    <string name="sticker_tab_emoji">Emojis</string>
+    <string name="sticker_tab_stickers">Stickers</string>
+    <string name="sticker_empty">Todavía no hay stickers. Selecciona algo en una página y pulsa el botón de sticker junto a copiar para guardarlo aquí.</string>
+    <string name="sticker_empty_short">Todavía no hay stickers</string>
+    <string name="sticker_remove">Quitar stickers</string>
+    <string name="sticker_done_removing">Listo</string>
+    <string name="notice_sticker_saved">Guardado como sticker</string>
+    <string name="notice_sticker_failed">No se pudo guardar el sticker</string>
+    <!-- Paint bucket -->
+    <string name="tool_fill">Bote de pintura</string>
+    <string name="fill_opacity">Opacidad</string>
+    <string name="notice_fill_open">No hay nada que rellenar ahí: la zona no está cerrada, o el lápiz está sobre una línea</string>
+    <string name="sticker_add_pack">Agregar un paquete de stickers desde una carpeta</string>
+    <string name="notice_pack_added">Paquete de stickers agregado</string>
+    <string name="notice_pack_empty">No hay imágenes en esa carpeta</string>
+    <string name="notice_pack_failed">No se pudo leer esa carpeta</string>
+    <string name="fill_pick_color">Tomar un color de la página</string>
+    <string name="notice_pick_color">Toca un color de la página para tomarlo</string>
+    <string name="panel_pressure">Presión</string>
+    <string name="info_pressure">La línea es más fina donde el lápiz presiona poco y más gruesa donde presiona fuerte.</string>
+    <string name="fill_return">Volver a la herramienta anterior</string>
+    <string name="fill_return_delay">Retraso</string>
+    <string name="toolbar_hidden_tools">Herramientas ocultas</string>
+    <string name="toolbar_reset">Restablecer valores</string>
+    <string name="selection_send_back">Enviar al fondo</string>
+    <string name="selection_move_middle">Mover al medio</string>
+    <string name="selection_bring_front">Traer al frente</string>
+    <string name="settings_template_language">Idioma de las plantillas</string>
+    <string name="settings_template_language_auto">El de la app</string>
+    <string name="settings_template_language_detail">Las palabras impresas en las plantillas incluidas, como las páginas de semestre, mapa mental y semana. Se aplica a todos los cuadernos.</string>
+    <!-- Agenda -->
+    <string name="planner_weekday_title">Día de la semana de esta fecha</string>
+    <string name="planner_title_title">Título de la agenda</string>
+    <string name="planner_date_clear">Borrar</string>
+    <string name="planner_years_title">Años de la agenda</string>
+    <string name="planner_years_mid">Medio año</string>
+    <string name="planner_years_full">Año completo</string>
+    <string name="planner_years_mid_detail">De julio a julio del año siguiente.</string>
+    <string name="planner_years_full_detail">De enero a diciembre.</string>
+    <string name="planner_years_apply">Aplicar</string>
+</resources>

@@ -4,6 +4,7 @@ import app.betternotes.core.model.Document
 import app.betternotes.core.model.PageItem
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
@@ -27,6 +28,7 @@ class DocumentStore(val root: File) {
     private val pagesDir = File(root, "pages")
     private val assetsDir = File(root, "assets")
     private val lastPageFile = File(root, "last-page")
+    private val templateLanguageFile = File(root, "template-language")
 
     /** True if a document has been written here. */
     fun exists() = documentFile.exists()
@@ -55,6 +57,22 @@ class DocumentStore(val root: File) {
         if (lastPageFile.exists()) lastPageFile.readText().toLongOrNull() else null
     } catch (_: java.io.IOException) {
         null
+    }
+
+    /**
+     * The language of the words on this notebook's built-in templates, "en" or "es", or null before one was chosen. It lives
+     * beside the document, not in it, so it needs no format change; it moves into the file with the next format.
+     */
+    fun readTemplateLanguage(): String? = try {
+        templateLanguageFile.readText().trim().takeIf { it == "en" || it == "es" }
+    } catch (_: IOException) {
+        null
+    }
+
+    /** [touch] marks the document as changed, so its picture on the home screen is drawn again. */
+    fun writeTemplateLanguage(code: String, touch: Boolean) {
+        writeAtomically(templateLanguageFile, code.toByteArray())
+        if (touch) documentFile.setLastModified(System.currentTimeMillis())
     }
 
     fun writeLastPage(pageId: Long) = writeAtomically(lastPageFile, pageId.toString().toByteArray())

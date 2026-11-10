@@ -4,6 +4,7 @@ import app.betternotes.core.format.ByteReader
 import app.betternotes.core.format.ByteWriter
 import app.betternotes.core.format.DOCUMENT_KINDS
 import app.betternotes.core.format.DocumentStore
+import app.betternotes.core.format.LIBRARY_FORMAT_VERSION
 import app.betternotes.core.format.decodeFile
 import app.betternotes.core.format.encodeFile
 import app.betternotes.core.format.writeAtomically
@@ -16,12 +17,12 @@ private const val MIN_ENTRY_BYTES = Long.SIZE_BYTES * 2 + 5
 
 /** The file holding how the library is organized. */
 object LibraryCodec {
-    fun encode(library: Library): ByteArray = encodeFile(LIBRARY_MAGIC) {
+    fun encode(library: Library, version: Int = LIBRARY_FORMAT_VERSION): ByteArray = encodeFile(LIBRARY_MAGIC, version) {
         varint(library.entries.size)
         library.entries.forEach { entry(it) }
     }
 
-    fun decode(bytes: ByteArray): Library = decodeFile(bytes, LIBRARY_MAGIC) {
+    fun decode(bytes: ByteArray): Library = decodeFile(bytes, LIBRARY_MAGIC, LIBRARY_FORMAT_VERSION) {
         Library(List(count(MIN_ENTRY_BYTES)) { entry() })
     }
 }
@@ -41,6 +42,11 @@ private fun ByteWriter.entry(entry: LibraryEntry) {
         int(it.paperColor)
         long(it.savedAtMs)
     }
+    if (version >= 2) {
+        int(entry.style.color)
+        float(entry.style.opacity)
+        bool(entry.style.previews)
+    }
 }
 
 private fun ByteReader.entry(): LibraryEntry {
@@ -52,7 +58,8 @@ private fun ByteReader.entry(): LibraryEntry {
     val tags = List(count(1)) { string() }.toSet()
     val trashedAtMs = optionalLong()
     val document = if (bool()) DocumentInfo(DOCUMENT_KINDS.read(this), int(), long()) else null
-    return LibraryEntry(id, name, parentId, modifiedAtMs, starred, tags, trashedAtMs, document)
+    val style = if (version >= 2) FolderStyle(int(), float().coerceIn(0f, 1f), bool()) else FolderStyle.DEFAULT
+    return LibraryEntry(id, name, parentId, modifiedAtMs, starred, tags, trashedAtMs, document, style)
 }
 
 private fun ByteWriter.optionalLong(value: Long?) {

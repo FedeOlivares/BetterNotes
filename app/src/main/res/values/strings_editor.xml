@@ -70,8 +70,7 @@
     <string name="pages_all">All pages</string>
     <string name="pages_add">Add a page</string>
     <string name="pages_add_after">Add a page after this one</string>
-    <string name="pages_delete">Delete this page</string>
-    <string name="pages_select">Select pages</string>
+    <string name="pages_delete">Delete this page</string>    <string name="pages_select">Select pages</string>
     <string name="menu_insert">Insert</string>
     <string name="menu_search">Search</string>
     <string name="panel_image_library">Pictures</string>
@@ -115,6 +114,8 @@
     <string name="panel_thickness">Thickness</string>
     <string name="panel_thinner">Thinner</string>
     <string name="panel_thicker">Thicker</string>
+    <string name="panel_decrease">Decrease</string>
+    <string name="panel_increase">Increase</string>
     <string name="panel_opacity">Opacity</string>
     <string name="panel_line_type">Line type</string>
     <string name="panel_tip">Tip</string>
@@ -141,7 +142,7 @@
     <string name="panel_done">Done</string>
 
     <string name="info_not_built_setting">Saved, but it does nothing yet.</string>
-    <string name="info_full_selection">Only selects items that are completely inside the selection.</string>
+    <string name="info_full_selection">On: only items completely inside the selection. Off: anything the selection touches, even slightly.</string>
     <string name="info_any_portion">Selects any item with a part inside the selection, even one the lasso only crosses.</string>
     <string name="info_hold_shape">Keep the pen still at the end of a stroke to turn it into a straight line.</string>
     <string name="info_scribble">Saved, but it does nothing yet.</string>
@@ -159,6 +160,11 @@
     <string name="scan_loading">Loading the photo</string>
     <string name="menu_export">Export</string>
     <string name="menu_rename">Rename</string>
+    <string name="menu_add_cover">Add cover</string>
+    <string name="menu_edit_cover">Edit cover</string>
+    <string name="menu_edit_size">Edit size</string>
+    <string name="menu_template_language">Template language</string>
+    <string name="menu_template_language_detail">The words printed on this notebook\'s templates. It starts as the app\'s language when the notebook is made, and changing the app later does not change it.</string>
     <string name="menu_go_to_page">Go to page</string>
     <string name="menu_change_template">Change template</string>
     <string name="menu_scroll_layout">Scroll and layout</string>
@@ -170,6 +176,14 @@
     <string name="sources_tabs">Tabs</string>
     <string name="sources_count">%1$d Source</string>
     <string name="sources_add">Add a source</string>
+    <string name="sources_remove">Remove from sources</string>
+    <string name="sources_no_notebooks">There are no other notebooks to link.</string>
+    <string name="add_audio_source_detail">Upload an audio file</string>
+    <string name="add_notebook">Notebook</string>
+    <string name="add_notebook_detail">Link a notebook from your library</string>
+    <string name="source_canvas">Canvas</string>
+    <string name="source_image">Image</string>
+    <string name="source_audio">Audio</string>
     <string name="sources_pages">%1$d pages</string>
     <string name="add_title">Add to Note</string>
     <string name="add_text">Text</string>

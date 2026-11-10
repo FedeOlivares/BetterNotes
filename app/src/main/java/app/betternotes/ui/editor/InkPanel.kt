@@ -79,17 +79,21 @@ internal fun PanelSheet(
     title: String,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** False for a sheet of set height that lets one part of its content scroll by itself. */
+    scrolls: Boolean = true,
+    width: androidx.compose.ui.unit.Dp = PanelWidth,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalEditorColors.current
+    val scroll = rememberScrollState()
     Column(
         modifier
             .opensFrom(OpenFrom.TopEnd)
-            .width(PanelWidth)
+            .width(width)
             .shadow(12.dp, PanelShape, clip = false)
             .clip(PanelShape)
             .background(colors.panel)
-            .verticalScroll(rememberScrollState()),
+            .then(if (scrolls) Modifier.verticalScroll(scroll) else Modifier),
     ) {
         Box(Modifier.fillMaxWidth().height(54.dp)) {
             Text(
@@ -161,10 +165,11 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
             }
         }
         LabeledRow(R.string.panel_opacity) { ValuePill { ValueText("${(preset.opacity * 100).roundToInt()}%") } }
-        PanelSlider(
+        StepperSlider(
             fraction = preset.opacity,
             onChange = { f -> state.update { it.copy(opacity = f.coerceAtLeast(MIN_OPACITY)) } },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            steps = 20,
+            modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(16.dp))
         Box(Modifier.padding(horizontal = PanelPadding).fillMaxWidth().height(1.dp).background(colors.panelDivider))
@@ -176,6 +181,19 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
         }
         LabeledRow(R.string.panel_tip) {
             ValuePill(onClick = { state.update { it.copy(tip = it.tip.next()) } }) { TipGlyph(preset.tip) }
+        }
+        // The natural pen follows pressure by itself. Every other pen and brush can be told to.
+        if (!(preset.tool == InkTool.PEN && preset.penType == PenType.NATURAL)) {
+            LabeledRow(R.string.panel_pressure, info = { notices.say(R.string.info_pressure) }) {
+                PanelSwitch(preset.pressure, stringResource(R.string.panel_pressure)) { on -> state.update { it.copy(pressure = on) } }
+            }
+        }
+        if (preset.tool == InkTool.HIGHLIGHTER) {
+            LabeledRow(R.string.panel_no_overlap, info = { notices.say(R.string.info_no_overlap) }) {
+                PanelSwitch(preset.noOverlap, stringResource(R.string.panel_no_overlap)) { on ->
+                    state.update { it.copy(noOverlap = on) }
+                }
+            }
         }
         LabeledRow(
             R.string.panel_hold_shape,
@@ -204,7 +222,7 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
             LabeledRow(R.string.panel_hold_time) {
                 ValuePill { ValueText("%.1f s".format(preset.holdDelayMs / 1000f)) }
             }
-            PanelSlider(
+            StepperSlider(
                 fraction = (preset.holdDelayMs - InkPreset.MIN_HOLD_MS).toFloat() /
                     (InkPreset.MAX_HOLD_MS - InkPreset.MIN_HOLD_MS),
                 onChange = { f ->
@@ -212,7 +230,8 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
                     val ms = InkPreset.MIN_HOLD_MS + (f * range / HOLD_STEP_MS).roundToInt() * HOLD_STEP_MS
                     state.update { it.copy(holdDelayMs = ms) }
                 },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+                steps = (InkPreset.MAX_HOLD_MS - InkPreset.MIN_HOLD_MS) / HOLD_STEP_MS,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         LabeledRow(R.string.panel_scribble, info = { notices.say(R.string.info_scribble) }) {
@@ -228,13 +247,13 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
         LabeledRow(R.string.panel_stabilization, info = { notices.say(R.string.info_stabilization) }) {
             ValuePill { ValueText(preset.stabilization.toString()) }
         }
-        PanelSlider(
-            fraction = (preset.stabilization - 1).toFloat() / (InkPreset.MAX_STABILIZATION - 1),
+        StepperSlider(
+            fraction = preset.stabilization.toFloat() / InkPreset.MAX_STABILIZATION,
             onChange = { f ->
-                val level = 1 + (f * (InkPreset.MAX_STABILIZATION - 1)).roundToInt()
-                state.update { it.copy(stabilization = level) }
+                state.update { it.copy(stabilization = (f * InkPreset.MAX_STABILIZATION).roundToInt()) }
             },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            steps = InkPreset.MAX_STABILIZATION,
+            modifier = Modifier.fillMaxWidth(),
         )
         ColorSection(state, preset, notices)
     }
@@ -299,8 +318,11 @@ private fun TipShape.next() = if (this == TipShape.ROUND) TipShape.SQUARE else T
 @Composable
 private fun TipGlyph(tip: TipShape) {
     val colors = LocalEditorColors.current
-    val shape = if (tip == TipShape.ROUND) CircleShape else RoundedCornerShape(1.dp)
-    Box(Modifier.size(14.dp).background(colors.icon, shape))
+    if (tip == TipShape.ROUND) {
+        Box(Modifier.size(14.dp).background(colors.icon, CircleShape))
+    } else {
+        Box(Modifier.size(width = 17.dp, height = 10.dp).background(colors.icon, RoundedCornerShape(3.dp)))
+    }
 }
 
 @Composable

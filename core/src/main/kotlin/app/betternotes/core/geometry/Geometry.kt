@@ -57,6 +57,13 @@ data class Affine(
     companion object {
         fun translate(dx: Float, dy: Float) = Affine(e = dx, f = dy)
 
+        /** Turns by [radians] (clockwise on a screen, whose y runs down) about a fixed point. */
+        fun rotateAbout(radians: Double, px: Float, py: Float): Affine {
+            val c = kotlin.math.cos(radians).toFloat()
+            val s = kotlin.math.sin(radians).toFloat()
+            return Affine(a = c, b = s, c = -s, d = c, e = px - (c * px - s * py), f = py - (s * px + c * py))
+        }
+
         /** Scales about a fixed point, as when dragging a selection handle. */
         fun scaleAbout(sx: Float, sy: Float, px: Float, py: Float) =
             Affine(a = sx, d = sy, e = px - sx * px, f = py - sy * py)

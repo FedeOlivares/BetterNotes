@@ -2,6 +2,8 @@ package app.betternotes.core.format
 
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.AudioItem
+import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
 import app.betternotes.core.model.BrushKind
@@ -43,6 +45,8 @@ private const val TAG_STYLED_TEXT = 8
 private const val TAG_STYLED_TABLE = 9
 private const val TAG_VIDEO = 10
 private const val TAG_TAPE_PATH = 11
+private const val TAG_FILL = 12
+private const val TAG_PATH_SHAPE = 13
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -138,6 +142,7 @@ private fun ByteWriter.item(item: PageItem) {
         is StrokeItem -> {
             byte(TAG_STROKE)
             long(item.id)
+            locked(item)
             inkStyle(item.style)
             varint(item.points.size)
             floats(item.points.packed)
@@ -145,6 +150,7 @@ private fun ByteWriter.item(item: PageItem) {
         is ShapeItem -> {
             byte(TAG_SHAPE)
             long(item.id)
+            locked(item)
             frame(item.frame)
             SHAPE_KINDS.write(this, item.kind)
             int(item.strokeColor)
@@ -168,6 +174,7 @@ private fun ByteWriter.item(item: PageItem) {
             require(version >= 4) { "Tape that follows the pen needs page format 4" }
             byte(TAG_TAPE_PATH)
             long(item.id)
+            locked(item)
             float(item.width)
             int(item.fillColor)
             float(item.opacity)
@@ -178,20 +185,51 @@ private fun ByteWriter.item(item: PageItem) {
             varint(item.pointCount)
             for (value in item.points) float(value)
         }
+        is FillItem -> {
+            require(version >= 6) { "A paint bucket fill needs page format 6" }
+            byte(TAG_FILL)
+            long(item.id)
+            locked(item)
+            int(item.color)
+            float(item.opacity)
+            varint(item.loops.size)
+            for (loop in item.loops) {
+                varint(loop.size / 2)
+                for (value in loop) float(value)
+            }
+        }
+        is PathShapeItem -> {
+            require(version >= 6) { "A recognized shape needs page format 6" }
+            byte(TAG_PATH_SHAPE)
+            long(item.id)
+            locked(item)
+            bool(item.closed)
+            bool(item.smooth)
+            int(item.strokeColor)
+            float(item.strokeWidth)
+            lineStyle(item.line)
+            int(item.fillColor)
+            float(item.opacity)
+            varint(item.pointCount)
+            for (value in item.points) float(value)
+        }
         is ImageItem -> {
             byte(TAG_IMAGE)
             long(item.id)
+            locked(item)
             frame(item.frame)
             string(item.assetId)
             IMAGE_SHAPES.write(this, item.shape)
             float(item.cornerRadius)
             int(item.borderColor)
             float(item.borderWidth)
+            if (version >= 5) float(item.opacity)
         }
         is TextItem -> {
             val styled = item.style != TextStyle()
             byte(if (styled) TAG_STYLED_TEXT else TAG_TEXT)
             long(item.id)
+            locked(item)
             frame(item.frame)
             string(item.text)
             float(item.textSize)
@@ -208,17 +246,20 @@ private fun ByteWriter.item(item: PageItem) {
         is StickyNoteItem -> {
             byte(TAG_STICKY)
             long(item.id)
+            locked(item)
             frame(item.frame)
             int(item.color)
             bool(item.isOpen)
             float(item.closedWidth)
             float(item.closedHeight)
+            if (version >= 5) bool(item.keepOpen)
             items(item.items)
         }
         is TableItem -> {
             val styled = item.headerRow || item.headerColumn || item.fillColor != 0
             byte(if (styled) TAG_STYLED_TABLE else TAG_TABLE)
             long(item.id)
+            locked(item)
             frame(item.frame)
             floatList(item.columnWeights)
             floatList(item.rowWeights)
@@ -235,6 +276,7 @@ private fun ByteWriter.item(item: PageItem) {
         is VideoItem -> {
             byte(TAG_VIDEO)
             long(item.id)
+            locked(item)
             frame(item.frame)
             string(item.assetId)
             string(item.posterAssetId)
@@ -243,6 +285,7 @@ private fun ByteWriter.item(item: PageItem) {
         is AudioItem -> {
             byte(TAG_AUDIO)
             long(item.id)
+            locked(item)
             frame(item.frame)
             string(item.assetId)
             long(item.durationMs)
@@ -252,6 +295,7 @@ private fun ByteWriter.item(item: PageItem) {
 
 private fun ByteReader.table(): TableItem {
     val id = long()
+    val locked = locked()
     val frame = frame()
     val columns = floatList()
     val rows = floatList()
@@ -267,18 +311,21 @@ private fun ByteReader.table(): TableItem {
         textSize = float(),
         lineColor = int(),
         lineWidth = float(),
+        locked = locked,
     )
 }
 
 private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     TAG_STROKE -> {
         val id = long()
+        val locked = locked()
         val style = inkStyle()
         val pointCount = count(StrokePoints.STRIDE * Float.SIZE_BYTES)
-        StrokeItem(id, style, StrokePoints(floats(pointCount * StrokePoints.STRIDE)))
+        StrokeItem(id, style, StrokePoints(floats(pointCount * StrokePoints.STRIDE)), locked)
     }
     TAG_SHAPE -> ShapeItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         kind = SHAPE_KINDS.read(this),
         strokeColor = int(),
@@ -294,25 +341,50 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     )
     TAG_TAPE_PATH -> {
         val id = long()
+        val locked = locked()
         val width = float()
         val color = int()
         val opacity = float()
         val pattern = TAPE_PATTERNS.read(this)
         val shadow = TapeShadow(float(), float(), float())
         val count = count(2 * Float.SIZE_BYTES)
-        TapePathItem(id, floats(count * 2), width, color, opacity, pattern, shadow)
+        TapePathItem(id, floats(count * 2), width, color, opacity, pattern, shadow, locked)
+    }
+    TAG_FILL -> {
+        val id = long()
+        val locked = locked()
+        val color = int()
+        val opacity = float()
+        val loops = List(count(1)) { floats(count(2 * Float.SIZE_BYTES) * 2) }
+        FillItem(id, loops, color, opacity, locked)
+    }
+    TAG_PATH_SHAPE -> {
+        val id = long()
+        val locked = locked()
+        val closed = bool()
+        val smooth = bool()
+        val color = int()
+        val width = float()
+        val line = lineStyle()
+        val fill = int()
+        val opacity = float()
+        val count = count(2 * Float.SIZE_BYTES)
+        PathShapeItem(id, floats(count * 2), closed, smooth, color, width, line, fill, opacity, locked)
     }
     TAG_IMAGE -> ImageItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         assetId = string(),
         shape = IMAGE_SHAPES.read(this),
         cornerRadius = float(),
         borderColor = int(),
         borderWidth = float(),
+        opacity = if (version >= 5) float() else 1f,
     )
     TAG_STYLED_TEXT -> TextItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         text = string(),
         textSize = float(),
@@ -328,6 +400,7 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     )
     TAG_TEXT -> TextItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         text = string(),
         textSize = float(),
@@ -335,11 +408,13 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     )
     TAG_STICKY -> StickyNoteItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         color = int(),
         isOpen = bool(),
         closedWidth = float(),
         closedHeight = float(),
+        keepOpen = if (version >= 5) bool() else false,
         items = items(),
     )
     TAG_TABLE -> table()
@@ -348,6 +423,7 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     }
     TAG_VIDEO -> VideoItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         assetId = string(),
         posterAssetId = string(),
@@ -355,6 +431,7 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     )
     TAG_AUDIO -> AudioItem(
         id = long(),
+        locked = locked(),
         frame = frame(),
         assetId = string(),
         durationMs = long(),
@@ -365,24 +442,36 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
 private fun ByteWriter.inkStyle(style: InkStyle) {
     INK_TOOLS.write(this, style.tool)
     PEN_TYPES.write(this, style.penType)
-    TIP_SHAPES.write(this, style.tip)
+    // The tip's byte has room: the top bit says the line follows the pen's pressure. Older files never set it.
+    byte(TIP_SHAPES.coded.indexOf(style.tip) or if (style.pressure) PRESSURE_BIT else 0)
     int(style.color)
     float(style.width)
     float(style.opacity)
     lineStyle(style.line)
     if (version >= 3) BRUSH_KINDS.write(this, style.brush)
+    if (version >= 5) bool(style.noOverlap)
 }
 
-private fun ByteReader.inkStyle() = InkStyle(
-    tool = INK_TOOLS.read(this),
-    penType = PEN_TYPES.read(this),
-    tip = TIP_SHAPES.read(this),
-    color = int(),
-    width = float(),
-    opacity = float(),
-    line = lineStyle(),
-    brush = if (version >= 3) BRUSH_KINDS.read(this) else BrushKind.PENCIL,
-)
+private const val PRESSURE_BIT = 0x80
+
+private fun ByteReader.inkStyle(): InkStyle {
+    val tool = INK_TOOLS.read(this)
+    val penType = PEN_TYPES.read(this)
+    val tipByte = byte()
+    val tip = TIP_SHAPES.coded.getOrNull(tipByte and PRESSURE_BIT.inv()) ?: throw CorruptFileException("Unknown tip $tipByte")
+    return InkStyle(
+        tool = tool,
+        penType = penType,
+        tip = tip,
+        color = int(),
+        width = float(),
+        opacity = float(),
+        line = lineStyle(),
+        brush = if (version >= 3) BRUSH_KINDS.read(this) else BrushKind.PENCIL,
+        noOverlap = if (version >= 5) bool() else false,
+        pressure = tipByte and PRESSURE_BIT != 0,
+    )
+}
 
 private fun ByteWriter.lineStyle(style: LineStyle) {
     LINE_KINDS.write(this, style.kind)
@@ -411,3 +500,9 @@ private fun ByteReader.floatList(): List<Float> {
     val count = count(Float.SIZE_BYTES)
     return List(count) { float() }
 }
+
+private fun ByteWriter.locked(item: PageItem) {
+    if (version >= 5) bool(item.locked)
+}
+
+private fun ByteReader.locked() = if (version >= 5) bool() else false

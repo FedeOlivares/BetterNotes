@@ -246,7 +246,7 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
             }
         }
         Spacer(Modifier.height(4.dp))
-        LabeledRow(R.string.panel_select_locked, info = { notices.say(R.string.info_not_built_setting) }) {
+        LabeledRow(R.string.panel_select_locked, info = { notices.say(R.string.info_select_locked) }) {
             PanelSwitch(options.lockedToo, stringResource(R.string.panel_select_locked)) { on ->
                 state.updateLasso { it.copy(lockedToo = on) }
             }
@@ -258,12 +258,7 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
         }
         LabeledRow(R.string.panel_full_selection, info = { notices.say(R.string.info_full_selection) }) {
             PanelSwitch(options.fullSelectionOnly, stringResource(R.string.panel_full_selection)) { on ->
-                state.updateLasso { it.copy(fullSelectionOnly = on, anyPortion = it.anyPortion && !on) }
-            }
-        }
-        LabeledRow(R.string.panel_any_portion, info = { notices.say(R.string.info_any_portion) }) {
-            PanelSwitch(options.anyPortion, stringResource(R.string.panel_any_portion)) { on ->
-                state.updateLasso { it.copy(anyPortion = on, fullSelectionOnly = it.fullSelectionOnly && !on) }
+                state.updateLasso { it.copy(fullSelectionOnly = on) }
             }
         }
         // With strips of tape selected, their thickness and opacity can be changed here.
@@ -348,6 +343,7 @@ private val KIND_FILTERS: List<Triple<ItemKind, ImageVector, Int>> by lazy {
         Triple(ItemKind.HIGHLIGHTER, EditorIcons.Highlighter, R.string.tool_highlighter),
         Triple(ItemKind.TAPE, EditorIcons.Tape, R.string.tool_tape),
         Triple(ItemKind.SHAPE, EditorIcons.Shapes, R.string.tool_shapes),
+        Triple(ItemKind.FILL, EditorIcons.Bucket, R.string.tool_fill),
         Triple(ItemKind.IMAGE, EditorIcons.Image, R.string.tool_image),
         Triple(ItemKind.VIDEO, EditorIcons.AddElement, R.string.tool_add_element),
         Triple(ItemKind.TABLE, EditorIcons.Table, R.string.tool_table),

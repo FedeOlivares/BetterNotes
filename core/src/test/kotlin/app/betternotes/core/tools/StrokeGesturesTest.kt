@@ -68,22 +68,22 @@ class StrokeGesturesTest {
         assertFalse(StrokeGestures.isNearLine(loop, 100f, 100f, 5f))
     }
 
-    @Test fun `stabilizer level one is the pen and higher levels lag`() {
+    @Test fun `stabilizer level zero is the pen and higher levels lag`() {
         val out = FloatArray(2)
-        val pen = Stabilizer(1)
+        val pen = Stabilizer(0)
         pen.next(0f, 0f, 0L, out)
         pen.next(10f, 0f, 10L, out)
         assertEquals(10f, out[0], 0f)
-        val steady = Stabilizer(4)
+        val steady = Stabilizer(8)
         steady.next(0f, 0f, 0L, out)
         steady.next(10f, 0f, 10L, out)
-        assertEquals(10f * (1f - kotlin.math.exp(-10f / 75f)), out[0], 1e-4f)
+        assertEquals(10f * (1f - kotlin.math.exp(-10f / 100f)), out[0], 1e-4f)
     }
 
     @Test fun `stabilizer lag does not depend on the sample rate`() {
         fun after(stepMs: Long): Float {
             val out = FloatArray(2)
-            val steady = Stabilizer(3)
+            val steady = Stabilizer(6)
             var t = 0L
             while (t <= 200L) {
                 steady.next(if (t == 0L) 0f else 100f, 0f, t, out)

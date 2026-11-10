@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stickers -->
+    <string name="sticker_tab_emoji">Emoji</string>
+    <string name="sticker_tab_stickers">Stickers</string>
+    <string name="sticker_empty">No stickers yet. Select something on a page and press the sticker button next to copy to keep it here.</string>
+    <string name="sticker_empty_short">No stickers yet</string>
+    <string name="sticker_remove">Remove stickers</string>
+    <string name="sticker_done_removing">Done removing</string>
+    <string name="notice_sticker_saved">Saved as a sticker</string>
+    <string name="notice_sticker_failed">Could not save the sticker</string>
+    <!-- Paint bucket -->
+    <string name="tool_fill">Paint bucket</string>
+    <string name="fill_opacity">Opacity</string>
+    <string name="notice_fill_open">Nothing to fill there: the area is not closed, or the pen is on a line</string>
+    <string name="sticker_add_pack">Add a sticker pack from a folder</string>
+    <string name="notice_pack_added">Sticker pack added</string>
+    <string name="notice_pack_empty">No pictures in that folder</string>
+    <string name="notice_pack_failed">Could not read that folder</string>
+    <string name="fill_pick_color">Pick a color from the page</string>
+    <string name="notice_pick_color">Touch a color on the page to take it</string>
+    <string name="panel_pressure">Pressure</string>
+    <string name="info_pressure">The line is thinner where the pen presses lightly and fuller where it presses hard.</string>
+    <string name="fill_return">Return to previous tool</string>
+    <string name="fill_return_delay">Delay</string>
+    <string name="toolbar_hidden_tools">Hidden tools</string>
+    <string name="toolbar_reset">Reset to default</string>
+    <string name="selection_send_back">Send to back</string>
+    <string name="selection_move_middle">Move to the middle</string>
+    <string name="selection_bring_front">Bring to front</string>
+    <string name="settings_template_language">Template language</string>
+    <string name="settings_template_language_auto">Same as the app</string>
+    <string name="settings_template_language_detail">The words printed on the built-in templates, such as the semester, mind map and week pages. It applies to every notebook.</string>
+    <!-- Planner -->
+    <string name="planner_weekday_title">Weekday of this date</string>
+    <string name="planner_title_title">Title of the planner</string>
+    <string name="planner_date_clear">Clear</string>
+    <string name="planner_years_title">Years of the planner</string>
+    <string name="planner_years_mid">Mid-year</string>
+    <string name="planner_years_full">Full year</string>
+    <string name="planner_years_mid_detail">From July to July of the next year.</string>
+    <string name="planner_years_full_detail">From January to December.</string>
+    <string name="planner_years_apply">Apply</string>
+</resources>

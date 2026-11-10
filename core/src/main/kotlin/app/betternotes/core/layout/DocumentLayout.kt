@@ -16,23 +16,89 @@ enum class ScrollDirection { VERTICAL, LEFT_TO_RIGHT, RIGHT_TO_LEFT }
  * page with its origin at the document's origin.
  */
 class DocumentLayout(
-    pages: List<Page>,
+    private val pages: List<Page>,
     val direction: ScrollDirection = ScrollDirection.VERTICAL,
     private val gapPt: Float = DEFAULT_GAP_PT,
 ) {
     val isInfinite = pages.any { it.size == null }
 
+    /** How far the view may go past the last page, in points, along the way the pages run: room for a new page. */
+    var endRoomPt = 0f
+
+    /** How far the view may go before the first page, in points: the room where "Add cover" sits. */
+    var startRoomPt = 0f
+
     val pageCount = pages.size
 
-    /** left, top, right, bottom of each page. */
+    /**
+     * left, top, right, bottom of the room each page takes. A page that is turned takes the box around it, so the pages after it
+     * move aside; an upright page takes exactly its own rectangle.
+     */
     @PublishedApi
     internal val boxes = FloatArray(pages.size * BOX_STRIDE)
 
-    /** The area pages occupy. On an infinite canvas, the area the view may reach. */
-    val bounds: Bounds = if (isInfinite) placeInfinite() else place(pages)
+    /** left, top, right, bottom of each page's own upright rectangle, which sits in the middle of its room. */
+    private val rects = FloatArray(pages.size * BOX_STRIDE)
 
-    fun originX(index: Int) = if (isInfinite) 0f else boxes[index * BOX_STRIDE]
-    fun originY(index: Int) = if (isInfinite) 0f else boxes[index * BOX_STRIDE + 1]
+    /** How far each page is turned, in degrees clockwise about its middle. */
+    private val turns = FloatArray(pages.size) { if (pages[it].size == null) 0f else pages[it].rotation }
+
+    /** The area pages occupy. On an infinite canvas, the area the view may reach. */
+    var bounds: Bounds = if (isInfinite) placeInfinite() else place(pages)
+        private set
+
+    /** Where the page's own upright rectangle starts. A turned page turns about this rectangle's middle. */
+    fun originX(index: Int) = if (isInfinite) 0f else rects[index * BOX_STRIDE]
+    fun originY(index: Int) = if (isInfinite) 0f else rects[index * BOX_STRIDE + 1]
+
+    fun pageWidth(index: Int) = if (isInfinite) 0f else rects[index * BOX_STRIDE + 2] - rects[index * BOX_STRIDE]
+    fun pageHeight(index: Int) = if (isInfinite) 0f else rects[index * BOX_STRIDE + 3] - rects[index * BOX_STRIDE + 1]
+
+    fun centerX(index: Int) = originX(index) + pageWidth(index) / 2f
+    fun centerY(index: Int) = originY(index) + pageHeight(index) / 2f
+
+    /** The room the page takes, which is the box around it once it is turned. */
+    fun roomBounds(index: Int): Bounds {
+        val offset = index * BOX_STRIDE
+        return Bounds(boxes[offset], boxes[offset + 1], boxes[offset + 2], boxes[offset + 3])
+    }
+
+    /** How far the page is drawn turned, in degrees clockwise. */
+    fun turn(index: Int) = turns[index]
+
+    /**
+     * Turns the page as drawn, and lays the pages out again, so the pages after it slide to keep the same gap from the box
+     * around it. Cheap enough to call on every move of two fingers.
+     */
+    fun setTurn(index: Int, degrees: Float) {
+        if (isInfinite || turns[index] == degrees) return
+        turns[index] = degrees
+        bounds = place(pages)
+    }
+
+    /** The point of the page that lies under a document point, written to [out] as x then y. Upright, it is the point less the origin. */
+    fun worldToPage(index: Int, x: Float, y: Float, out: FloatArray) {
+        val w = pageWidth(index)
+        val h = pageHeight(index)
+        val dx = x - centerX(index)
+        val dy = y - centerY(index)
+        val radians = Math.toRadians(-turns[index].toDouble())
+        val cos = kotlin.math.cos(radians).toFloat()
+        val sin = kotlin.math.sin(radians).toFloat()
+        out[0] = w / 2f + dx * cos - dy * sin
+        out[1] = h / 2f + dx * sin + dy * cos
+    }
+
+    /** The document point where a point of the page lies, written to [out] as x then y. */
+    fun pageToWorld(index: Int, x: Float, y: Float, out: FloatArray) {
+        val dx = x - pageWidth(index) / 2f
+        val dy = y - pageHeight(index) / 2f
+        val radians = Math.toRadians(turns[index].toDouble())
+        val cos = kotlin.math.cos(radians).toFloat()
+        val sin = kotlin.math.sin(radians).toFloat()
+        out[0] = centerX(index) + dx * cos - dy * sin
+        out[1] = centerY(index) + dx * sin + dy * cos
+    }
 
     /** The page under a document point, or -1 if the point is off every page. */
     fun pageIndexAt(x: Float, y: Float): Int {
@@ -63,16 +129,22 @@ class DocumentLayout(
      * [marginPx].
      */
     fun minPanX(pxPerPt: Float, screenPx: Int, marginPx: Float) =
-        minPan(bounds.left, bounds.right, pxPerPt, screenPx, marginPx)
+        minPan(bounds.left, bounds.right, pxPerPt, screenPx, marginPx) -
+            (if (direction == ScrollDirection.LEFT_TO_RIGHT) endRoomPt * pxPerPt else 0f) -
+            if (direction == ScrollDirection.RIGHT_TO_LEFT) startRoomPt * pxPerPt else 0f
 
     fun maxPanX(pxPerPt: Float, screenPx: Int, marginPx: Float) =
-        maxPan(bounds.left, bounds.right, pxPerPt, screenPx, marginPx)
+        maxPan(bounds.left, bounds.right, pxPerPt, screenPx, marginPx) +
+            (if (direction == ScrollDirection.RIGHT_TO_LEFT) endRoomPt * pxPerPt else 0f) +
+            if (direction == ScrollDirection.LEFT_TO_RIGHT) startRoomPt * pxPerPt else 0f
 
     fun minPanY(pxPerPt: Float, screenPx: Int, marginPx: Float) =
-        minPan(bounds.top, bounds.bottom, pxPerPt, screenPx, marginPx)
+        minPan(bounds.top, bounds.bottom, pxPerPt, screenPx, marginPx) -
+            if (direction == ScrollDirection.VERTICAL) endRoomPt * pxPerPt else 0f
 
     fun maxPanY(pxPerPt: Float, screenPx: Int, marginPx: Float) =
-        maxPan(bounds.top, bounds.bottom, pxPerPt, screenPx, marginPx)
+        maxPan(bounds.top, bounds.bottom, pxPerPt, screenPx, marginPx) +
+            if (direction == ScrollDirection.VERTICAL) startRoomPt * pxPerPt else 0f
 
     /** Pulls the viewport back inside the range it may reach. */
     fun clampPan(viewport: Viewport, widthPx: Int, heightPx: Int, marginPx: Float) {
@@ -85,6 +157,13 @@ class DocumentLayout(
             minPanY(scale, heightPx, marginPx),
             maxPanY(scale, heightPx, marginPx),
         )
+    }
+
+    /** The length of the room the page at [index] takes along the way the pages run, in points. */
+    fun lengthAlong(index: Int): Float {
+        if (isInfinite) return 0f
+        val offset = index * BOX_STRIDE
+        return if (direction == ScrollDirection.VERTICAL) boxes[offset + 3] - boxes[offset + 1] else boxes[offset + 2] - boxes[offset]
     }
 
     /**
@@ -113,12 +192,27 @@ class DocumentLayout(
         boxes[1] = area.top
         boxes[2] = area.right
         boxes[3] = area.bottom
+        rects[0] = area.left
+        rects[1] = area.top
+        rects[2] = area.right
+        rects[3] = area.bottom
         return area
     }
 
     private fun place(pages: List<Page>): Bounds {
         val vertical = direction == ScrollDirection.VERTICAL
-        val across = pages.maxOf { if (vertical) it.size!!.widthPt else it.size!!.heightPt }
+        // Each page takes the box around it as turned, so a turned page has room.
+        val roomWidth = FloatArray(pages.size)
+        val roomHeight = FloatArray(pages.size)
+        for (i in pages.indices) {
+            val size = pages[i].size!!
+            val radians = Math.toRadians(turns[i].toDouble())
+            val cos = kotlin.math.abs(kotlin.math.cos(radians)).toFloat()
+            val sin = kotlin.math.abs(kotlin.math.sin(radians)).toFloat()
+            roomWidth[i] = size.widthPt * cos + size.heightPt * sin
+            roomHeight[i] = size.widthPt * sin + size.heightPt * cos
+        }
+        val across = pages.indices.maxOf { if (vertical) roomWidth[it] else roomHeight[it] }
         var along = 0f
         // Right to left runs backwards from the origin, so the first page has the highest x.
         val ordered = if (direction == ScrollDirection.RIGHT_TO_LEFT) pages.indices.reversed() else pages.indices
@@ -126,16 +220,20 @@ class DocumentLayout(
             val size = pages[i].size!!
             val offset = i * BOX_STRIDE
             if (vertical) {
-                boxes[offset] = (across - size.widthPt) / 2f
+                boxes[offset] = (across - roomWidth[i]) / 2f
                 boxes[offset + 1] = along
-                along += size.heightPt + gapPt
+                along += roomHeight[i] + gapPt
             } else {
                 boxes[offset] = along
-                boxes[offset + 1] = (across - size.heightPt) / 2f
-                along += size.widthPt + gapPt
+                boxes[offset + 1] = (across - roomHeight[i]) / 2f
+                along += roomWidth[i] + gapPt
             }
-            boxes[offset + 2] = boxes[offset] + size.widthPt
-            boxes[offset + 3] = boxes[offset + 1] + size.heightPt
+            boxes[offset + 2] = boxes[offset] + roomWidth[i]
+            boxes[offset + 3] = boxes[offset + 1] + roomHeight[i]
+            rects[offset] = boxes[offset] + (roomWidth[i] - size.widthPt) / 2f
+            rects[offset + 1] = boxes[offset + 1] + (roomHeight[i] - size.heightPt) / 2f
+            rects[offset + 2] = rects[offset] + size.widthPt
+            rects[offset + 3] = rects[offset + 1] + size.heightPt
         }
         val length = along - gapPt
         return if (vertical) Bounds(0f, 0f, across, length) else Bounds(0f, 0f, length, across)

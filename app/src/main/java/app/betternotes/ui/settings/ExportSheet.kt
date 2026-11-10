@@ -61,6 +61,7 @@ import app.betternotes.core.export.ImageExportOptions
 import app.betternotes.core.export.ImageFormat
 import app.betternotes.core.export.PAGE_SCALE_RANGE
 import app.betternotes.core.export.PageSelection
+import app.betternotes.core.format.NotebookArchive
 import app.betternotes.core.export.PdfExportOptions
 import app.betternotes.core.export.exportFileName
 import app.betternotes.core.export.parsePageRange
@@ -76,7 +77,7 @@ import java.io.IOException
 import java.io.OutputStream
 import kotlin.math.roundToInt
 
-private enum class ExportKind { PDF, IMAGE }
+private enum class ExportKind { PDF, IMAGE, NOTEBOOK }
 
 private const val SCALE_STEP = 0.05f
 private const val POINTS_PER_INCH = 72f
@@ -131,6 +132,15 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
             run({ writeTo(context, uri) { exporter.writePdf(selection, it, PdfExportOptions(scale, invert, rasterize)) } })
         }
     }
+    val notebookTarget = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) {
+            // The editor saved already, in `editor.exporter()` above.
+            val root = editor.store.root
+            val repository = app.betternotes.library.LibraryRepository.get(context)
+            val linked = app.betternotes.core.format.Binder(editor.store).links().map { repository.documentStore(it).root }
+            run({ writeTo(context, uri) { NotebookArchive.write(root, it, linked); 1 } })
+        }
+    }
     val imagesFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
         if (tree != null) {
             run({
@@ -158,14 +168,16 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
                 )
             }
             Spacer(Modifier.height(36.dp))
-            PageChooser(pages, exporter, worker, selected) { index ->
+            // The cover, when there is one, is page 0, as in the editor.
+            val firstNumber = if (pages.firstOrNull()?.isCover == true) 0 else 1
+            PageChooser(pages, exporter, worker, selected, firstNumber) { index ->
                 selected = if (index in selected) selected - index else selected + index
                 rangeText = ""
             }
             Spacer(Modifier.height(20.dp))
             RangeField(rangeText) { text ->
                 rangeText = text
-                val parsed = parsePageRange(text, pages.size)
+                val parsed = parsePageRange(text, pages.size, firstNumber)
                 if (parsed != null) selected = parsed.toSet()
             }
             Spacer(Modifier.height(36.dp))
@@ -175,12 +187,17 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
                 Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
                     KindCard(ExportIcons.Pdf, stringResource(R.string.export_pdf), kind == ExportKind.PDF, Modifier.weight(1f)) { kind = ExportKind.PDF }
                     KindCard(ExportIcons.Image, stringResource(R.string.export_image), kind == ExportKind.IMAGE, Modifier.weight(1f)) { kind = ExportKind.IMAGE }
+                    KindCard(ExportIcons.Notebook, stringResource(R.string.export_notebook), kind == ExportKind.NOTEBOOK, Modifier.weight(1f)) { kind = ExportKind.NOTEBOOK }
                 }
                 when (kind) {
                     ExportKind.PDF -> SettingsCard(horizontal = 27.dp, top = 16.dp, bottom = 16.dp) {
                         ScaleRow(scale, sizeLabel(pages, selected, scale, inPixels = false)) { scale = it }
                         ToggleRow(stringResource(R.string.export_invert), invert) { invert = it }
                         ToggleRow(stringResource(R.string.export_rasterize), rasterize, stringResource(R.string.export_rasterize_detail)) { rasterize = it }
+                    }
+                    ExportKind.NOTEBOOK -> SettingsCard(horizontal = 27.dp, top = 16.dp, bottom = 16.dp) {
+                        // The whole notebook, whatever pages are chosen above: someone with this app can open it and edit everything.
+                        Text(stringResource(R.string.export_notebook_detail), color = colors.secondary, fontSize = 17.sp, modifier = Modifier.padding(vertical = 10.dp))
                     }
                     ExportKind.IMAGE -> SettingsCard(horizontal = 27.dp, top = 16.dp, bottom = 16.dp) {
                         ScaleRow(scale, sizeLabel(pages, selected, scale, inPixels = true)) { scale = it }
@@ -195,11 +212,12 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
             Spacer(Modifier.height(30.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(38.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
                 TextButton(stringResource(R.string.export_cancel), enabled = !working, onClick = onClose)
-                val ready = !working && selected.isNotEmpty()
+                val ready = !working && (selected.isNotEmpty() || kind == ExportKind.NOTEBOOK)
                 TextButton(stringResource(if (working) R.string.export_working else R.string.export_action), enabled = ready) {
                     when (kind) {
                         ExportKind.PDF -> pdfTarget.launch(exportFileName(title, "pdf"))
                         ExportKind.IMAGE -> imagesFolder.launch(null)
+                        ExportKind.NOTEBOOK -> notebookTarget.launch(exportFileName(title, NotebookArchive.EXTENSION))
                     }
                 }
             }
@@ -227,6 +245,7 @@ private fun PageChooser(
     exporter: DocumentExporter,
     worker: CoroutineDispatcher,
     selected: Set<Int>,
+    firstNumber: Int,
     onToggle: (Int) -> Unit,
 ) {
     val thumbnails = remember { mutableStateMapOf<Int, Bitmap>() }
@@ -247,7 +266,7 @@ private fun PageChooser(
                     if (made != null) thumbnails[index] = made
                 }
             }
-            PageTile(index, thumbnails[index], index in selected) { onToggle(index) }
+            PageTile(index + firstNumber - 1, thumbnails[index], index in selected) { onToggle(index) }
         }
     }
 }
@@ -386,5 +405,6 @@ private fun TextButton(label: String, enabled: Boolean, onClick: () -> Unit) {
 
 private object ExportIcons {
     val Pdf by lazy { lineIcon("pdf", "M6 3h8l4 4v14H6zM14 3v4h4M9 17c2-1 4-4 4.5-7c.3 3 2 5 4 5.5c-3 0-6 .5-8.5 1.5z") }
+    val Notebook by lazy { lineIcon("notebook", "M6.5 3.5h11a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1zM9.5 3.5v17M12.5 8h3.5") }
     val Image by lazy { lineIcon("image", "M4 5h16v14H4zM4 16l5-5l4 4l3-2.5l4 3.5M15.5 8.5a1.2 1.2 0 1 0 .01 0") }
 }

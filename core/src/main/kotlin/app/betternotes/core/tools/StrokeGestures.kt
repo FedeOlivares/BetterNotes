@@ -146,12 +146,12 @@ object StrokeGestures {
 }
 
 /**
- * Follows the pen a little behind it, so a shaky hand draws a steadier line. Level 1 is the pen
- * itself. Higher levels follow with a time constant of [TAU_MS_PER_LEVEL] ms for each level above
- * the first, whatever rate the pen reports at.
+ * Follows the pen a little behind it, so a shaky hand draws a steadier line. Level 0 is the pen
+ * itself. Each level above follows with a further [TAU_MS_PER_LEVEL] ms time constant, whatever
+ * rate the pen reports at.
  */
 class Stabilizer(level: Int) {
-    private val tauMs = (level.coerceAtLeast(1) - 1) * TAU_MS_PER_LEVEL
+    private val tauMs = level.coerceAtLeast(0) * TAU_MS_PER_LEVEL
     private var x = 0f
     private var y = 0f
     private var lastMs = 0L
@@ -174,6 +174,6 @@ class Stabilizer(level: Int) {
     }
 
     companion object {
-        const val TAU_MS_PER_LEVEL = 25f
+        const val TAU_MS_PER_LEVEL = 12.5f
     }
 }

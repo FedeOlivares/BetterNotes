@@ -14,8 +14,8 @@ android {
         // API 35 gives PdfRenderer text extraction. Unverified: the Pad 7 must run Android 15+ to install this.
         minSdk = 35
         targetSdk = 37
-        versionCode = 120
-        versionName = "1.2"
+        versionCode = 140
+        versionName = "1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

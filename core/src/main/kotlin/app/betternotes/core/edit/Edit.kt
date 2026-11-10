@@ -61,6 +61,24 @@ class RemovePage(val index: Int, val page: Page) : Edit {
     override fun revert(target: EditTarget) = target.document.insertPage(index, page)
 }
 
+/**
+ * Adds, changes or takes out the cover page. [before] and [after] are the cover pages, or null for none. A changed
+ * design keeps its page id, so what was drawn on the cover stays. A page taken out leaves its file, so undo brings its items back.
+ */
+class SetCover(val before: Page?, val after: Page?) : Edit {
+    override fun apply(target: EditTarget) = target.document.replaceCover(after)
+    override fun revert(target: EditTarget) = target.document.replaceCover(before)
+}
+
+/**
+ * Replaces a planner's pages when its dates change. [before] and [after] are the whole page lists. A page that is in both keeps its id,
+ * so what was drawn on it stays; one taken out leaves its file, so undo brings its items back.
+ */
+class SetPlannerPages(val before: List<Page>, val after: List<Page>) : Edit {
+    override fun apply(target: EditTarget) = target.document.replacePages(after)
+    override fun revert(target: EditTarget) = target.document.replacePages(before)
+}
+
 class MovePage(val from: Int, val to: Int) : Edit {
     override fun apply(target: EditTarget) = target.document.movePage(from, to)
     override fun revert(target: EditTarget) = target.document.movePage(to, from)

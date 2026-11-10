@@ -31,6 +31,7 @@ import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.LayoutElement
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.bounds
+import app.betternotes.core.template.corners
 import app.betternotes.core.template.frameLines
 import kotlin.math.abs
 import kotlin.math.min
@@ -73,7 +74,8 @@ internal fun LayoutCanvas(
     onDraw: (Float, Float, Float, Float) -> Unit,
     onDrag: (Float, Float) -> Unit,
     onFrameLine: (Int, Float) -> Unit,
-    onLineEnd: (index: Int, end: Int, x: Float, y: Float) -> Unit,
+    /** A selected element's handle was dragged: an end of a line, or a corner of a box, in the order of the element's handles. */
+    onHandle: (index: Int, handle: Int, x: Float, y: Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = LocalSettingsColors.current
@@ -90,7 +92,7 @@ internal fun LayoutCanvas(
     val onDrawNow by rememberUpdatedState(onDraw)
     val onDragNow by rememberUpdatedState(onDrag)
     val onFrameLineNow by rememberUpdatedState(onFrameLine)
-    val onLineEndNow by rememberUpdatedState(onLineEnd)
+    val onHandleNow by rememberUpdatedState(onHandle)
     val selectedNow by rememberUpdatedState(selected)
     val shadow = colors.screen
 
@@ -112,18 +114,17 @@ internal fun LayoutCanvas(
                     val first = view ?: return@awaitEachGesture
                     fun toPage(position: Offset) = Offset((position.x - first.x) / first.scale, (position.y - first.y) / first.scale)
                     val begin = toPage(down.position)
-                    // A grab on an end of the selected line moves that end, and nothing else.
-                    val ends = layoutNow.lineEnds(selectedNow)
-                    val endGrabbed = ends.indexOfFirst { point ->
-                        (Offset(first.x + point.x * first.scale, first.y + point.y * first.scale) - down.position).getDistance() <= HANDLE_GRAB_DP.dp.toPx()
-                    }
+                    // A grab on a handle of the selected element (an end of a line, a corner of a box) drags that handle, and nothing else.
+                    val ends = layoutNow.handles(selectedNow)
+                    val endDistances = ends.map { (Offset(first.x + it.x * first.scale, first.y + it.y * first.scale) - down.position).getDistance() }
+                    val endGrabbed = endDistances.indices.minByOrNull { endDistances[it] }?.takeIf { endDistances[it] <= HANDLE_GRAB_DP.dp.toPx() } ?: -1
                     if (endGrabbed >= 0) {
                         down.consume()
                         do {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             val at = toPage(change.position)
-                            onLineEndNow(selectedNow, endGrabbed, at.x, at.y)
+                            onHandleNow(selectedNow, endGrabbed, at.x, at.y)
                             change.consume()
                         } while (event.changes.any { it.pressed })
                         return@awaitEachGesture
@@ -208,7 +209,7 @@ internal fun LayoutCanvas(
             drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
             drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
         }
-        for (point in layout.lineEnds(selected)) {
+        for (point in layout.handles(selected)) {
             val center = Offset(now.x + point.x * now.scale, now.y + point.y * now.scale)
             drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
             drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
@@ -266,7 +267,7 @@ private fun DrawScope.paintPage(layout: CustomLayout, width: Float, height: Floa
 private fun DrawScope.paintPaper(layout: CustomLayout, width: Float, height: Float, factor: Float) {
     drawRect(Color(layout.paper), Offset.Zero, Size(width, height))
     scale(factor, factor, Offset.Zero) {
-        TemplatePainter.paint(this, PageTemplate.Custom(layout), layout.size, minLine = 1f / factor)
+        TemplatePainter.paint(this, PageTemplate.Custom(layout), layout.size, minLine = 1f / factor, paper = layout.paper)
     }
 }
 
@@ -275,8 +276,9 @@ private fun CustomLayout.frameHandles(): List<Offset> = base.frameLines(size, fr
     if (line.vertical) Offset(line.position(size), size.heightPt / 2f) else Offset(size.widthPt * if (line.ruling) RULING_HANDLE_X else HORIZONTAL_HANDLE_X, line.position(size))
 }
 
-/** The two ends of the line at [index], in points, or none if that element is not a line. */
-private fun CustomLayout.lineEnds(index: Int): List<Offset> {
-    val line = elements.getOrNull(index) as? LayoutElement.Line ?: return emptyList()
-    return listOf(Offset(line.x0, line.y0), Offset(line.x1, line.y1))
+/** The handles of the element at [index], in points: the two ends of a line, or the four corners of a box. */
+private fun CustomLayout.handles(index: Int): List<Offset> = when (val element = elements.getOrNull(index)) {
+    null -> emptyList()
+    is LayoutElement.Line -> listOf(Offset(element.x0, element.y0), Offset(element.x1, element.y1))
+    else -> element.corners.map { (x, y) -> Offset(x, y) }
 }

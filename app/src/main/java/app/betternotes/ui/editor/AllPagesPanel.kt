@@ -121,7 +121,7 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
                                 dragging = grid.layoutInfo.visibleItemsInfo.firstOrNull { item ->
                                     at.x.toInt() in item.offset.x..item.offset.x + item.size.width &&
                                         at.y.toInt() in item.offset.y..item.offset.y + item.size.height
-                                }?.index
+                                }?.index?.takeUnless { it == 0 && pages.first().isCover }
                             },
                             onDragEnd = { dragging = null },
                             onDragCancel = { dragging = null },
@@ -133,7 +133,8 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
                                     at.x.toInt() in item.offset.x..item.offset.x + item.size.width &&
                                         at.y.toInt() in item.offset.y..item.offset.y + item.size.height
                                 }?.index
-                                if (over != null && over != from) {
+                                // The cover is locked in place, so nothing is dropped before it.
+                                if (over != null && over != from && !(over == 0 && pages.first().isCover)) {
                                     state.movePage(from, over)
                                     dragging = over
                                 }
@@ -179,7 +180,7 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.clickable(role = Role.Button) { menu = true }.padding(8.dp),
             ) {
-                Text("${index + 1}", color = colors.title, fontSize = 13.sp)
+                Text("${index + 1 - state.coverOffset}", color = colors.title, fontSize = 13.sp)
                 Icon(EditorIcons.ChevronDown, stringResource(R.string.editor_more), tint = colors.icon, modifier = Modifier.size(16.dp))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -192,7 +193,7 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
                         },
                     )
                 }
-                if (state.pageCount > 1) {
+                if (state.pageCount > 1 && !page.isCover) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.pages_delete), fontSize = 14.sp) },
                         onClick = {

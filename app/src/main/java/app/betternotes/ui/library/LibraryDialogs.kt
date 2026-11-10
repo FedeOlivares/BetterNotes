@@ -1,6 +1,23 @@
 package app.betternotes.ui.library
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import app.betternotes.core.library.FolderStyle
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -137,3 +154,49 @@ internal fun TagsDialog(
 private fun ListRow(label: String, onClick: () -> Unit) {
     Text(label, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 14.dp))
 }
+
+/** The folder's color, opacity and whether it shows its files. The opacity fades the folder only, never what is in it. */
+@Composable
+internal fun FolderStyleDialog(initial: FolderStyle, onConfirm: (FolderStyle) -> Unit, onDismiss: () -> Unit) {
+    var color by remember { mutableStateOf(initial.color) }
+    var opacity by remember { mutableFloatStateOf(initial.opacity) }
+    var previews by remember { mutableStateOf(initial.previews) }
+    AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.library_edit_folder)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.library_folder_color))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    for (swatch in FolderColors) {
+                        val chosen = swatch == color
+                        Box(
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(if (swatch == FolderStyle.DEFAULT_COLOR) Color(0xFF719EF9) else Color(swatch or OPAQUE_FOLDER))
+                                .border(if (chosen) 3.dp else 1.dp, if (chosen) MaterialTheme.colorScheme.primary else Color(0x33000000), CircleShape)
+                                .clickable(role = Role.RadioButton) { color = swatch },
+                        )
+                    }
+                }
+                Text(stringResource(R.string.library_folder_opacity, (opacity * 100).roundToInt()))
+                Slider(opacity, { opacity = it }, valueRange = MIN_FOLDER_OPACITY..1f)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(R.string.library_folder_previews), Modifier.weight(1f))
+                    Switch(previews, { previews = it })
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(FolderStyle(color, opacity, previews)) }) { Text(stringResource(R.string.library_done)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.library_cancel)) } },
+    )
+}
+
+private val FolderColors = listOf(
+    FolderStyle.DEFAULT_COLOR,
+    0xE57373, 0xFFB74D, 0xFFD54F, 0x81C784, 0x4DB6AC, 0x64B5F6, 0xBA68C8, 0xF06292, 0x90A4AE, 0x3C4048,
+)
+private val OPAQUE_FOLDER = 0xFF000000.toInt()
+private const val MIN_FOLDER_OPACITY = 0.1f

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ajustes de la barra -->
+    <string name="toolbar_settings_title">Ajustes de la barra</string>
+    <string name="toolbar_move">Mover la barra</string>
+    <string name="toolbar_grid">Cuadrícula</string>
+    <string name="toolbar_move_hint">Mantén presionada la barra, arrástrala y suéltala cerca del borde que quieras.</string>
+    <string name="toolbar_grid_cross">Cruz central</string>
+    <string name="toolbar_grid_thirds">Tercios</string>
+    <string name="toolbar_not_built">Todavía no está disponible</string>
+    <string name="toolbar_color">Cambiar el color de la barra</string>
+    <string name="toolbar_color_default">Color del tema</string>
+    <string name="toolbar_color_custom">Color personalizado</string>
+    <string name="toolbar_color_hex">Código hexadecimal</string>
+    <string name="toolbar_color_apply">Aplicar</string>
+    <!-- Selección -->
+    <string name="selection_lock">Fijar en su lugar</string>
+    <string name="selection_unlock">Desbloquear</string>
+    <string name="selection_note_color">Color de la nota</string>
+    <string name="selection_keep_open">Mantener abierta</string>
+    <string name="selection_translucent">Translúcida</string>
+    <!-- Resaltador -->
+    <string name="panel_no_overlap">Sin superposición</string>
+    <string name="info_no_overlap">Pasar otra vez por el mismo lugar no lo oscurece. Los trazos con esto activado se mezclan como uno solo.</string>
+    <!-- Portapapeles -->
+    <string name="clipboard_title">Portapapeles</string>
+    <string name="clipboard_empty">Todavía no se copió nada. Copia texto o una imagen y abre esto de nuevo.</string>
+    <string name="clipboard_picture">Imagen</string>
+    <string name="clipboard_clear">Vaciar la lista</string>
+    <plurals name="clipboard_items">
+        <item quantity="one">%d elemento de una página</item>
+        <item quantity="other">%d elementos de una página</item>
+    </plurals>
+    <string name="info_select_locked">Los elementos bloqueados se omiten salvo que esto esté activado. Los bloqueados seleccionados no se pueden mover ni cambiar de tamaño.</string>
+    <!-- Giro de la página -->
+    <string name="rotation_reset">Enderezar la página</string>
+    <string name="panel_keep_open">Mantener abierta</string>
+    <string name="info_keep_open">Las notas nuevas siguen abiertas al tocar o escribir en otro lugar de la página. Cámbialo después desde el botón ... bajo su selección.</string>
+    <string name="add_page">Agregar una página</string>
+    <string name="toolbar_position">Posición de la barra</string>
+    <string name="toolbar_reorder">Reordenar herramientas</string>
+    <string name="toolbar_edge_top">Arriba</string>
+    <string name="toolbar_edge_bottom">Abajo</string>
+    <string name="toolbar_edge_left">Izquierda</string>
+    <string name="toolbar_edge_right">Derecha</string>
+    <string name="toolbar_tool_hide">Ocultar de la barra</string>
+    <string name="toolbar_tool_show">Mostrar en la barra</string>
+    <string name="toolbar_tool_drag">Arrastra para reordenar</string>
+    <string name="toolbar_organize_icons">Organizar iconos</string>
+    <string name="toolbar_customize_title">Personalizar la barra</string>
+</resources>

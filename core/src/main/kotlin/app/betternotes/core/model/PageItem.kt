@@ -49,6 +49,10 @@ data class InkStyle(
     val line: LineStyle = LineStyle.Solid,
     /** Which creative brush a pencil-slot stroke was drawn with. The pen and the highlighter ignore it. */
     val brush: BrushKind = BrushKind.PENCIL,
+    /** Only for the highlighter: strokes of one color overlap without getting darker. */
+    val noOverlap: Boolean = false,
+    /** The line gets thinner where the pen presses lightly. The natural pen always does, so it ignores this. */
+    val pressure: Boolean = false,
 )
 
 /**
@@ -57,6 +61,9 @@ data class InkStyle(
  */
 sealed interface PageItem {
     val id: Long
+
+    /** A locked item can be selected but not moved, resized or deleted, and the lasso and eraser skip it unless asked not to. */
+    val locked: Boolean
 
     /** A box containing everything the item paints, in the coordinates of its page. */
     val bounds: Bounds
@@ -72,6 +79,7 @@ data class StrokeItem(
     override val id: Long,
     val style: InkStyle,
     val points: StrokePoints,
+    override val locked: Boolean = false,
 ) : PageItem {
     init {
         require(points.size > 0) { "A stroke needs a point" }
@@ -81,7 +89,7 @@ data class StrokeItem(
     override val bounds = points.bounds().outset(style.width * SQUARE_TIP_REACH)
 
     // The creative brushes throw stamps and particles well past the line. Selection boxes and hit tests keep to bounds.
-    override val paintBounds = if (style.tool == InkTool.PENCIL) points.bounds().outset(style.width * CREATIVE_BRUSH_REACH) else bounds
+    override val paintBounds = points.bounds().outset(style.width * if (style.tool == InkTool.PENCIL) CREATIVE_BRUSH_REACH else PAINT_REACH)
 
     override fun transformed(t: Affine): StrokeItem {
         val factor = t.meanScale
@@ -92,6 +100,9 @@ data class StrokeItem(
     private companion object {
         const val SQUARE_TIP_REACH = 0.7072f
         const val CREATIVE_BRUSH_REACH = 2.5f
+
+        // The smoothed line can swing past its samples and past the square-tip reach, so what tiles cut and redraw is wider than bounds.
+        const val PAINT_REACH = 1.2f
     }
 }
 
@@ -164,6 +175,7 @@ data class ShapeItem(
     /** Only for tape: what is printed on it, and its shadow. */
     val pattern: TapePattern = TapePattern.PLAIN,
     val shadow: TapeShadow = TapeShadow.NONE,
+    override val locked: Boolean = false,
 ) : PageItem {
     /** The frame, and for a speech or thought bubble also the tail, which can reach out of it in any direction. */
     override val bounds: Bounds
@@ -203,6 +215,9 @@ data class ImageItem(
     val cornerRadius: Float = 0f,
     val borderColor: Int = 0,
     val borderWidth: Float = 0f,
+    /** 1 is solid; less lets what is under the picture show through. */
+    val opacity: Float = 1f,
+    override val locked: Boolean = false,
 ) : PageItem {
     override val bounds get() = frame.bounds.outset(borderWidth / 2f)
 
@@ -237,6 +252,7 @@ data class TextItem(
     val textSize: Float = 12f,
     val color: Int = 0xFF000000.toInt(),
     val style: TextStyle = TextStyle(),
+    override val locked: Boolean = false,
 ) : PageItem {
     override val bounds get() = frame.bounds
 
@@ -259,6 +275,9 @@ data class StickyNoteItem(
     val closedWidth: Float = DEFAULT_CLOSED_SIZE,
     val closedHeight: Float = DEFAULT_CLOSED_SIZE,
     val items: List<PageItem> = emptyList(),
+    /** An open note with this stays open when the page is tapped elsewhere. */
+    val keepOpen: Boolean = false,
+    override val locked: Boolean = false,
 ) : PageItem {
     init {
         require(items.none { it is StickyNoteItem }) { "Sticky notes do not nest" }
@@ -299,6 +318,7 @@ data class TableItem(
     val headerRow: Boolean = false,
     val headerColumn: Boolean = false,
     val fillColor: Int = 0,
+    override val locked: Boolean = false,
 ) : PageItem {
     init {
         require(columnWeights.isNotEmpty() && rowWeights.isNotEmpty()) { "A table needs cells" }
@@ -322,6 +342,7 @@ data class VideoItem(
     val assetId: String,
     val posterAssetId: String,
     val durationMs: Long,
+    override val locked: Boolean = false,
 ) : PageItem {
     override val bounds get() = frame.bounds
 
@@ -334,6 +355,7 @@ data class AudioItem(
     val frame: Frame,
     val assetId: String,
     val durationMs: Long,
+    override val locked: Boolean = false,
 ) : PageItem {
     override val bounds get() = frame.bounds
 
@@ -351,6 +373,23 @@ fun PageItem.withId(id: Long): PageItem = when (this) {
     is VideoItem -> copy(id = id)
     is AudioItem -> copy(id = id)
     is TapePathItem -> copy(id = id)
+    is FillItem -> copy(id = id)
+    is PathShapeItem -> copy(id = id)
+}
+
+/** A copy locked or unlocked. */
+fun PageItem.withLocked(locked: Boolean): PageItem = when (this) {
+    is StrokeItem -> copy(locked = locked)
+    is ShapeItem -> copy(locked = locked)
+    is ImageItem -> copy(locked = locked)
+    is TextItem -> copy(locked = locked)
+    is StickyNoteItem -> copy(locked = locked)
+    is TableItem -> copy(locked = locked)
+    is VideoItem -> copy(locked = locked)
+    is AudioItem -> copy(locked = locked)
+    is TapePathItem -> copy(locked = locked)
+    is FillItem -> copy(locked = locked)
+    is PathShapeItem -> copy(locked = locked)
 }
 
 /**
@@ -365,6 +404,7 @@ class TapePathItem(
     val opacity: Float = 1f,
     val pattern: TapePattern = TapePattern.PLAIN,
     val shadow: TapeShadow = TapeShadow.NONE,
+    override val locked: Boolean = false,
 ) : PageItem {
     val pointCount get() = points.size / 2
 
@@ -402,10 +442,11 @@ class TapePathItem(
         opacity: Float = this.opacity,
         pattern: TapePattern = this.pattern,
         shadow: TapeShadow = this.shadow,
-    ) = TapePathItem(id, points, width, fillColor, opacity, pattern, shadow)
+        locked: Boolean = this.locked,
+    ) = TapePathItem(id, points, width, fillColor, opacity, pattern, shadow, locked)
 
     override fun equals(other: Any?) = other is TapePathItem && id == other.id && width == other.width &&
-        fillColor == other.fillColor && opacity == other.opacity && pattern == other.pattern && shadow == other.shadow &&
+        fillColor == other.fillColor && opacity == other.opacity && pattern == other.pattern && shadow == other.shadow && locked == other.locked &&
         points.contentEquals(other.points)
 
     override fun hashCode() = 31 * id.hashCode() + points.contentHashCode()
@@ -413,3 +454,196 @@ class TapePathItem(
 
 /** How far the soft edge of a drop shadow reaches beyond its offset, in points. */
 const val SHADOW_SOFTNESS = 2f
+
+/**
+ * A region filled with one color by the paint bucket: closed [loops] of packed x,y pairs in page points, filled with the even-odd rule, so
+ * a loop inside another is a hole. It is a vector, so it stays sharp at any zoom, and an item like any other for undo, the lasso and the eraser.
+ */
+class FillItem(
+    override val id: Long,
+    val loops: List<FloatArray>,
+    val color: Int,
+    val opacity: Float = 1f,
+    override val locked: Boolean = false,
+) : PageItem {
+    override val bounds: Bounds
+        get() {
+            var left = Float.MAX_VALUE
+            var top = Float.MAX_VALUE
+            var right = -Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
+            for (loop in loops) {
+                for (i in loop.indices step 2) {
+                    left = minOf(left, loop[i])
+                    right = maxOf(right, loop[i])
+                    top = minOf(top, loop[i + 1])
+                    bottom = maxOf(bottom, loop[i + 1])
+                }
+            }
+            return if (left > right) Bounds(0f, 0f, 0f, 0f) else Bounds(left, top, right, bottom)
+        }
+
+    override fun transformed(t: Affine) = copy(
+        loops = loops.map { loop ->
+            FloatArray(loop.size).also { moved ->
+                for (i in loop.indices step 2) {
+                    moved[i] = t.mapX(loop[i], loop[i + 1])
+                    moved[i + 1] = t.mapY(loop[i], loop[i + 1])
+                }
+            }
+        },
+    )
+
+    /** The area the fill covers in square points: the loops' areas, the outer ones adding and the holes taking away. */
+    val area: Float
+        get() {
+            var total = 0.0
+            for (loop in loops) {
+                var twice = 0.0
+                var j = loop.size - 2
+                for (i in loop.indices step 2) {
+                    twice += (loop[j].toDouble() * loop[i + 1] - loop[i].toDouble() * loop[j + 1])
+                    j = i
+                }
+                total += twice / 2.0
+            }
+            return Math.abs(total).toFloat()
+        }
+
+    /** True if the page point is inside the fill: inside an odd number of its loops. */
+    fun contains(x: Float, y: Float): Boolean = loops.count { loopContains(it, x, y) } % 2 == 1
+
+    fun copy(
+        id: Long = this.id,
+        loops: List<FloatArray> = this.loops,
+        color: Int = this.color,
+        opacity: Float = this.opacity,
+        locked: Boolean = this.locked,
+    ) = FillItem(id, loops, color, opacity, locked)
+
+    override fun equals(other: Any?) = other is FillItem && id == other.id && color == other.color && opacity == other.opacity &&
+        locked == other.locked && loops.size == other.loops.size && loops.indices.all { loops[it].contentEquals(other.loops[it]) }
+
+    override fun hashCode() = 31 * id.hashCode() + loops.sumOf { it.contentHashCode() }
+
+    private fun loopContains(loop: FloatArray, x: Float, y: Float): Boolean {
+        var inside = false
+        var j = loop.size - 2
+        for (i in loop.indices step 2) {
+            val xi = loop[i]
+            val yi = loop[i + 1]
+            val xj = loop[j]
+            val yj = loop[j + 1]
+            if ((yi > y) != (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside
+            j = i
+        }
+        return inside
+    }
+}
+
+/**
+ * A shape made of points that can each be moved: the corners of a polygon such as a triangle, or the control points a
+ * smooth curve runs through. [points] are packed x,y pairs. A [closed] shape joins its last point to its first, and a
+ * [smooth] one is drawn through its points as a curve instead of with straight sides. A [fillColor] with zero alpha
+ * means no fill, and only a closed shape fills.
+ */
+class PathShapeItem(
+    override val id: Long,
+    val points: FloatArray,
+    val closed: Boolean,
+    val smooth: Boolean,
+    val strokeColor: Int = 0xFF000000.toInt(),
+    val strokeWidth: Float = 2f,
+    val line: LineStyle = LineStyle.Solid,
+    val fillColor: Int = 0,
+    val opacity: Float = 1f,
+    override val locked: Boolean = false,
+) : PageItem {
+    init {
+        require(points.size >= 4 && points.size % 2 == 0) { "A path needs two points" }
+    }
+
+    val pointCount get() = points.size / 2
+
+    val isFilled get() = closed && fillColor ushr 24 != 0
+
+    /** The curve's bulges can reach past its control points, so the box takes in the drawn outline. */
+    override val bounds: Bounds
+        get() {
+            val outline = outline()
+            var left = Float.MAX_VALUE
+            var top = Float.MAX_VALUE
+            var right = -Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
+            for (i in outline.indices step 2) {
+                left = minOf(left, outline[i])
+                right = maxOf(right, outline[i])
+                top = minOf(top, outline[i + 1])
+                bottom = maxOf(bottom, outline[i + 1])
+            }
+            return Bounds(left, top, right, bottom).outset(strokeWidth / 2f)
+        }
+
+    /** The line as packed x,y pairs: the points themselves, or for a smooth shape a polyline close enough to the curve. */
+    fun outline(): FloatArray = if (smooth && pointCount > 2) smoothOutline(points, closed) else points
+
+    override fun transformed(t: Affine): PathShapeItem {
+        val moved = FloatArray(points.size)
+        for (i in points.indices step 2) {
+            moved[i] = t.mapX(points[i], points[i + 1])
+            moved[i + 1] = t.mapY(points[i], points[i + 1])
+        }
+        val factor = t.meanScale
+        return copy(points = moved, strokeWidth = strokeWidth * factor, line = line.scaled(factor))
+    }
+
+    fun copy(
+        id: Long = this.id,
+        points: FloatArray = this.points,
+        closed: Boolean = this.closed,
+        smooth: Boolean = this.smooth,
+        strokeColor: Int = this.strokeColor,
+        strokeWidth: Float = this.strokeWidth,
+        line: LineStyle = this.line,
+        fillColor: Int = this.fillColor,
+        opacity: Float = this.opacity,
+        locked: Boolean = this.locked,
+    ) = PathShapeItem(id, points, closed, smooth, strokeColor, strokeWidth, line, fillColor, opacity, locked)
+
+    override fun equals(other: Any?) = other is PathShapeItem && id == other.id && closed == other.closed && smooth == other.smooth &&
+        strokeColor == other.strokeColor && strokeWidth == other.strokeWidth && line == other.line && fillColor == other.fillColor &&
+        opacity == other.opacity && locked == other.locked && points.contentEquals(other.points)
+
+    override fun hashCode() = 31 * id.hashCode() + points.contentHashCode()
+}
+
+private const val CURVE_STEPS = 12
+
+/**
+ * A Catmull-Rom curve through [points] (packed x,y pairs) as a polyline of [CURVE_STEPS] pieces per span. An open curve
+ * runs from the first point to the last; a closed one comes round to the first again.
+ */
+fun smoothOutline(points: FloatArray, closed: Boolean): FloatArray {
+    val n = points.size / 2
+    val spans = if (closed) n else n - 1
+    val out = FloatArray((spans * CURVE_STEPS + 1) * 2)
+    fun px(k: Int) = points[(if (closed) Math.floorMod(k, n) else k.coerceIn(0, n - 1)) * 2]
+    fun py(k: Int) = points[(if (closed) Math.floorMod(k, n) else k.coerceIn(0, n - 1)) * 2 + 1]
+    var o = 0
+    for (s in 0 until spans) {
+        for (step in 0 until CURVE_STEPS) {
+            val t = step / CURVE_STEPS.toFloat()
+            out[o++] = catmull(px(s - 1), px(s), px(s + 1), px(s + 2), t)
+            out[o++] = catmull(py(s - 1), py(s), py(s + 1), py(s + 2), t)
+        }
+    }
+    out[o++] = px(spans)
+    out[o] = py(spans)
+    return out
+}
+
+private fun catmull(p0: Float, p1: Float, p2: Float, p3: Float, t: Float): Float {
+    val t2 = t * t
+    val t3 = t2 * t
+    return 0.5f * (2f * p1 + (p2 - p0) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (3f * p1 - p0 - 3f * p2 + p3) * t3)
+}

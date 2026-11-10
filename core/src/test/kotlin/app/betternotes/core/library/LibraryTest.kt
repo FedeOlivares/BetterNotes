@@ -202,8 +202,39 @@ class LibraryStoreTest {
     @Test
     fun theBytesOfVersionOneAreStable() {
         val expected = Base64.getDecoder().decode(GOLDEN)
-        assertArrayEquals(expected, LibraryCodec.encode(everything))
+        assertArrayEquals(expected, LibraryCodec.encode(everything, version = 1))
         assertEquals(everything.entries.toList(), LibraryCodec.decode(expected).entries.toList())
+    }
+
+    @Test
+    fun aFolderKeepsItsLookInVersionTwo() {
+        val styled = everything.withStyle(-5L, FolderStyle(0xFF336699.toInt(), 0.4f, previews = true))
+        val decoded = LibraryCodec.decode(LibraryCodec.encode(styled))
+        assertEquals(FolderStyle(0xFF336699.toInt(), 0.4f, true), decoded[-5L]?.style)
+        // A version 1 file has no look, so its folders open with the default one.
+        assertEquals(FolderStyle.DEFAULT, LibraryCodec.decode(LibraryCodec.encode(styled, version = 1))[-5L]?.style)
+    }
+
+    @Test
+    fun placingAnItemMovesItAndSetsTheManualOrder() {
+        val a = LibraryEntry(1, "A", null, 1)
+        val b = LibraryEntry(2, "B", null, 1)
+        val c = LibraryEntry(3, "C", null, 1)
+        val folder = LibraryEntry(4, "F", null, 1)
+        val library = Library(listOf(a, b, c, folder))
+        fun names(l: Library, folder: Long? = null) = l.list(LibraryView.InFolder(folder), LibrarySort.MANUAL).map { it.name }
+        assertEquals(listOf("C", "A", "B", "F"), names(library.placed(3, null, 1)))
+        assertEquals(listOf("A", "B", "F", "C"), names(library.placed(3, null, null)))
+        val inside = library.placed(2, 4, null)
+        assertEquals(listOf("A", "C", "F"), names(inside))
+        assertEquals(listOf("B"), names(inside, 4))
+        assertEquals(listOf("A", "B", "C", "F"), names(inside.placed(2, null, 3)))
+        // Items shown in another order (by name, say) are first put in that order, so a drop lands where it was seen.
+        assertEquals(listOf("C", "B", "F", "A"), names(library.placed(1, null, null, listOf(3, 2, 1))))
+        assertEquals(listOf("C", "A", "B", "F"), names(library.placed(1, null, 2, listOf(3, 2, 1))))
+        // A folder cannot go into itself, and a sibling must really be in the folder.
+        assertEquals(library.entries.toList(), library.placed(4, 4, null).entries.toList())
+        assertEquals(library.entries.toList(), library.placed(1, 4, 3).entries.toList())
     }
 
     @Test

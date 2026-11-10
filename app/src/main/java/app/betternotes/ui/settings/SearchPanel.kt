@@ -210,7 +210,8 @@ internal fun SearchPanel(
                     }
                 }
                 PageHitRow(
-                    page = (pageIndex[pageId] ?: 0) + 1,
+                    // The cover, when there is one, is page 0, as in the editor.
+                    page = (pageIndex[pageId] ?: 0) + 1 - if (pages.firstOrNull()?.isCover == true) 1 else 0,
                     count = found.size,
                     snippet = snippets[pageId],
                     selected = current?.pageId == pageId,

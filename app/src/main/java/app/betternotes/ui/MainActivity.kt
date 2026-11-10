@@ -32,7 +32,18 @@ import app.betternotes.BuildConfig
 import app.betternotes.R
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
+import app.betternotes.core.format.Binder
 import app.betternotes.core.format.DocumentSession
+import app.betternotes.library.MediaImport
+import app.betternotes.library.PhotoLayout
+import app.betternotes.pdf.PdfImportResult
+import app.betternotes.pdf.PdfImporter
+import app.betternotes.ui.editor.SourceEntry
+import app.betternotes.ui.editor.SourceKind
+import app.betternotes.ui.editor.SourceRequest
+import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.search.isPlaceholderTitle
@@ -58,6 +69,7 @@ import app.betternotes.ui.theme.BetterNotesTheme
 import app.betternotes.ui.theme.DarkEditorColors
 import app.betternotes.ui.theme.LightEditorColors
 import app.betternotes.ui.theme.ThemeMode
+import app.betternotes.ui.theme.templateLanguage
 import app.betternotes.search.DocumentSearch
 import app.betternotes.search.MlKitRecognizer
 import app.betternotes.settings.SettingsRepository
@@ -101,6 +113,7 @@ class MainActivity : ComponentActivity() {
 
         val tools = ToolStore(this)
         val state = EditorState(canvas, tools)
+        state.onAddSource = { request -> addSource(request, state) }
         val chrome = ComposeView(this).apply {
             setContent {
                 val library = remember { LibraryPreferences.get(this@MainActivity) }
@@ -120,7 +133,7 @@ class MainActivity : ComponentActivity() {
                         onOpenSettings = { shownOverlay.value = SettingsOverlay.SCREEN },
                         documentId = { editor?.document?.id },
                         documentInfo = {
-                            editor?.document?.let { DocumentInfo(it.title, it.pages.size, it.modifiedAtMs, it.createdAtMs) }
+                            editor?.document?.let { DocumentInfo(it.title, it.pages.size - if (it.coverId != null) 1 else 0,it.modifiedAtMs, it.createdAtMs) }
                         },
                         onOpenOverlay = { shownOverlay.value = it },
                         onRename = { name ->
@@ -137,6 +150,17 @@ class MainActivity : ComponentActivity() {
                             canvas.rememberPage()
                             editor?.saveNow()
                             openDocument(id)
+                        },
+                        sources = ::sourceEntries,
+                        currentSourceId = { editor?.document?.id },
+                        onOpenSource = { entry -> switchTo(entry.store) },
+                        onRemoveSource = ::removeSource,
+                        linkableNotebooks = {
+                            val linked = binderOwner?.let { Binder(it).links() }.orEmpty().toSet()
+                            val ownId = binderOwner?.let { runCatching { it.readDocument().id }.getOrNull() }
+                            LibraryRepository.get(this@MainActivity).library.value?.entries.orEmpty()
+                                .filter { it.document != null && it.id != ownId && it.id !in linked }
+                                .map { it.id to it.name }
                         },
                         onTogglePerfReadout = if (BuildConfig.PERF_TOOLS) ({ showReadout = !showReadout }) else null,
                     )
@@ -168,6 +192,7 @@ class MainActivity : ComponentActivity() {
         )
 
         val benchmarkStrokes = if (BuildConfig.PERF_TOOLS) intent.getIntExtra(EXTRA_BENCHMARK_STROKES, 0) else 0
+        canvas.startOnCover = intent.getStringExtra(EXTRA_START_ACTION) == START_COVER
         when {
             BuildConfig.PERF_TOOLS && intent.getBooleanExtra(EXTRA_BENCHMARK_HEAVY, false) -> runHeavyBenchmark()
             benchmarkStrokes > 0 -> runBenchmark(benchmarkStrokes)
@@ -204,6 +229,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        app.betternotes.ui.theme.TemplateText.documentLanguage = null
         canvas.close()
         editor?.close()
         search?.close()
@@ -212,7 +238,117 @@ class MainActivity : ComponentActivity() {
 
     private fun openDocument(id: Long) {
         val store = LibraryRepository.get(this).documentStore(id)
+        binderOwner = store
         show(NoteEditor(store, DocumentSession.open(store)))
+    }
+
+    // ---- The binder: the sources of the notebook the owner came in through ----
+
+    /** The notebook whose Sources panel is shown. It stays the same while the owner moves between its sources. */
+    private var binderOwner: DocumentStore? = null
+
+    /** The notebook itself first, then its sources oldest first, then the notebooks linked into it. Blocks on the disk. */
+    private fun sourceEntries(): List<SourceEntry> {
+        val owner = binderOwner ?: return emptyList()
+        val binder = Binder(owner)
+        val entries = ArrayList<SourceEntry>()
+        try {
+            val own = owner.readDocument()
+            entries += SourceEntry(own.id, own.title, own.pages.size, SourceKind.OWNER, owner)
+        } catch (_: java.io.IOException) {
+            return emptyList()
+        }
+        for ((store, document) in binder.children()) {
+            val kind = when (document.kind) {
+                app.betternotes.core.model.DocumentKind.PDF -> SourceKind.PDF
+                app.betternotes.core.model.DocumentKind.CANVAS -> SourceKind.CANVAS
+                else -> SourceKind.NOTE
+            }
+            entries += SourceEntry(document.id, document.title, document.pages.size, kind, store)
+        }
+        val repository = LibraryRepository.get(this)
+        for (libraryId in binder.links()) {
+            val store = repository.documentStore(libraryId)
+            try {
+                val document = store.readDocument()
+                entries += SourceEntry(document.id, document.title, document.pages.size, SourceKind.LINKED, store, libraryId)
+            } catch (_: java.io.IOException) {
+                // A linked notebook that was deleted from the library simply drops out of the list.
+            }
+        }
+        return entries
+    }
+
+    /** Moves to a source, keeping the binder. The page being left is remembered and saved. */
+    private fun switchTo(store: DocumentStore) {
+        canvas.rememberPage()
+        editor?.saveNow()
+        show(NoteEditor(store, DocumentSession.open(store)))
+    }
+
+    private fun removeSource(entry: SourceEntry) {
+        val owner = binderOwner ?: return
+        if (entry.kind == SourceKind.OWNER) return
+        val binder = Binder(owner)
+        val wasOpen = editor?.document?.id == entry.id
+        if (wasOpen) switchTo(owner)
+        if (entry.libraryId != null) binder.unlink(entry.libraryId) else binder.remove(entry.store)
+    }
+
+    /** Makes the source the owner asked for, off the main thread, and opens it. A linked notebook only joins the list. */
+    private fun addSource(request: SourceRequest, state: EditorState) {
+        val owner = binderOwner ?: return
+        val binder = Binder(owner)
+        canvas.rememberPage()
+        editor?.saveNow()
+        lifecycleScope.launch {
+            val made: DocumentStore? = withContext(Dispatchers.IO) {
+                val now = System.currentTimeMillis()
+                val background = PageBackground(template = PageTemplate.Dotted())
+                try {
+                    when (request) {
+                        SourceRequest.Canvas -> binder.add { store ->
+                            Document.newCanvas(getString(R.string.source_canvas), background, now).also(store::writeDocument)
+                        }
+                        is SourceRequest.Image -> binder.add { store ->
+                            MediaImport.photos(contentResolver, listOf(request.uri), store, getString(R.string.source_image), PhotoLayout.FILLS_PAGE, PageBackground(), now)
+                        }
+                        is SourceRequest.File -> addFile(binder, request.uri, now)
+                        is SourceRequest.Notebook -> {
+                            binder.link(request.libraryId)
+                            null
+                        }
+                    }
+                } catch (_: java.io.IOException) {
+                    null
+                }
+            }
+            state.sourcesVersion++
+            if (made != null) {
+                state.sourcesOpen = false
+                switchTo(made)
+            } else if (request !is SourceRequest.Notebook) {
+                Toast.makeText(this@MainActivity, R.string.library_import_failed, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    /** A PDF becomes a PDF source, a recording an audio source, a picture an image source. Blocks on the disk. */
+    private fun addFile(binder: Binder, uri: android.net.Uri, now: Long): DocumentStore? {
+        val type = contentResolver.getType(uri).orEmpty()
+        return when {
+            type == "application/pdf" -> {
+                binder.directory.mkdirs()
+                (PdfImporter.import(contentResolver, uri, binder.directory) as? PdfImportResult.Imported)?.store
+            }
+            type.startsWith("audio/") -> binder.add { store ->
+                MediaImport.audio(contentResolver, uri, store, getString(R.string.source_audio), PageBackground(), now)
+            }
+            type.startsWith("image/") -> binder.add { store ->
+                MediaImport.photos(contentResolver, uri.let(::listOf), store, getString(R.string.source_image), PhotoLayout.FILLS_PAGE, PageBackground(), now)
+            }
+            else -> null
+        }
     }
 
     private fun openScratch(canvasKind: Boolean) {
@@ -238,6 +374,8 @@ class MainActivity : ComponentActivity() {
         editor?.close()
         search?.close()
         editor = next
+        // The notebook's own template language wins over the app's while it is open.
+        app.betternotes.ui.theme.TemplateText.documentLanguage = next.store.templateLanguage()
         canvas.open(next)
         val nextSearch = DocumentSearch(next.store, MlKitRecognizer())
         search = nextSearch
@@ -341,6 +479,9 @@ class MainActivity : ComponentActivity() {
         /** What the user came to do in a new document, if anything. So far only [START_RECORDING]. */
         const val EXTRA_START_ACTION = "start_action"
         const val START_RECORDING = "recording"
+
+        /** Open on the cover, page 0, instead of the first page. */
+        const val START_COVER = "cover"
 
         /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */
         private const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"

@@ -64,6 +64,7 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
     val colors = LocalEditorColors.current
     val info = remember { actions.documentInfo() }
     var renaming by remember { mutableStateOf(false) }
+    var choosingLanguage by remember { mutableStateOf(false) }
     val dark = LibraryPreferences.get(androidx.compose.ui.platform.LocalContext.current).theme == ThemeMode.DARK
     Box(
         Modifier
@@ -83,18 +84,39 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
         ) {
             if (info != null) {
                 Header(state, info)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                ) {
-                    Tile(EditorIcons.Export, R.string.menu_export, Modifier.weight(1f)) {
-                        onClose()
-                        actions.onOpenOverlay(SettingsOverlay.EXPORT)
+                // Two rows of two: add or edit cover and rename on top, export and go to page below.
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        if (state.canHaveCover) {
+                            val hasCover = state.coverId != null
+                            Tile(
+                                EditorIcons.Cover,
+                                if (hasCover) R.string.menu_edit_cover else R.string.menu_add_cover,
+                                Modifier.weight(1f),
+                            ) {
+                                onClose()
+                                state.coverOpen = true
+                            }
+                        } else if (state.isInfinite) {
+                            // An infinite canvas has no cover, so its first tile is the size, which the template editor sets.
+                            Tile(EditorIcons.Template, R.string.menu_edit_size, Modifier.weight(1f)) {
+                                onClose()
+                                actions.onOpenOverlay(SettingsOverlay.TEMPLATE)
+                            }
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
+                        Tile(EditorIcons.EditColor, R.string.menu_rename, Modifier.weight(1f)) { renaming = true }
                     }
-                    Tile(EditorIcons.EditColor, R.string.menu_rename, Modifier.weight(1f)) { renaming = true }
-                    Tile(EditorIcons.GoToPage, R.string.menu_go_to_page, Modifier.weight(1f)) {
-                        onClose()
-                        state.pagesOpen = true
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Tile(EditorIcons.Export, R.string.menu_export, Modifier.weight(1f)) {
+                            onClose()
+                            actions.onOpenOverlay(SettingsOverlay.EXPORT)
+                        }
+                        Tile(EditorIcons.GoToPage, R.string.menu_go_to_page, Modifier.weight(1f)) {
+                            onClose()
+                            state.pagesOpen = true
+                        }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -107,6 +129,7 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
                 onClose()
                 actions.onOpenOverlay(SettingsOverlay.TEMPLATE)
             }
+            Entry(EditorIcons.Template, R.string.menu_template_language) { choosingLanguage = true }
             Entry(EditorIcons.ScrollLayout, R.string.menu_scroll_layout) {
                 onClose()
                 actions.onOpenOverlay(SettingsOverlay.SCREEN)
@@ -136,6 +159,38 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
                 }
             }
         }
+    }
+    if (choosingLanguage) {
+        // This notebook's own language for the words on its templates; it overrides the app's choice for this notebook only.
+        AlertDialog(
+            modifier = Modifier.opensFrom(OpenFrom.Center),
+            onDismissRequest = { choosingLanguage = false },
+            title = { Text(stringResource(R.string.menu_template_language)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.menu_template_language_detail), color = colors.label, fontSize = 14.sp)
+                    Spacer(Modifier.height(12.dp))
+                    for ((code, name) in listOf("en" to "English", "es" to "Español")) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(role = Role.RadioButton) {
+                                    choosingLanguage = false
+                                    onClose()
+                                    state.setTemplateLanguage(code)
+                                }
+                                .padding(vertical = 10.dp),
+                        ) {
+                            androidx.compose.material3.RadioButton(selected = state.templateLanguage == code, onClick = null)
+                            Text(name, color = colors.title, fontSize = 17.sp, modifier = Modifier.padding(start = 12.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { choosingLanguage = false }) { Text(stringResource(R.string.scan_cancel)) } },
+        )
     }
     if (renaming && info != null) {
         RenameDialog(info.title, onDismiss = { renaming = false }) { name ->

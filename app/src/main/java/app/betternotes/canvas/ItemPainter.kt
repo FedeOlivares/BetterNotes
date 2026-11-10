@@ -2,6 +2,7 @@ package app.betternotes.canvas
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
@@ -19,6 +20,8 @@ import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.VideoItem
+import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
 import app.betternotes.core.model.LineKind
@@ -71,7 +74,46 @@ internal class ItemPainter(
             is ImageItem -> inFrame(canvas, item.frame) { paintImage(canvas, item) }
             is VideoItem -> inFrame(canvas, item.frame) { paintVideo(canvas, item) }
             is AudioItem -> Unit
+            is FillItem -> paintFill(canvas, item)
+            is PathShapeItem -> paintPathShape(canvas, item)
         }
+    }
+
+    /** Corners joined by straight sides, or a smooth curve through the points; a closed one may be filled. */
+    private fun paintPathShape(canvas: Canvas, item: PathShapeItem) {
+        val outline = item.outline()
+        path.rewind()
+        path.moveTo(outline[0], outline[1])
+        for (i in 2 until outline.size step 2) path.lineTo(outline[i], outline[i + 1])
+        if (item.closed) path.close()
+        val alpha = (item.opacity * OPAQUE).roundToInt()
+        if (item.isFilled) {
+            fill.color = item.fillColor
+            fill.alpha = fill.alpha * alpha / OPAQUE.toInt()
+            canvas.drawPath(path, fill)
+        }
+        if (item.strokeWidth <= 0f) return
+        applyLine(item.strokeColor, item.strokeWidth, item.line)
+        line.alpha = line.alpha * alpha / OPAQUE.toInt()
+        canvas.drawPath(path, line)
+        line.pathEffect = null
+    }
+
+    // A fill ends at the middle of the line beside it, which the line covers, so it needs nothing around it.
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val fillPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
+
+    /** A paint bucket fill: its loops as one path, filled with the even-odd rule so that a loop inside another is a hole. */
+    private fun paintFill(canvas: Canvas, item: FillItem) {
+        fillPath.rewind()
+        for (loop in item.loops) {
+            fillPath.moveTo(loop[0], loop[1])
+            for (i in 2 until loop.size step 2) fillPath.lineTo(loop[i], loop[i + 1])
+            fillPath.close()
+        }
+        fillPaint.color = item.color
+        fillPaint.alpha = (Color.alpha(item.color) * item.opacity).toInt().coerceIn(0, 255)
+        canvas.drawPath(fillPath, fillPaint)
     }
 
     /** Runs [draw] with the frame's top-left corner at the origin, turned by its rotation. */
@@ -472,6 +514,7 @@ internal class ItemPainter(
         box.set(0f, 0f, width, height)
         val poster = image(item.posterAssetId)
         if (poster != null) {
+            bitmapPaint.alpha = OPAQUE.toInt()
             canvas.drawBitmap(poster, null, box, bitmapPaint)
         } else {
             fill.color = VIDEO_BACK
@@ -502,6 +545,7 @@ internal class ItemPainter(
             path.addRoundRect(box, item.cornerRadius, item.cornerRadius, Path.Direction.CW)
         }
         val bitmap = image(item.assetId)
+        bitmapPaint.alpha = (item.opacity.coerceIn(0f, 1f) * OPAQUE + 0.5f).toInt()
         canvas.withClip(path) {
             if (bitmap != null) {
                 drawBitmap(bitmap, null, box, bitmapPaint)
@@ -512,6 +556,7 @@ internal class ItemPainter(
         }
         if (item.borderWidth > 0f) {
             applyLine(item.borderColor, item.borderWidth, LineStyle.Solid)
+            line.alpha = (line.alpha * item.opacity.coerceIn(0f, 1f) + 0.5f).toInt()
             canvas.drawPath(path, line)
         }
     }
@@ -548,3 +593,4 @@ internal class ItemPainter(
         const val IMAGE_PLACEHOLDER = 0x22000000
     }
 }
+

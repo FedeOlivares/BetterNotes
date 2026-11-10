@@ -45,12 +45,13 @@ internal class LoupeView(context: Context) : View(context) {
 
     fun contains(x: Float, y: Float) = area.contains(x, y)
 
-    fun pageX(screenX: Float) = box.left + (screenX - area.left) / scale
+    /** The document point that shows under a screen point of the window. */
+    fun worldX(screenX: Float) = box.left + (screenX - area.left) / scale
 
-    fun pageY(screenY: Float) = box.top + (screenY - area.top) / scale
+    fun worldY(screenY: Float) = box.top + (screenY - area.top) / scale
 
-    /** Fills [matrix] with the mapping from the window's screen pixels to page coordinates. */
-    fun screenToPage(matrix: Matrix) {
+    /** Fills [matrix] with the mapping from the window's screen pixels to document coordinates. */
+    fun screenToWorld(matrix: Matrix) {
         matrix.setTranslate(-area.left, -area.top)
         val inverse = 1f / scale
         matrix.postScale(inverse, inverse)
@@ -62,8 +63,9 @@ internal class LoupeView(context: Context) : View(context) {
         val layout = layoutOf() ?: return
         if (area.isEmpty || box.isEmpty || !canvas.isHardwareAccelerated) return
         val scale = scale
-        val x = layout.originX(pageIndex) + box.left
-        val y = layout.originY(pageIndex) + box.top
+        // The box is in document coordinates, and whatever page lies there, turned or not, shows as it is.
+        val x = box.left
+        val y = box.top
         val region = Bounds(x, y, x + box.width(), y + area.height() / scale)
         clip.reset()
         val radius = RADIUS_DP * density

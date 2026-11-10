@@ -86,10 +86,11 @@ internal fun LaserPanel(state: EditorState, modifier: Modifier = Modifier) {
         }
         LabeledRow(R.string.laser_length) { ValuePill { ValueText(state.laserLength.toString()) } }
         val steps = EditorState.MAX_LASER_LENGTH - EditorState.MIN_LASER_LENGTH
-        PanelSlider(
+        StepperSlider(
             fraction = (state.laserLength - EditorState.MIN_LASER_LENGTH).toFloat() / steps,
             onChange = { f -> state.selectLaserLength(EditorState.MIN_LASER_LENGTH + (f * steps).roundToInt()) },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+            steps = steps,
+            modifier = Modifier.fillMaxWidth(),
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,

@@ -14,6 +14,18 @@ data class DocumentInfo(
 )
 
 /**
+ * How a folder looks on the home screen. [color] is ARGB; [opacity] (0 to 1) fades the folder only, never what it holds;
+ * with [previews] on, the folder shows up to three of its documents stacked behind its front.
+ */
+data class FolderStyle(val color: Int = DEFAULT_COLOR, val opacity: Float = 1f, val previews: Boolean = false) {
+    companion object {
+        /** The marker for "the app's own folder color", which depends on the theme. */
+        const val DEFAULT_COLOR = 0
+        val DEFAULT = FolderStyle()
+    }
+}
+
+/**
  * A folder, or a document if [document] is set. Both are organized in exactly the same ways, so they
  * share one type. [name] and [modifiedAtMs] of a document copy what its own file says.
  */
@@ -28,6 +40,8 @@ data class LibraryEntry(
     /** When this went to the bin, or null if it is not there. */
     val trashedAtMs: Long? = null,
     val document: DocumentInfo? = null,
+    /** A folder's own look. Documents have none. */
+    val style: FolderStyle = FolderStyle.DEFAULT,
 ) {
     val isFolder get() = document == null
 }
@@ -44,7 +58,8 @@ sealed interface LibraryView {
     data class Search(val query: String) : LibraryView
 }
 
-enum class LibrarySort { MODIFIED, NAME }
+/** [MANUAL] is the order the owner dragged the items into. */
+enum class LibrarySort { MODIFIED, NAME, MANUAL }
 
 /** A document's current description as found on the disk. */
 data class ScannedDocument(val id: Long, val name: String, val modifiedAtMs: Long, val info: DocumentInfo) {
@@ -118,6 +133,7 @@ class Library(entries: Collection<LibraryEntry> = emptyList()) {
         return when (sort) {
             LibrarySort.MODIFIED -> found.sortedByDescending { lastActivityMs(it) }
             LibrarySort.NAME -> found.sortedBy { foldForSearch(it.name) }
+            LibrarySort.MANUAL -> found
         }
     }
 
@@ -134,6 +150,37 @@ class Library(entries: Collection<LibraryEntry> = emptyList()) {
     fun withStar(id: Long, starred: Boolean) = updated(id) { it.copy(starred = starred) }
 
     fun withTags(id: Long, tags: Set<String>) = updated(id) { it.copy(tags = tags) }
+
+    /** Makes the order of the entries in [ids], which may be anywhere in the library, the order they were given in. */
+    fun ordered(ids: List<Long>): Library {
+        val wanted = ids.filter { it in byId }.distinct()
+        val taken = wanted.toSet()
+        val slots = byId.keys.withIndex().filter { it.value in taken }.map { it.index }
+        val list = byId.values.toMutableList()
+        wanted.forEachIndexed { i, id -> list[slots[i]] = byId.getValue(id) }
+        return Library(list)
+    }
+
+    fun withStyle(id: Long, style: FolderStyle) = updated(id) { it.copy(style = style) }
+
+    /**
+     * Puts [id] in [folderId] (null for the top), just before [beforeId], or last if that is null. The manual order is the order of
+     * the entries, so this is how a drag changes it. Returns this library if the move is not allowed.
+     */
+    fun placed(id: Long, folderId: Long?, beforeId: Long?, shownOrder: List<Long> = emptyList()): Library {
+        if (shownOrder.isNotEmpty()) return ordered(shownOrder).placed(id, folderId, beforeId)
+        val moving = byId[id] ?: return this
+        if (!canMove(id, folderId) || beforeId == id) return this
+        if (beforeId != null && byId[beforeId]?.parentId != folderId) return this
+        val next = ArrayList<LibraryEntry>(byId.size)
+        for (entry in byId.values) {
+            if (entry.id == id) continue
+            if (entry.id == beforeId) next.add(moving.copy(parentId = folderId))
+            next.add(entry)
+        }
+        if (beforeId == null) next.add(moving.copy(parentId = folderId))
+        return Library(next)
+    }
 
     /** True if [id] can move into [folderId]. A folder cannot go inside itself. */
     fun canMove(id: Long, folderId: Long?): Boolean {

@@ -48,7 +48,7 @@ class Selection(
  * Selects what a closed lasso surrounds. [polygon] holds packed x,y pairs. A stroke is selected if
  * at least half of it is inside, so a slightly sloppy lasso still works. Anything else is selected
  * if its center is inside. With [fullOnly], all of the item must be inside. With [anyPortion], an item is selected
- * if any part of it is inside, even when the lasso only crosses it. Only items of [kinds] count.
+ * if any part of it is inside, even when the lasso only crosses it. Only items of [kinds] count, and locked ones only with [includeLocked].
  */
 fun selectWithLasso(
     pageId: Long,
@@ -57,12 +57,13 @@ fun selectWithLasso(
     kinds: Set<ItemKind> = ALL_ITEM_KINDS,
     fullOnly: Boolean = false,
     anyPortion: Boolean = false,
+    includeLocked: Boolean = false,
 ): Selection {
     val indices = ArrayList<Int>()
     val items = ArrayList<PageItem>()
     if (polygon.size >= MIN_POLYGON_FLOATS) {
         content.forEachIntersecting(polygonBounds(polygon)) { index, item ->
-            if (item.kind in kinds && item.isCaughtBy(polygon, fullOnly, anyPortion)) {
+            if ((includeLocked || !item.locked) && item.kind in kinds && item.isCaughtBy(polygon, fullOnly, anyPortion)) {
                 indices += index
                 items += item
             }

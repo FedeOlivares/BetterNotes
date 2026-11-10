@@ -70,6 +70,11 @@ internal class ImageSources(
     val pickDocument: () -> Unit,
     val pickVideo: () -> Unit,
     val scan: () -> Unit,
+    /** The same ways in, for the Sources panel: what comes back becomes a source of the binder, not an item on the canvas. */
+    val sourcePhoto: () -> Unit = {},
+    val sourceCamera: () -> Unit = {},
+    val sourceFile: () -> Unit = {},
+    val sourceAudio: () -> Unit = {},
 )
 
 @Composable
@@ -77,12 +82,22 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
     val context = LocalContext.current
     var pendingPhoto by remember { mutableStateOf<Uri?>(null) }
     var scanning by remember { mutableStateOf(false) }
+    // Every way of opening the camera sets this, so a cancelled one never leaves it set for the next.
+    var forSource by remember { mutableStateOf(false) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         val uri = pendingPhoto
         if (saved && uri != null) {
-            if (scanning) state.scanPhoto = uri else state.importImage(uri)
+            if (forSource) {
+                state.onAddSource?.invoke(SourceRequest.Image(uri))
+            } else if (scanning) {
+                state.scanPhoto = uri
+            } else {
+                state.importImage(uri)
+            }
         }
     }
+    var photoForSource by remember { mutableStateOf(false) }
+    var fileForSource by remember { mutableStateOf(false) }
     val openCamera = {
         val photo = newPhotoUri(context)
         pendingPhoto = photo
@@ -92,20 +107,46 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
         if (granted) openCamera()
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) state.importImage(uri)
+        if (uri != null) {
+            if (photoForSource) state.onAddSource?.invoke(SourceRequest.Image(uri)) else state.importImage(uri)
+        }
     }
     val files = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) state.importImage(uri)
     }
     val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) state.importDocument(uri)
+        if (uri != null) {
+            if (fileForSource) state.onAddSource?.invoke(SourceRequest.File(uri)) else state.importDocument(uri)
+        }
     }
     val videos = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) state.importVideo(uri)
     }
     return remember {
         ImageSources(
+            sourcePhoto = {
+                photoForSource = true
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            sourceCamera = {
+                forSource = true
+                scanning = false
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                    openCamera()
+                } else {
+                    cameraPermission.launch(Manifest.permission.CAMERA)
+                }
+            },
+            sourceFile = {
+                fileForSource = true
+                documents.launch(arrayOf("application/pdf", "audio/*", "image/*"))
+            },
+            sourceAudio = {
+                fileForSource = true
+                documents.launch(arrayOf("audio/*"))
+            },
             takePhoto = {
+                forSource = false
                 scanning = false
                 // An app that declares the camera permission must hold it even to use another app's camera.
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
@@ -115,6 +156,7 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
                 }
             },
             scan = {
+                forSource = false
                 scanning = true
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
                     openCamera()
@@ -122,9 +164,15 @@ internal fun rememberImageSources(state: EditorState): ImageSources {
                     cameraPermission.launch(Manifest.permission.CAMERA)
                 }
             },
-            pickPhoto = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+            pickPhoto = {
+                photoForSource = false
+                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
             pickFile = { files.launch("image/*") },
-            pickDocument = { documents.launch(arrayOf("application/pdf", "audio/mpeg", "audio/*", "image/*")) },
+            pickDocument = {
+                fileForSource = false
+                documents.launch(arrayOf("application/pdf", "audio/mpeg", "audio/*", "image/*"))
+            },
             pickVideo = { videos.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
         )
     }

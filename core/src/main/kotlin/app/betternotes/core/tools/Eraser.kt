@@ -10,6 +10,7 @@ import app.betternotes.core.geometry.RectClipper
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePoints
 import app.betternotes.core.model.StrokePointsBuilder
@@ -20,6 +21,44 @@ enum class EraseMode {
 
     /** Removes any stroke or shape the tip touches, whole. */
     WHOLE,
+}
+
+/** A drag of the eraser, on a page or inside a note. */
+interface Erasing {
+    fun eraseTo(x: Float, y: Float)
+
+    /** The drag as one edit, or null if it erased nothing. */
+    fun finish(): Edit?
+}
+
+/**
+ * One drag of the eraser inside an open sticky note, on what is in it. The note on the page ([content] at [at]) changes as the tip
+ * moves, and the drag is one edit of the note, which is what [finish] returns.
+ */
+class NoteEraseSession(
+    private val pageId: Long,
+    private val content: PageContent,
+    private val at: Int,
+    private val mode: EraseMode,
+    private val radius: Float,
+    private val kinds: Set<ItemKind>,
+    private val includeLocked: Boolean,
+) : Erasing {
+    private val original = content[at] as StickyNoteItem
+    private val inside = PageContent(original.items)
+    private val session = EraseSession(pageId, inside, mode, radius, kinds = kinds, includeLocked = includeLocked)
+    private var current = original
+
+    override fun eraseTo(x: Float, y: Float) {
+        session.eraseTo(x - original.frame.left, y - original.frame.top)
+        val items = List(inside.size) { inside[it] }
+        if (items == current.items) return
+        current = original.copy(items = items)
+        content.splice(intArrayOf(at), intArrayOf(at), listOf(current))
+    }
+
+    override fun finish(): Edit? =
+        if (current === original) null else ItemsEdit(pageId, intArrayOf(at), listOf(original), intArrayOf(at), listOf(current))
 }
 
 /**
@@ -37,13 +76,15 @@ class EraseSession(
     private val radius: Float,
     private val ids: IdSource = IdSource.Random,
     private val kinds: Set<ItemKind> = DEFAULT_ERASABLE,
-) {
+    /** Locked items are left alone unless this is set. */
+    private val includeLocked: Boolean = false,
+) : Erasing {
     private val steps = ArrayList<Edit>()
     private var lastX = Float.NaN
     private var lastY = Float.NaN
 
     /** Moves the tip to a point, erasing along the way from the previous one. */
-    fun eraseTo(x: Float, y: Float) {
+    override fun eraseTo(x: Float, y: Float) {
         val startX = if (lastX.isNaN()) x else lastX
         val startY = if (lastY.isNaN()) y else lastY
         step(Capsule(startX, startY, x, y, radius))
@@ -52,7 +93,7 @@ class EraseSession(
     }
 
     /** The drag as one edit, or null if it erased nothing. */
-    fun finish(): Edit? = when (steps.size) {
+    override fun finish(): Edit? = when (steps.size) {
         0 -> null
         1 -> steps[0]
         else -> BatchEdit(steps.toList())
@@ -61,6 +102,7 @@ class EraseSession(
     private fun step(tip: Capsule) {
         val changes = ChangeList()
         content.forEachIntersecting(tip.bounds) { index, item ->
+            if (item.locked && !includeLocked) return@forEachIntersecting
             when (mode) {
                 EraseMode.PARTIAL -> if (item is StrokeItem && item.kind in kinds) {
                     cutStroke(item.points, tip, item.style.width / 2f)?.let { pieces ->
@@ -88,10 +130,11 @@ class EraseSession(
 fun clearEdit(pageId: Long, content: PageContent, region: Bounds?, ids: IdSource = IdSource.Random): ItemsEdit? {
     val changes = ChangeList()
     if (region == null) {
-        for (i in 0 until content.size) changes.replace(i, content[i], emptyList())
+        for (i in 0 until content.size) if (!content[i].locked) changes.replace(i, content[i], emptyList())
     } else {
         val clipper = RectClipper(region)
         content.forEachIntersecting(region) { index, item ->
+            if (item.locked) return@forEachIntersecting
             if (region.contains(item.bounds)) {
                 changes.replace(index, item, emptyList())
             } else if (item is StrokeItem) {

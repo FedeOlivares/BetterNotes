@@ -114,6 +114,10 @@
     <string name="template_music">Music Score</string>
     <string name="template_guitar_tab">Guitar Tablature</string>
     <string name="template_guitar_score">Guitar Score</string>
+    <string name="template_group_planning">Planning</string>
+    <string name="template_semester">Semester Overview</string>
+    <string name="template_mind_map">Mind Map</string>
+    <string name="template_week_planner">Week Planner</string>
     <string name="template_apply_current">Apply to current page</string>
     <string name="template_apply_all">Apply to all pages</string>
     <string name="template_apply_more">More ways to apply</string>
@@ -177,6 +181,8 @@
     <string name="export_as">Export as</string>
     <string name="export_pdf">PDF</string>
     <string name="export_image">Image</string>
+    <string name="export_notebook">Notebook</string>
+    <string name="export_notebook_detail">The whole notebook in one file, with everything still editable and its sources. Someone with this app can open it from the + panel, under File &amp; Doc.</string>
     <string name="export_page_scale">Page Scale</string>
     <string name="export_percent">%1$d%%</string>
     <string name="export_size_mm">%1$d × %2$d mm</string>

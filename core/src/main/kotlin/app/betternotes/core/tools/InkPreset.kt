@@ -31,9 +31,14 @@ data class InkPreset(
     val holdDelayMs: Int = DEFAULT_HOLD_MS,
     val scribbleToErase: Boolean = false,
     val circleToLasso: Boolean = false,
-    val stabilization: Int = 1,
+    /** 0 is off; each level adds the same lag, up to [MAX_STABILIZATION]. */
+    val stabilization: Int = 0,
     /** For the pencil slot, which creative brush it draws with. */
     val brush: BrushKind = BrushKind.PENCIL,
+    /** For the highlighter: repeated passes over the same place do not get darker. */
+    val noOverlap: Boolean = false,
+    /** The width follows how hard the pen presses. The natural pen does this whatever it says. */
+    val pressure: Boolean = false,
 ) {
     init {
         require(colors.size in 1..MAX_COLOR_SLOTS) { "${colors.size} colors" }
@@ -58,6 +63,8 @@ data class InkPreset(
         opacity = opacity,
         line = LineStyle(kind = line),
         brush = brush,
+        noOverlap = noOverlap && tool == InkTool.HIGHLIGHTER,
+        pressure = pressure,
     )
 
     /** Fine-tunes the width slot in use. */
@@ -112,7 +119,7 @@ data class InkPreset(
         const val MIN_HOLD_MS = 200
         const val MAX_HOLD_MS = 2000
         const val DEFAULT_HOLD_MS = 500
-        const val MAX_STABILIZATION = 5
+        const val MAX_STABILIZATION = 10
 
         /** One tenth of a millimeter, in points. */
         const val POINTS_PER_THICKNESS_UNIT = 0.1f * 72f / 25.4f

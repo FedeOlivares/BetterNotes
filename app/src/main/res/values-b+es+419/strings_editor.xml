@@ -71,8 +71,7 @@
     <string name="pages_all">Todas las páginas</string>
     <string name="pages_add">Agregar una página</string>
     <string name="pages_add_after">Agregar una página después de esta</string>
-    <string name="pages_delete">Eliminar esta página</string>
-    <string name="pages_select">Seleccionar páginas</string>
+    <string name="pages_delete">Eliminar esta página</string>    <string name="pages_select">Seleccionar páginas</string>
     <string name="menu_insert">Insertar</string>
     <string name="menu_search">Buscar</string>
     <string name="panel_image_library">Imágenes</string>
@@ -116,6 +115,8 @@
     <string name="panel_thickness">Grosor</string>
     <string name="panel_thinner">Más delgado</string>
     <string name="panel_thicker">Más grueso</string>
+    <string name="panel_decrease">Disminuir</string>
+    <string name="panel_increase">Aumentar</string>
     <string name="panel_opacity">Opacidad</string>
     <string name="panel_line_type">Tipo de línea</string>
     <string name="panel_tip">Punta</string>
@@ -142,7 +143,7 @@
     <string name="panel_done">Listo</string>
 
     <string name="info_not_built_setting">Se guarda, pero todavía no hace nada.</string>
-    <string name="info_full_selection">Solo selecciona lo que queda completamente dentro de la selección.</string>
+    <string name="info_full_selection">Activado: solo lo que queda completamente dentro. Desactivado: todo lo que la selección toque, aunque sea un poco.</string>
     <string name="info_any_portion">Selecciona cualquier elemento con una parte dentro de la selección, aunque el lazo solo lo cruce.</string>
     <string name="info_hold_shape">Mantén el lápiz quieto al final de un trazo para convertirlo en una línea recta.</string>
     <string name="info_scribble">Se guarda, pero todavía no hace nada.</string>
@@ -160,6 +161,11 @@
     <string name="scan_loading">Cargando la foto</string>
     <string name="menu_export">Exportar</string>
     <string name="menu_rename">Cambiar nombre</string>
+    <string name="menu_add_cover">Añadir portada</string>
+    <string name="menu_edit_cover">Editar portada</string>
+    <string name="menu_edit_size">Editar tamaño</string>
+    <string name="menu_template_language">Idioma de las plantillas</string>
+    <string name="menu_template_language_detail">Las palabras impresas en las plantillas de este cuaderno. Empieza siendo el idioma de la app cuando se crea el cuaderno, y cambiar la app después no lo cambia.</string>
     <string name="menu_go_to_page">Ir a la página</string>
     <string name="menu_change_template">Cambiar plantilla</string>
     <string name="menu_scroll_layout">Desplazamiento y diseño</string>
@@ -171,6 +177,14 @@
     <string name="sources_tabs">Pestañas</string>
     <string name="sources_count">%1$d fuente</string>
     <string name="sources_add">Añadir una fuente</string>
+    <string name="sources_remove">Quitar de las fuentes</string>
+    <string name="sources_no_notebooks">No hay otros cuadernos para vincular.</string>
+    <string name="add_audio_source_detail">Sube un archivo de audio</string>
+    <string name="add_notebook">Cuaderno</string>
+    <string name="add_notebook_detail">Vincula un cuaderno de tu biblioteca</string>
+    <string name="source_canvas">Lienzo</string>
+    <string name="source_image">Imagen</string>
+    <string name="source_audio">Audio</string>
     <string name="sources_pages">%1$d páginas</string>
     <string name="add_title">Añadir a la nota</string>
     <string name="add_text">Texto</string>

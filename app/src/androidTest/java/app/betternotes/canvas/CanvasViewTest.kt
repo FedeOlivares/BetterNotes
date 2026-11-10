@@ -423,6 +423,68 @@ class CanvasViewTest {
     }
 
     @Test
+    fun theLoupeShowsTheTurnedPageSoInkInItFollowsTheTurn() {
+        twist(startDegrees = 0f, endDegrees = 100f)
+        assertEquals(90f, onMain { canvas.rotationDegrees }, 0f)
+        val top = onMain {
+            canvas.setLoupeArea(0f, canvas.height / 2f, canvas.width.toFloat(), canvas.height.toFloat())
+            canvas.loupeOpen = true
+            canvas.height / 2f
+        }
+        val width = onMain { canvas.width.toFloat() }
+        val drag = 300f
+        drag(MotionEvent.TOOL_TYPE_STYLUS, width / 2f - drag / 2f to top + 200f, width / 2f + drag / 2f to top + 200f)
+        val stroke = onlyStroke()
+        val last = stroke.points.size - 1
+        val pxPerPt = onMain { canvas.viewport.pxPerPt }
+        val expected = drag * 0.45f / pxPerPt
+        // A drag across the window runs along the page's height once the page is turned a quarter.
+        assertEquals(0f, stroke.points.x(last) - stroke.points.x(0), 1f)
+        assertEquals(expected, Math.abs(stroke.points.y(last) - stroke.points.y(0)), 1f)
+    }
+
+    @Test
+    fun aFingerOnTheLoupeBoxCarriesItAlong() {
+        onMain {
+            canvas.setLoupeArea(0f, canvas.height * 0.7f, canvas.width.toFloat(), canvas.height.toFloat())
+            canvas.loupeOpen = true
+        }
+        val box = onMain { canvas.loupeBoxForTest() }
+        val from = worldToScreen(box.centerX(), box.centerY())
+        fingerDragBy(from, 120f, 0f)
+        val moved = onMain { canvas.loupeBoxForTest() }
+        val pxPerPt = onMain { canvas.viewport.pxPerPt }
+        assertEquals(box.left + 120f / pxPerPt, moved.left, 1f)
+    }
+
+    @Test
+    fun theAddPageSpotShowsOnlyWhenRoomForAThirdOfAPageIsShowingPastTheLastPage() {
+        assertEquals(null, onMain { canvas.addPageSpot() })
+        repeat(4) {
+            fingerDrag(canvas.width / 2f to canvas.height * 0.8f, -canvas.height * 0.7f)
+            SystemClock.sleep(700)
+        }
+        val spot = onMain { canvas.addPageSpot() }
+        assertTrue("room past the last page", spot != null)
+        assertTrue(spot!![1] > 0f && spot[1] < canvas.height)
+    }
+
+    @Test
+    fun onlyThePageTwistedTurnsAndThePagesAfterItMakeRoom() {
+        onMain { canvas.addPage(0) }
+        waitUntil { canvas.pageCount == 2 }
+        val before = onMain { canvas.pageOriginYForTest(1) }
+        twist(startDegrees = 0f, endDegrees = 50f)
+        val turned = onMain { canvas.pageTurnForTest(0) }
+        assertEquals(40f, turned, 1.5f)
+        assertEquals(0f, onMain { canvas.pageTurnForTest(1) }, 0f)
+        // A4 turned by 40 degrees is taller than upright, so the next page starts lower.
+        assertTrue(onMain { canvas.pageOriginYForTest(1) } > before)
+        assertEquals(turned, onMain { editor.document.pages[0].rotation }, 0.01f)
+        assertEquals(0f, onMain { editor.document.pages[1].rotation }, 0f)
+    }
+
+    @Test
     fun aMovedSelectionLinesUpWithThePageUnlessToldNotTo() {
         for (snapping in listOf(true, false)) {
             onMain {
@@ -793,6 +855,134 @@ class CanvasViewTest {
         waitUntil { onMain { dropped() } == 1 }
     }
 
+    @Test
+    fun twistingTwoFingersTurnsThePageAndTheStrokeDrawnThenLandsWhereThePenIs() {
+        twist(startDegrees = 0f, endDegrees = 50f)
+        // The turn starts counting once the twist passes its 10 degree threshold.
+        val turned = onMain { canvas.rotationDegrees }
+        assertEquals(40f, turned, 1.5f)
+
+        val from = (canvas.width * 0.4f) to (canvas.height * 0.4f)
+        val to = (canvas.width * 0.6f) to (canvas.height * 0.5f)
+        stylusStroke(from, to)
+        val stroke = onlyStroke()
+        val expectedStart = onMain { canvas.pagePointForTest(from.first, from.second, 0) }
+        val expectedEnd = onMain { canvas.pagePointForTest(to.first, to.second, 0) }
+        assertEquals(expectedStart[0], stroke.points.x(0), 1f)
+        assertEquals(expectedStart[1], stroke.points.y(0), 1f)
+        val last = stroke.points.size - 1
+        assertEquals(expectedEnd[0], stroke.points.x(last), 1f)
+        assertEquals(expectedEnd[1], stroke.points.y(last), 1f)
+    }
+
+    @Test
+    fun aPinchWithoutATwistLeavesThePageUpright() {
+        pinch(canvas.width / 2f, canvas.height / 2f, startGap = 200f, endGap = 400f)
+        assertEquals(0f, onMain { canvas.rotationDegrees }, 0f)
+        assertTrue(onMain { canvas.viewport.zoom } > 1f)
+    }
+
+    @Test
+    fun theTurnIsKeptOnThePageAndResetPutsItBack() {
+        twist(startDegrees = 0f, endDegrees = 50f)
+        val turned = onMain { canvas.rotationDegrees }
+        assertEquals(turned, onMain { editor.document.pages[0].rotation }, 0.01f)
+        onMain { canvas.resetRotation() }
+        // It slides back, then it is saved.
+        waitUntil { editor.document.pages[0].rotation == 0f }
+        assertEquals(0f, onMain { canvas.rotationDegrees }, 0f)
+    }
+
+    @Test
+    fun aTwistNearARightAngleSnapsToIt() {
+        // 100 degrees of twist is 90 of turn, once the 10 degree threshold is taken off.
+        twist(startDegrees = 0f, endDegrees = 100f)
+        assertEquals(90f, onMain { canvas.rotationDegrees }, 0f)
+    }
+
+    @Test
+    fun twoFingerTapsStillUndoOnATurnedPage() {
+        twist(startDegrees = 0f, endDegrees = 50f)
+        stylusStroke(canvas.width * 0.4f to canvas.height * 0.4f, canvas.width * 0.6f to canvas.height * 0.5f)
+        onlyStroke()
+        // A touch right after the stylus lifts is taken for the palm.
+        SystemClock.sleep(200)
+        val at = canvas.width * 0.3f to canvas.height * 0.7f
+        twoFingerTap(at)
+        twoFingerTap(at)
+        waitUntil { pageContent().size == 0 }
+    }
+
+    /** What page point lies under a screen point, when the page is turned by [degrees] about the middle of the view. */
+    private fun pageUnderScreenPoint(at: Pair<Float, Float>, degrees: Float): Pair<Float, Float> {
+        val cx = canvas.width / 2f
+        val cy = canvas.height / 2f
+        val rad = Math.toRadians(-degrees.toDouble())
+        val dx = at.first - cx
+        val dy = at.second - cy
+        val flatX = cx + (dx * Math.cos(rad) - dy * Math.sin(rad)).toFloat()
+        val flatY = cy + (dx * Math.sin(rad) + dy * Math.cos(rad)).toFloat()
+        return onMain { canvas.viewport.toWorldX(flatX) to canvas.viewport.toWorldY(flatY) }
+    }
+
+    /** Two fingers 300 px apart around the middle of the view, turning their line from one angle to another. */
+    private fun twist(startDegrees: Float, endDegrees: Float) {
+        val tool = MotionEvent.TOOL_TYPE_FINGER
+        val cx = canvas.width / 2f
+        val cy = canvas.height / 2f
+        fun fingers(degrees: Float): List<Pair<Float, Float>> {
+            val rad = Math.toRadians(degrees.toDouble())
+            val dx = (150 * Math.cos(rad)).toFloat()
+            val dy = (150 * Math.sin(rad)).toFloat()
+            return listOf(cx - dx to cy - dy, cx + dx to cy + dy)
+        }
+        val steps = 40
+        val down = SystemClock.uptimeMillis() - 400 - (steps + 3) * 8
+        var time = down
+        val start = fingers(startDegrees)
+        send(event(down, time, MotionEvent.ACTION_DOWN, tool, listOf(start[0])))
+        time += 100
+        send(event(down, time, pointerAction(MotionEvent.ACTION_POINTER_DOWN, 1), tool, start))
+        for (i in 0..steps) {
+            time += 8
+            send(event(down, time, MotionEvent.ACTION_MOVE, tool, fingers(startDegrees + (endDegrees - startDegrees) * i / steps)))
+        }
+        time += 8
+        val end = fingers(endDegrees)
+        send(event(down, time, pointerAction(MotionEvent.ACTION_POINTER_UP, 1), tool, end))
+        send(event(down, time + 8, MotionEvent.ACTION_UP, tool, listOf(end[0])))
+        waitForIdle()
+    }
+
+    @Test
+    fun aNoOverlapHighlighterStrokeIsEvenAcrossTheTileEdges() {
+        val style = InkStyle(tool = app.betternotes.core.model.InkTool.HIGHLIGHTER, color = 0xFFFFEB3B.toInt(), width = 14f, opacity = 0.4f, noOverlap = true)
+        onMain { canvas.tool = CanvasTool.Ink(style) }
+        val y = canvas.height * 0.5f
+        stylusStroke(canvas.width * 0.08f to y, canvas.width * 0.92f to y)
+        waitUntil { pageContent().size == 1 }
+        SystemClock.sleep(800)
+        val shot = instrumentation.uiAutomation.takeScreenshot()
+        val row = IntArray(canvas.width) { x -> shot.getPixel(x, y.toInt()) }
+        val from = (canvas.width * 0.12f).toInt()
+        val to = (canvas.width * 0.88f).toInt()
+        val blues = row.slice(from..to).map { android.graphics.Color.blue(it) }.sorted()
+        val typical = blues[blues.size / 2]
+        val worst = row.slice(from..to).withIndex().maxByOrNull { android.graphics.Color.blue(it.value) }!!
+        assertTrue("the stroke is lighter at x=${from + worst.index} (blue ${android.graphics.Color.blue(worst.value)} against ${typical})", android.graphics.Color.blue(worst.value) - typical <= 6)
+    }
+
+    @Test
+    fun aTwistOnThePageStillTurnsItWhileTheLoupeIsOpen() {
+        onMain {
+            canvas.setLoupeArea(0f, canvas.height * 0.7f, canvas.width.toFloat(), canvas.height.toFloat())
+            canvas.loupeOpen = true
+        }
+        twist(startDegrees = 0f, endDegrees = 50f)
+        assertEquals(40f, onMain { canvas.pageTurnForTest(0) }, 1.5f)
+        assertTrue(onMain { canvas.loupeOpen })
+    }
+
     // ---- Helpers ----
 
     private fun stylusPath(points: List<Pair<Float, Float>>) {
@@ -832,6 +1022,10 @@ class CanvasViewTest {
         val down = SystemClock.uptimeMillis()
         send(event(down, down, MotionEvent.ACTION_DOWN, tool, listOf(at), 1f))
         send(event(down, down + 20, MotionEvent.ACTION_UP, tool, listOf(at), 1f))
+    }
+
+    private fun fingerDragBy(from: Pair<Float, Float>, dx: Float, dy: Float) {
+        drag(MotionEvent.TOOL_TYPE_FINGER, from, from.first + dx to from.second + dy)
     }
 
     private fun fingerDrag(from: Pair<Float, Float>, dy: Float) {

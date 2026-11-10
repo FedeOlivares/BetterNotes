@@ -26,7 +26,7 @@ val PageTemplate.lineColor: Int?
         is PageTemplate.Legal -> color
         is PageTemplate.MusicScore -> color
         is PageTemplate.GuitarTab -> color
-        PageTemplate.Blank, is PageTemplate.Custom -> null
+        PageTemplate.Blank, PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner, is PageTemplate.Planner, is PageTemplate.Custom -> null
     }
 
 /** Sets [lineColor]. Templates with none come back unchanged. */
@@ -42,7 +42,7 @@ fun PageTemplate.withLineColor(value: Int): PageTemplate = when (this) {
     is PageTemplate.Legal -> copy(color = value)
     is PageTemplate.MusicScore -> copy(color = value)
     is PageTemplate.GuitarTab -> copy(color = value)
-    PageTemplate.Blank, is PageTemplate.Custom -> this
+    PageTemplate.Blank, PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner, is PageTemplate.Planner, is PageTemplate.Custom -> this
 }
 
 /** The stroke width of an element's lines, or null for a sticky note, which has none. */

@@ -28,6 +28,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +38,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -66,10 +69,7 @@ import kotlin.math.roundToInt
 @Composable
 internal fun NoteRow(state: EditorState, options: NoteOptions, modifier: Modifier, showColors: Boolean) {
     Pill(modifier) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-        ) {
+        ToolStrip {
             if (showColors) {
                 options.colors.forEachIndexed { slot, color ->
                     ToolbarCellBox(onClick = { state.updateNote { it.copy(selectedColor = slot) } }) {
@@ -126,7 +126,7 @@ private fun VerticalAlign.icon() = when (this) {
 }
 
 @Composable
-internal fun NotePanel(state: EditorState, options: NoteOptions, modifier: Modifier, sticky: Boolean) {
+internal fun NotePanel(state: EditorState, notices: Notices, options: NoteOptions, modifier: Modifier, sticky: Boolean) {
     val colors = LocalEditorColors.current
     val title = if (sticky) R.string.tool_sticky else R.string.tool_text
     PanelSheet(stringResource(title), onClose = { state.panelOpen = false }, modifier = modifier) {
@@ -198,6 +198,11 @@ internal fun NotePanel(state: EditorState, options: NoteOptions, modifier: Modif
             )
         }
         if (sticky) {
+            LabeledRow(R.string.panel_keep_open, info = { notices.say(R.string.info_keep_open) }) {
+                PanelSwitch(options.keepOpen, stringResource(R.string.panel_keep_open)) { on ->
+                    state.updateNote { it.copy(keepOpen = on) }
+                }
+            }
             LabeledRow(R.string.panel_fill_color) {}
             Row(
                 modifier = Modifier
@@ -360,9 +365,15 @@ internal fun TablePanel(state: EditorState, options: TableOptions, modifier: Mod
 @Composable
 internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit) {
     val density = LocalDensity.current
-    var value by remember(request) { mutableStateOf(request.initial) }
+    var value by remember(request) { mutableStateOf(TextFieldValue(request.text, TextRange(request.text.length))) }
+    // Words read from handwriting arrive in the request, and the cursor goes to the end after them.
+    LaunchedEffect(request) {
+        androidx.compose.runtime.snapshotFlow { request.text }.collect { text ->
+            if (text != value.text) value = TextFieldValue(text, TextRange(text.length))
+        }
+    }
     val focus = remember(request) { FocusRequester() }
-    val latest by androidx.compose.runtime.rememberUpdatedState(value)
+    val latest by androidx.compose.runtime.rememberUpdatedState(value.text)
     val latestDone by androidx.compose.runtime.rememberUpdatedState(onDone)
     LaunchedEffect(request) { focus.requestFocus() }
     DisposableEffect(request) {
@@ -376,7 +387,16 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
     )
     BasicTextField(
         value = value,
-        onValueChange = { value = it },
+        onValueChange = {
+            value = it
+            request.text = it.text
+        },
+        onTextLayout = { layout ->
+            val end = layout.getCursorRect(layout.layoutInput.text.length)
+            request.endX = end.left
+            request.endY = end.top
+            request.lineHeight = end.height
+        },
         cursorBrush = SolidColor(LocalEditorColors.current.accent),
         textStyle = ComposeTextStyle(
             color = Color(request.color),
@@ -393,6 +413,14 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
         modifier = Modifier
             .offset { IntOffset(request.left.roundToInt(), request.top.roundToInt()) }
             .size(with(density) { request.width.toDp() }, with(density) { request.height.toDp() })
+            // Turned with the page, about the middle of the screen.
+            .graphicsLayer {
+                rotationZ = request.turnDegrees
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                    (request.pivotX - request.left) / size.width,
+                    (request.pivotY - request.top) / size.height,
+                )
+            }
             // The area the text stays in, so that it is plain where typing will go.
             .background(LocalEditorColors.current.accent.copy(alpha = 0.08f))
             .border(1.dp, LocalEditorColors.current.accent.copy(alpha = 0.6f))

@@ -211,19 +211,24 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
         }
         if (options.line != LineKind.SOLID) {
             LabeledRow(R.string.panel_dash_size) { ValuePill { ValueText(options.dashLength.roundToInt().toString()) } }
-            PanelSlider(
+            StepperSlider(
                 fraction = (options.dashLength - ShapeOptions.MIN_DASH) / (ShapeOptions.MAX_DASH - ShapeOptions.MIN_DASH),
                 onChange = { f ->
                     state.updateShape { it.copy(dashLength = ShapeOptions.MIN_DASH + f * (ShapeOptions.MAX_DASH - ShapeOptions.MIN_DASH)) }
                 },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding + 6.dp),
+                steps = (ShapeOptions.MAX_DASH - ShapeOptions.MIN_DASH).roundToInt(),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
-        LabeledRow(R.string.panel_corner_radius) {
-            ValuePill(onClick = {
-                state.updateShape { it.copy(cornerRadius = (it.cornerRadius + 1) % (ShapeOptions.MAX_CORNER_RADIUS + 1)) }
-            }) { ValueText(options.cornerRadius.toString()) }
-        }
+        LabeledRow(R.string.panel_corner_radius) { ValuePill { ValueText(options.cornerRadius.toString()) } }
+        StepperSlider(
+            fraction = options.cornerRadius.toFloat() / ShapeOptions.MAX_CORNER_RADIUS,
+            onChange = { f ->
+                state.updateShape { it.copy(cornerRadius = (f * ShapeOptions.MAX_CORNER_RADIUS).roundToInt()) }
+            },
+            steps = ShapeOptions.MAX_CORNER_RADIUS,
+            modifier = Modifier.fillMaxWidth(),
+        )
         LabeledRow(R.string.panel_border_color) {
             Box(Modifier.size(36.dp).clip(CircleShape).clickable { state.colorTarget = ColorTarget.SHAPE_BORDER }, Alignment.Center) {
                 ColorRing(options.color)

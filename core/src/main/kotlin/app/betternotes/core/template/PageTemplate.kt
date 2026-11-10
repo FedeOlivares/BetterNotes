@@ -144,6 +144,35 @@ sealed interface PageTemplate {
         init { requireLength(lineGap, staffGap, lineWidth) }
     }
 
+    /** A semester overview: weekly breakdown, a timetable, goals and a notes box. */
+    data object Semester : PageTemplate
+
+    /** A main topic in the middle, four sub-topics and eight boxes around it. */
+    data object MindMap : PageTemplate
+
+    /** A week as seven day rows, each with a 24 hour ruler. */
+    data object WeekPlanner : PageTemplate
+
+    /** A page of a planner: which one, and the dates the planner covers. */
+    data class Planner(
+        val page: app.betternotes.core.planner.PlannerPage,
+        val setup: app.betternotes.core.planner.PlannerSetup,
+        /** On a planner's cover: the title the owner typed, or empty for the default ("Planner" or "Agenda"). Empty on every other page. */
+        val title: String = "",
+        /**
+         * The start and end of each of the four semesters or quarters, as days since 1970 ([NO_DATE] for none), start before end:
+         * 8 numbers, or none at all. Kept on the pages that show them (the index and the semester planning page), so a date typed on one
+         * shows on the other.
+         */
+        val semesters: List<Int> = emptyList(),
+    ) : PageTemplate {
+        init { require(semesters.isEmpty() || semesters.size == app.betternotes.core.planner.PlannerPages.SEMESTER_DATES) { "Semester dates: 8 numbers or none" } }
+
+        companion object {
+            const val NO_DATE = 0
+        }
+    }
+
     data class Custom(val layout: CustomLayout) : PageTemplate
 
     companion object {

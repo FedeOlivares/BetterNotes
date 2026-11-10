@@ -192,6 +192,22 @@ class LassoTest {
     }
 
     @Test
+    fun `a locked item is a layer below, so a tap finds an unlocked one first`() {
+        fill(
+            ImageItem(1, Frame(0f, 0f, 100f, 100f), "unlocked"),
+            ImageItem(2, Frame(0f, 0f, 100f, 100f), "locked", locked = true),
+        )
+        // The locked picture is later in the page, but lies below.
+        assertEquals(0, content.topItemAt(50f, 50f))
+    }
+
+    @Test
+    fun `a locked item is still found where nothing unlocked is`() {
+        fill(ImageItem(1, Frame(0f, 0f, 100f, 100f), "locked", locked = true))
+        assertEquals(0, content.topItemAt(50f, 50f))
+    }
+
+    @Test
     fun `tap finds the topmost item within tolerance`() {
         fill(
             stroke(1, 0f, 50f, 100f, 50f, width = 2f),

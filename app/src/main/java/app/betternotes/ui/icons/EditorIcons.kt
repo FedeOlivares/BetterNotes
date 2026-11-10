@@ -26,6 +26,8 @@ internal object EditorIcons {
     val ChevronsUpDown by lazy { line("chevrons", "M7 9.5l5-5 5 5 M7 14.5l5 5 5-5") }
     val ChevronUp by lazy { line("chevron-up", "M7 14.5l5-5 5 5") }
     val ChevronDown by lazy { line("chevron-down", "M7 9.5l5 5 5-5") }
+    val ChevronLeft by lazy { line("chevron-left", "M14.5 7l-5 5 5 5") }
+    val ChevronRight by lazy { line("chevron-right", "M9.5 7l5 5-5 5") }
     val Undo by lazy { line("undo", "M8.5 5L4.5 9l4 4 M4.5 9h10a5 5 0 0 1 0 10h-3") }
     val Redo by lazy { line("redo", "M15.5 5l4 4-4 4 M19.5 9h-10a5 5 0 0 0 0 10h3") }
     val FingerMode by lazy {
@@ -72,6 +74,10 @@ internal object EditorIcons {
     val Broom by lazy { line("broom", "M20.5 3.5L13 11 M9.5 9l5.5 5.5c-1.5 3-4 5.5-8 6.5l-1-3-1.5 2L3 19c1.5-1 3-3 2-4l-1-.5c2.500-.5 4-2.500 5.500-5.500z") }
     val LassoFreeform by lazy { line("lasso-freeform", dashedCircle() + "M16.5 6.500l1.500 1.500-6 6-2 .5.5-2z") }
     val LassoRectangle by lazy { line("lasso-rectangle", "M3 7V4.500A1.500 1.500 0 0 1 4.500 3H7 M11 3h3 M21 11v3 M21 18v1.500a1.500 1.500 0 0 1-1.500 1.500H17 M13 21h-3 M6 21H4.500A1.500 1.500 0 0 1 3 19.500V18 M3 14v-3 M17.500 5.500l2 2-7 7-2.500.5.500-2.500z") }
+    val Rotate by lazy { line("rotate", "M19.500 12a7.500 7.500 0 1 1-2.200-5.300 M19.500 4.500v4h-4") }
+    val Lock by lazy { line("lock", "M6.500 11h11v8.500h-11z M8.500 11V8a3.500 3.500 0 0 1 7 0v3") }
+    val Unlock by lazy { line("unlock", "M6.500 11h11v8.500h-11z M8.500 11V8a3.500 3.500 0 0 1 6.600-1.600") }
+    val Translucent by lazy { line("translucent", "M12 3.500C9 7.500 6.500 10 6.500 13.500a5.500 5.500 0 0 0 11 0C17.500 10 15 7.500 12 3.500z M12 7v10") }
     val LassoLocked by lazy { line("lasso-locked", dashedCircle() + "M8.500 11h7v5.500h-7z M10 11V9.500a2 2 0 0 1 4 0V11") }
     val LassoScreenshot by lazy { line("lasso-screenshot", dashedCircle() + "M8 10h1.500l1-1.500h3l1 1.500H16v6H8z M12 11a1.700 1.700 0 1 0 .01 0") }
     val Bold by lazy { line("bold", "M8 5h5a3.500 3.500 0 0 1 0 7H8z M8 12h6a3.500 3.500 0 0 1 0 7H8z", width = 2.4f) }
@@ -96,6 +102,14 @@ internal object EditorIcons {
     val StopCircle by lazy { filled("stop-circle", "M12 2.500a9.500 9.500 0 1 0 .01 0z M9 9h6v6H9z") }
     val CheckCircle by lazy { line("check-circle", "M12 3a9 9 0 1 0 .01 0 M7.500 12.500l3 3 6-6.500") }
     val Crosshair by lazy { line("crosshair", "M12 5a7 7 0 1 0 .01 0 M12 2.500V8 M12 16v5.500 M2.500 12H8 M16 12h5.500") }
+    val Bucket by lazy {
+        line("bucket", "M4.500 12.500L11 6l7.500 7.500-6.500 6.500a2 2 0 0 1-2.800 0L4.500 15.300a2 2 0 0 1 0-2.800z M11 6L9 4 M4.500 13h14 M20 16.500c1.200 1.700 1.700 2.600 1.700 3.200a1.700 1.700 0 0 1-3.400 0c0-.6.500-1.500 1.700-3.200z")
+    }
+    val Eyedropper by lazy {
+        line("eyedropper", "M15 4.500l4.500 4.500 M17 3a2.100 2.100 0 0 1 3 3l-2.500 2.500-3-3z M14.500 6.500l-9 9a2 2 0 0 0-.5 1.100V19h2.400a2 2 0 0 0 1.100-.5l9-9 M4.500 19.500l.5-.5")
+    }
+    val GridCross by lazy { line("grid-cross", "M12 3v18 M3 12h18") }
+    val GridThirds by lazy { line("grid-thirds", "M9 3v18 M15 3v18 M3 9h18 M3 15h18") }
     val Forward by lazy { line("forward", "M4 12h15.500 M13 5l7 7-7 7") }
     val Search by lazy { line("search", "M10.5 4a6.5 6.5 0 1 0 .01 0 M15.5 15.5L21 21") }
     val Image by lazy { line("image", rrect(3f, 4.5f, 18f, 15f, 2.5f) + "M3.5 17l5-5 4 4 2.5-2.5 5 5 M15.5 9.5a1.2 1.2 0 1 0 .01 0") }
@@ -109,6 +123,11 @@ internal object EditorIcons {
     val Laser by lazy { line("laser", "M3.5 20.5L11 13 M15 3v3 M15 12v3 M21 9h-3 M12 9H9 M19.2 4.8l-2 2 M12.8 11.2l-1 1 M19.2 13.2l-2-2 M12.8 6.8l-2-2") }
     val Settings by lazy { line("settings", gear() + "M12 9a3 3 0 1 0 .01 0") }
     val Eye by lazy { line("eye", "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 0 .01 0") }
+    /** A crossed eye with the corners of a square and a circle behind it, for the tools that are hidden. */
+    val HiddenTools by lazy {
+        line("hidden-tools", "M3 8V4.500A1.500 1.500 0 0 1 4.500 3H8 M16 3a4 4 0 0 1 4 4 M3.500 14.500s3-4.500 8.500-4.500 8.500 4.500 8.500 4.500-3 4.500-8.500 4.500-8.500-4.500-8.500-4.500z M12 13a1.800 1.800 0 1 0 .01 0 M4.500 20.500l15-15")
+    }
+    val EyeOff by lazy { line("eye-off", "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z M12 9.2a2.8 2.8 0 1 0 .01 0 M4 4l16 16") }
     val More by lazy { filled("more", "M5.5 10.2a1.8 1.8 0 1 0 .01 0z M12 10.2a1.8 1.8 0 1 0 .01 0z M18.5 10.2a1.8 1.8 0 1 0 .01 0z") }
     val AddColor by lazy { line("add-color", dashedCircle() + "M12 8v8 M8 12h8") }
     val EditColor by lazy { line("edit-color", "M14.5 4.5l3.5 3.5L8.5 17.5H5v-3.5z M5 21h14") }
@@ -119,6 +138,7 @@ internal object EditorIcons {
     val Export by lazy { line("export", "M12 15V4 M8 8l4-4 4 4 M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5") }
     val GoToPage by lazy { line("go-to-page", "M12 3a9 9 0 1 0 .01 0 M8 12h8 M13 9l3 3-3 3") }
     val Template by lazy { line("template", rrect(4f, 4f, 16f, 6f, 1.5f) + "M4 14h6 M4 18h6 M14 14h6 M14 18h6") }
+    val Cover by lazy { line("cover", rrect(5f, 3f, 14f, 18f, 2f) + "M9 3v18 M12 8h4") }
     val ScrollLayout by lazy { line("scroll-layout", "M8 5v14 M4.5 15.5L8 19l3.5-3.5 M16 19V5 M12.5 8.5L16 5l3.5 3.5") }
     val StylusFinger by lazy { line("stylus-finger", "M3.5 17c3-9 5-9 5-4s2 3 4 0 3-1 4 2 M17 15l3.5-4") }
     val Trash by lazy { line("trash", "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6") }
@@ -142,6 +162,34 @@ internal object EditorIcons {
     val Check by lazy { line("check", "M5 12.5l4.5 4.5L19 7.5") }
     val Minus by lazy { line("minus", "M5 12h14") }
     val Plus by lazy { line("plus", "M12 5v14 M5 12h14") }
+    /** The simplified solid version of a tool's icon, small enough to sit three to a button as a group's preview. */
+    fun mini(key: String): ImageVector = minis.getOrPut(key) {
+        filled("mini-$key", MINI_PATHS[key] ?: "M4 4h16v16H4z")
+    }
+
+    private val minis = HashMap<String, ImageVector>()
+    private val MINI_PATHS = mapOf(
+        "lasso" to "M12 4C7 4 3 7 3 11s4 7 9 7c1 0 2-.1 3-.4l3 2.4-.4-3.500c1.600-1.200 2.400-3 2.400-5.500 0-4-4-7-9-7z",
+        "pen" to "M15.500 3.500l5 5L9 20l-6 1 1-6z",
+        "pencil" to "M20 3l1 1-9 9-1.500-1.500z M9 13a3.500 3.500 0 1 1-3.500 3.500C5.500 15 7 13 9 13z",
+        "highlighter" to "M14 3l7 7-8 8-7-7z M4 14l6 6-4 1-3-3z",
+        "eraser" to "M13 3l8 8-9 9H7l-5-5z",
+        "tape" to "M3 8l3-3h12l3 3v8l-3 3H6l-3-3z",
+        "shapes" to "M3 4h9v9H3z M14 11l7 10h-14z",
+        "image" to "M3 5h18v14H3z",
+        "text" to "M4 4h16v16H4z",
+        "sticky" to "M4 4h16v11l-5 5H4z",
+        "sticker" to "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+        "table" to "M3 4h8v7H3z M13 4h8v7h-8z M3 13h8v7H3z M13 13h8v7h-8z",
+        "clipboard" to "M4 8h16v12H4z M8 3h8v3H8z",
+        "add_element" to "M3 4h10v7H3z M3 13h18v7H3z M17 3h2v2h2v2h-2v2h-2V7h-2V5h2z",
+        "loupe" to "M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14z M15.500 15l5.500 5.500-1.500 1.500-5.500-5.500z",
+        "ruler" to "M3 15L15 3l6 6L9 21z",
+        "recorder" to "M9 3h6v11a3 3 0 0 1-6 0z M11 17h2v4h-2z",
+        "laser" to "M12 2l2.500 7.500L22 12l-7.500 2.500L12 22l-2.500-7.500L2 12l7.500-2.500z",
+        "settings" to "M12 2l2 3.500 4-.5.500 4 3.500 2-3.500 2-.5 4-4-.5L12 22l-2-3.500-4 .5-.5-4L2 12l3.500-2 .5-4 4 .5z",
+        "fill" to "M11 3l9 9-7.500 7.500a2 2 0 0 1-2.800 0L3.500 13.300a2 2 0 0 1 0-2.800z M20 15.500c1.300 1.800 2 3 2 4a2 2 0 1 1-4 0c0-1 .7-2.200 2-4z",
+    )
     val Info by lazy { line("info", "M12 3a9 9 0 1 0 .01 0 M12 11v5.5 M12 7.6v.2") }
     val List by lazy { line("list", "M4 5.5h16 M4 10h16 M4 14.5h16 M4 19h16", width = 2.2f) }
     val NaturalNib by lazy { line("natural", "M4 20.2L13.6 3.8 20.2 10.2z M11.9 7.2l5.3 5.3 M4 20.2l2.6-.7") }
@@ -172,6 +220,33 @@ internal object EditorIcons {
         ICON_DP,
         ICON_DP,
     ).addPath(PathParser().parsePathString(path).toNodes(), fill = SolidColor(Color.Black)).build()
+
+    /**
+     * Three squares overlapping from the top left to the bottom right, read as a stack seen from above: the top one is the front and
+     * the bottom one the back. The one at [solid] (0 top, 1 middle, 2 bottom) is filled.
+     */
+    private fun stack(name: String, solid: Int): ImageVector {
+        val squares = listOf(
+            "M3 3h9v9H3z",
+            "M7.5 7.5h9v9h-9z",
+            "M12 12h9v9h-9z",
+        )
+        val builder = ImageVector.Builder(name, ICON_DP.dp, ICON_DP.dp, ICON_DP, ICON_DP)
+        // The bottom one first and the top one last, so the top one covers the lines of the ones under it.
+        for (k in squares.indices.reversed()) {
+            val nodes = PathParser().parsePathString(squares[k]).toNodes()
+            if (k == solid) {
+                builder.addPath(nodes, fill = SolidColor(Color.Black), stroke = SolidColor(Color.Black), strokeLineWidth = STROKE_WIDTH, strokeLineJoin = StrokeJoin.Round)
+            } else {
+                builder.addPath(nodes, stroke = SolidColor(Color.Black), strokeLineWidth = STROKE_WIDTH, strokeLineJoin = StrokeJoin.Round)
+            }
+        }
+        return builder.build()
+    }
+
+    val BringToFront by lazy { stack("bring-to-front", 0) }
+    val MoveToMiddle by lazy { stack("move-to-middle", 1) }
+    val SendToBack by lazy { stack("send-to-back", 2) }
 
     private fun rrect(x: Float, y: Float, w: Float, h: Float, r: Float): String {
         val innerW = w - 2 * r

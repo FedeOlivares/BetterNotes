@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Toolbar settings -->
+    <string name="toolbar_settings_title">Toolbar settings</string>
+    <string name="toolbar_move">Move toolbar</string>
+    <string name="toolbar_grid">Grid</string>
+    <string name="toolbar_move_hint">Drag the toolbar with a long press and let go near the edge you want.</string>
+    <string name="toolbar_grid_cross">Center cross</string>
+    <string name="toolbar_grid_thirds">Thirds</string>
+    <string name="toolbar_not_built">Not available yet</string>
+    <string name="toolbar_color">Change toolbar color</string>
+    <string name="toolbar_color_default">Theme color</string>
+    <string name="toolbar_color_custom">Custom color</string>
+    <string name="toolbar_color_hex">Hex code</string>
+    <string name="toolbar_color_apply">Apply</string>
+    <!-- Selection -->
+    <string name="selection_lock">Lock in place</string>
+    <string name="selection_unlock">Unlock</string>
+    <string name="selection_note_color">Note color</string>
+    <string name="selection_keep_open">Keep open</string>
+    <string name="selection_translucent">Translucent</string>
+    <!-- Highlighter -->
+    <string name="panel_no_overlap">No overlap</string>
+    <string name="info_no_overlap">Going over the same place again does not make it darker. Strokes with this on are blended as one.</string>
+    <!-- Clipboard -->
+    <string name="clipboard_title">Clipboard</string>
+    <string name="clipboard_empty">Nothing copied yet. Copy text or a picture, then open this again.</string>
+    <string name="clipboard_picture">Picture</string>
+    <string name="clipboard_clear">Clear the list</string>
+    <plurals name="clipboard_items">
+        <item quantity="one">%d item from a page</item>
+        <item quantity="other">%d items from a page</item>
+    </plurals>
+    <string name="info_select_locked">Locked items are skipped unless this is on. Selected locked items cannot be moved or resized.</string>
+    <!-- Page rotation -->
+    <string name="rotation_reset">Turn the page upright</string>
+    <string name="panel_keep_open">Keep open</string>
+    <string name="info_keep_open">New post-its stay open when you tap or write elsewhere on the page. Change one later from the ... button under its selection.</string>
+    <string name="add_page">Add a page</string>
+    <string name="toolbar_position">Toolbox position</string>
+    <string name="toolbar_reorder">Reorder tools</string>
+    <string name="toolbar_edge_top">Top</string>
+    <string name="toolbar_edge_bottom">Bottom</string>
+    <string name="toolbar_edge_left">Left</string>
+    <string name="toolbar_edge_right">Right</string>
+    <string name="toolbar_tool_hide">Hide from the toolbar</string>
+    <string name="toolbar_tool_show">Show in the toolbar</string>
+    <string name="toolbar_tool_drag">Drag to reorder</string>
+    <string name="toolbar_organize_icons">Organize icons</string>
+    <string name="toolbar_customize_title">Customize toolbar</string>
+</resources>

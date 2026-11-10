@@ -71,6 +71,23 @@ class EditTest {
     }
 
     @Test
+    fun `items go to the front, the middle or the back and undo`() {
+        for (id in 1L..6L) add(id)
+        // Items 2 and 4 to the front: they keep their order, and the rest keeps its own.
+        history.perform(rearrange(pageId, content, intArrayOf(1, 3), ZPlace.FRONT)!!.edit, target)
+        assertEquals(listOf(1L, 3L, 5L, 6L, 2L, 4L), content.ids())
+        history.undo(target)
+        assertEquals(listOf(1L, 2L, 3L, 4L, 5L, 6L), content.ids())
+        // Item 6 to the back, and item 1 to the middle of what is left: halfway through five others.
+        history.perform(rearrange(pageId, content, intArrayOf(5), ZPlace.BACK)!!.edit, target)
+        assertEquals(listOf(6L, 1L, 2L, 3L, 4L, 5L), content.ids())
+        history.perform(rearrange(pageId, content, intArrayOf(1), ZPlace.MIDDLE)!!.edit, target)
+        assertEquals(listOf(6L, 2L, 1L, 3L, 4L, 5L), content.ids())
+        // Where they already are, nothing happens.
+        assertEquals(null, rearrange(pageId, content, intArrayOf(5), ZPlace.FRONT))
+    }
+
+    @Test
     fun `remove restores items to their old positions`() {
         add(1)
         add(2)

@@ -23,6 +23,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -74,6 +79,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.betternotes.R
 import app.betternotes.canvas.physicalDpi
+import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.library.Library
 import app.betternotes.core.library.LibraryEntry
 import app.betternotes.core.library.LibrarySort
@@ -93,6 +99,8 @@ import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
+private const val LIFT_SCALE = 1.04f
+private const val LIFT_ALPHA = 0.9f
 private val MinCardWidth = 300.dp
 private val SideMargin = 22.dp
 private val CardGap = 34.dp
@@ -119,6 +127,7 @@ private sealed interface PendingDialog {
     class Rename(val entry: LibraryEntry) : PendingDialog
     class Move(val ids: Set<Long>) : PendingDialog
     class Tags(val entry: LibraryEntry) : PendingDialog
+    class EditFolder(val entry: LibraryEntry) : PendingDialog
     class DeleteForever(val entry: LibraryEntry) : PendingDialog
     data object EmptyBin : PendingDialog
     data object AskName : PendingDialog
@@ -196,12 +205,15 @@ internal fun LibraryScreen(
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
     BackHandler(adding) { adding = false }
+    var newNotebook by remember { mutableStateOf(false) }
+    BackHandler(newNotebook) { newNotebook = false }
     val flows = rememberNewItemActions(
         repository,
         settings,
         folderForNewItems,
         onOpenDocument,
         onNewFolder = { dialog = PendingDialog.NewFolder },
+        onNewNotebook = { newNotebook = true },
         importPdf = { uri, password ->
             scope.launch {
                 when (repository.importPdf(context.contentResolver, uri, folderForNewItems, password)) {
@@ -213,14 +225,24 @@ internal fun LibraryScreen(
         },
     )
 
-    Box(Modifier.fillMaxSize().background(colors.background)) {
+    // The home is blurred while the New Notebook dialog is over it, so the dialog stands out on top.
+    val behindDialog = if (newNotebook) Modifier.blur(14.dp) else Modifier
+    Box(Modifier.fillMaxSize().then(behindDialog).background(colors.background)) {
         TopGlow(colors)
         val current = library
         val entries = remember(current, view, preferences.sort) {
             current?.list(view, preferences.sort).orEmpty()
         }
         val listed = preferences.layout == LibraryLayout.LIST
+        val gridState = rememberLazyGridState()
+        val drag = remember { DragState() }
+        val density = LocalDensity.current
+        val outZone = 76.dp
+        val canMoveOut = openFolder != null
+        val organizable = view is LibraryView.InFolder && selection == null
+        var gridHeight by remember { mutableFloatStateOf(0f) }
         LazyVerticalGrid(
+            state = gridState,
             columns = if (listed) GridCells.Fixed(1) else GridCells.Adaptive(MinCardWidth),
             horizontalArrangement = Arrangement.spacedBy(CardGap),
             contentPadding = PaddingValues(
@@ -228,7 +250,30 @@ internal fun LibraryScreen(
                 end = SideMargin,
                 bottom = 110.dp,
             ),
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { gridHeight = it.height.toFloat() }
+                .dragToOrganize(
+                    enabled = organizable,
+                    state = gridState,
+                    drag = drag,
+                    entries = { entries.map { it.id to it.isFolder } },
+                    listed = listed,
+                    outZonePx = with(density) { outZone.toPx() },
+                    canMoveOut = canMoveOut,
+                    onDrop = { id, target ->
+                        val here = (view as? LibraryView.InFolder)?.id
+                        when (target) {
+                            is DropTarget.Into -> repository.place(id, target.folderId, null, emptyList())
+                            DropTarget.Out -> repository.place(id, openFolder?.parentId, null, emptyList())
+                            is DropTarget.Before -> {
+                                // What was on screen becomes the order, so the item lands where it was seen.
+                                repository.place(id, here, target.beforeId, entries.map { it.id })
+                                preferences.updateSort(LibrarySort.MANUAL)
+                            }
+                        }
+                    },
+                ),
         ) {
             item(span = { GridItemSpan(maxLineSpan) }, contentType = "header") {
                 Header(
@@ -266,16 +311,42 @@ internal fun LibraryScreen(
                     }
                 }
                 val count = current?.itemCount(entry.id) ?: 0
-                Box(Modifier.padding(bottom = if (listed) RowGap else CardGap)) {
+                val lifted = drag.id == entry.id
+                Box(
+                    Modifier
+                        .padding(bottom = if (listed) RowGap else CardGap)
+                        .zIndex(if (lifted) 1f else 0f)
+                        .graphicsLayer {
+                            if (lifted) {
+                                val at = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == entry.id }?.offset
+                                if (at != null) {
+                                    translationX = drag.finger.x - drag.grab.x - at.x
+                                    translationY = drag.finger.y - drag.grab.y - at.y
+                                }
+                                scaleX = LIFT_SCALE
+                                scaleY = LIFT_SCALE
+                                alpha = LIFT_ALPHA
+                            }
+                        },
+                ) {
                     val info = entry.document
                     when {
                         listed -> LibraryRow(entry, count, nowMs, repository.thumbnails, picked, actions, open)
                         info != null -> DocumentCard(entry, info, nowMs, repository.thumbnails, picked, actions, open)
-                        else -> FolderCard(entry, count, picked, actions, open)
+                        else -> {
+                            val shown = if (entry.style.previews) {
+                                current?.list(LibraryView.InFolder(entry.id), preferences.sort).orEmpty().filter { it.document != null }.take(3)
+                            } else {
+                                emptyList()
+                            }
+                            FolderCard(entry, count, shown, repository.thumbnails, picked, actions, open)
+                        }
                     }
                 }
             }
         }
+        DragAutoScroll(gridState, drag, gridHeight, with(density) { 90.dp.toPx() })
+        DragOverlay(drag, canMoveOut, outZone, Modifier.fillMaxSize())
         BottomScrim(colors, Modifier.align(Alignment.BottomCenter))
         selection?.let { chosen ->
             SelectionBar(
@@ -312,6 +383,25 @@ internal fun LibraryScreen(
         dialog = null
         // A move ends the selection it was made for.
         if (selection?.isNotEmpty() == true) selection = null
+    }
+    if (newNotebook) {
+        NewNotebookScreen(
+            flows.notebookTitle,
+            onCreate = { choice ->
+                newNotebook = false
+                if (choice.planner) {
+                    val setup = app.betternotes.core.planner.PlannerPages.defaultSetup(java.time.LocalDate.now())
+                    repository.createPlanner(choice.title, folderForNewItems, setup, choice.language, flows.open)
+                    return@NewNotebookScreen
+                }
+                val a4 = PageSize.A4
+                val size = if (choice.landscape) PageSize(a4.heightPt, a4.widthPt) else a4
+                // Edit opens the notebook on its cover, where the design is items to edit; Create opens it on its first page.
+                val open: (Long) -> Unit = if (choice.edit) { id -> onOpenDocument(id, app.betternotes.ui.MainActivity.START_COVER) } else flows.open
+                repository.createNotebook(choice.title, folderForNewItems, choice.coverId, choice.paper, size, choice.language, choice.edit, open)
+            },
+            onCancel = { newNotebook = false },
+        )
     }
     if (showingSettings) {
         val current by settings.settings.collectAsStateWithLifecycle()
@@ -358,6 +448,14 @@ private fun ShowDialog(
             targets = library?.moveTargets(pending.ids).orEmpty(),
             onMove = { folder ->
                 pending.ids.forEach { repository.move(it, folder) }
+                dismiss()
+            },
+            onDismiss = dismiss,
+        )
+        is PendingDialog.EditFolder -> FolderStyleDialog(
+            initial = pending.entry.style,
+            onConfirm = {
+                repository.setFolderStyle(pending.entry.id, it)
                 dismiss()
             },
             onDismiss = dismiss,
@@ -425,7 +523,8 @@ private fun cardActions(
     )
 } else {
     val star = if (entry.starred) R.string.library_unstar else R.string.library_star
-    listOf(
+    listOfNotNull(
+        if (entry.isFolder) CardAction(stringResource(R.string.library_edit)) { ask(PendingDialog.EditFolder(entry)) } else null,
         CardAction(stringResource(R.string.library_rename)) { ask(PendingDialog.Rename(entry)) },
         CardAction(stringResource(star)) { repository.setStarred(entry.id, !entry.starred) },
         CardAction(stringResource(R.string.library_tags)) { ask(PendingDialog.Tags(entry)) },
@@ -716,13 +815,27 @@ private fun OptionsMenu(
                 onClick = choose { preferences.updateLayout(LibraryLayout.LIST) },
             )
             OptionDivider()
-            val byName = preferences.sort == LibrarySort.NAME
+            val sort = preferences.sort
             OptionRow(
                 LibraryIcons.SortDown,
                 stringResource(R.string.library_sort_by),
-                detail = stringResource(if (byName) R.string.library_sort_name else R.string.library_sort_modified),
+                detail = stringResource(
+                    when (sort) {
+                        LibrarySort.NAME -> R.string.library_sort_name
+                        LibrarySort.MANUAL -> R.string.library_sort_manual
+                        LibrarySort.MODIFIED -> R.string.library_sort_modified
+                    },
+                ),
                 height = 64.dp,
-                onClick = choose { preferences.updateSort(if (byName) LibrarySort.MODIFIED else LibrarySort.NAME) },
+                onClick = choose {
+                    preferences.updateSort(
+                        when (sort) {
+                            LibrarySort.MODIFIED -> LibrarySort.NAME
+                            LibrarySort.NAME -> LibrarySort.MANUAL
+                            LibrarySort.MANUAL -> LibrarySort.MODIFIED
+                        },
+                    )
+                },
             )
             if (shelf == LibraryView.Bin) {
                 OptionDivider()

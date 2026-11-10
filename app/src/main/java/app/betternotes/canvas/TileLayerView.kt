@@ -9,7 +9,13 @@ import androidx.core.graphics.withTranslation
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.TileGrid
 import app.betternotes.core.geometry.Viewport
+import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.cos
+import kotlin.math.floor
+import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /** Paints a square of the document. See [PagePainter.paint] for the arguments. */
@@ -39,6 +45,16 @@ internal class TileLayerView(
     private var tileScale = 0f
     private var generation = 0
 
+    /**
+     * How far the page is turned on screen, in degrees clockwise. The canvas turns this view's drawing, so the tiles that
+     * show must cover the screen's corners too, which are further out than the view itself.
+     */
+    var turn = 0f
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     /** Called with the time each tile took to record, for the performance probe. */
     var onTileRecorded: ((nanos: Long) -> Unit)? = null
 
@@ -46,16 +62,41 @@ internal class TileLayerView(
     fun invalidateRegion(region: Bounds) {
         val scale = tileScale
         if (scale == 0f) return
+        val margin = DIRTY_MARGIN_PX / scale
         for (tile in slots) {
             if (tile == null) continue
             val left = tile.column * TILE_PX / scale - OVERLAP_PX / scale
             val top = tile.row * TILE_PX / scale - OVERLAP_PX / scale
             val extent = (TILE_PX + 2 * OVERLAP_PX) / scale
-            if (left <= region.right && region.left <= left + extent && top <= region.bottom && region.top <= top + extent) {
+            if (left <= region.right + margin && region.left - margin <= left + extent && top <= region.bottom + margin && region.top - margin <= top + extent) {
                 tile.dirty = true
             }
         }
         invalidate()
+    }
+
+    private var afterPaint: (() -> Unit)? = null
+    private var paintsToWait = 0
+    private val flushAfterPaint = Runnable { runAfterPaint() }
+
+    /**
+     * Runs [action] once the tiles have drawn [paints] more times, which is when what was just invalidated has been recorded and had a
+     * frame or two to reach the screen, or after [MAX_HOLD_MS] at the latest. A caller still waiting from before is run first.
+     */
+    fun afterPaints(paints: Int, action: () -> Unit) {
+        runAfterPaint()
+        afterPaint = action
+        paintsToWait = paints
+        removeCallbacks(flushAfterPaint)
+        postDelayed(flushAfterPaint, MAX_HOLD_MS)
+        invalidate()
+    }
+
+    private fun runAfterPaint() {
+        val action = afterPaint ?: return
+        afterPaint = null
+        removeCallbacks(flushAfterPaint)
+        action()
     }
 
     /** Marks every tile as out of date. */
@@ -71,7 +112,8 @@ internal class TileLayerView(
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        val needed = TileGrid(TILE_PX, max(w, h))
+        // Turned, the screen reaches as far as its diagonal.
+        val needed = TileGrid(TILE_PX, ceil(hypot(w.toFloat(), h.toFloat())).toInt())
         if (needed.dimension > (grid?.dimension ?: 0)) {
             discardTiles()
             grid = needed
@@ -101,10 +143,18 @@ internal class TileLayerView(
         val panX = if (ratio == 1f) viewport.panX.roundToInt().toFloat() else viewport.panX
         val panY = if (ratio == 1f) viewport.panY.roundToInt().toFloat() else viewport.panY
 
-        val firstColumn = TileGrid.firstVisible(panX, onScreen)
-        val lastColumn = TileGrid.lastVisible(panX, onScreen, width)
-        val firstRow = TileGrid.firstVisible(panY, onScreen)
-        val lastRow = TileGrid.lastVisible(panY, onScreen, height)
+        // The part of the flat page that the screen shows: the screen itself, or the box around it once turned.
+        val radians = Math.toRadians(turn.toDouble())
+        val cos = abs(cos(radians)).toFloat()
+        val sin = abs(sin(radians)).toFloat()
+        val halfWidth = (width * cos + height * sin) / 2f
+        val halfHeight = (width * sin + height * cos) / 2f
+        val left = width / 2f - halfWidth
+        val top = height / 2f - halfHeight
+        val firstColumn = floor((left - panX) / onScreen).toInt()
+        val lastColumn = ceil((left + 2 * halfWidth - panX) / onScreen).toInt() - 1
+        val firstRow = floor((top - panY) / onScreen).toInt()
+        val lastRow = ceil((top + 2 * halfHeight - panY) / onScreen).toInt() - 1
 
         var prefetchBudget = PREFETCH_TILES_PER_FRAME
         var prefetchPending = false
@@ -129,6 +179,9 @@ internal class TileLayerView(
             }
         }
         if (prefetchPending) postInvalidateOnAnimation()
+        if (afterPaint != null) {
+            if (--paintsToWait <= 0) post(flushAfterPaint) else postInvalidateOnAnimation()
+        }
     }
 
     private fun tileAt(grid: TileGrid, column: Int, row: Int): Tile {
@@ -193,7 +246,13 @@ internal class TileLayerView(
         const val OVERLAP_PX = 1
         const val NODE_PX = TILE_PX + 2 * OVERLAP_PX
 
+        /** Tiles redrawn for a change reach this far past it, so a line cut by a tile edge is never left stale. */
+        const val DIRTY_MARGIN_PX = 4f
+
         /** Limits the cost of drawing ahead, so a frame stays cheap while the ring fills up. */
         const val PREFETCH_TILES_PER_FRAME = 2
+
+        /** The longest a pen stroke on the wet layer waits for the tiles to show it. */
+        const val MAX_HOLD_MS = 600L
     }
 }

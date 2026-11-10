@@ -66,6 +66,7 @@ import app.betternotes.core.settings.AutoName
 import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.settings.KeyChord
 import app.betternotes.core.settings.NewNoteName
+import app.betternotes.ui.theme.TemplateLanguage
 import app.betternotes.core.settings.ScreenCalibration
 import app.betternotes.search.InkModels
 import android.view.KeyEvent
@@ -200,6 +201,19 @@ private fun GeneralCard() {
             AppLanguage.entries,
             { it.nativeName },
         ) { it.apply(context) }
+        DropdownRow(
+            stringResource(R.string.settings_template_language),
+            preferences.templateLanguage,
+            TemplateLanguage.entries,
+            {
+                when (it) {
+                    TemplateLanguage.AUTO -> stringResource(R.string.settings_template_language_auto)
+                    TemplateLanguage.ENGLISH -> "English"
+                    TemplateLanguage.SPANISH -> "Español"
+                }
+            },
+            detail = stringResource(R.string.settings_template_language_detail),
+        ) { preferences.updateTemplateLanguage(it) }
         ToggleRow(stringResource(R.string.library_dark_mode), preferences.theme == ThemeMode.DARK) { dark ->
             preferences.updateTheme(if (dark) ThemeMode.DARK else ThemeMode.LIGHT)
         }

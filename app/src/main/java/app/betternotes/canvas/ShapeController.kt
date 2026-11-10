@@ -1,6 +1,8 @@
 package app.betternotes.canvas
 
 import android.graphics.Canvas
+import androidx.core.graphics.withMatrix
+import android.graphics.Matrix
 import androidx.core.graphics.withScale
 import androidx.core.graphics.withTranslation
 import app.betternotes.core.geometry.Viewport
@@ -8,6 +10,7 @@ import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.TapePathItem
+import app.betternotes.core.model.withId
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.core.tools.smoothTapePath
 import app.betternotes.core.model.ShapeKind
@@ -18,13 +21,14 @@ import kotlin.math.hypot
 /** Dragging out a new shape. Until the pen lifts it floats over the page, drawn by the same painter. */
 internal class ShapeController(
     private val viewport: Viewport,
-    private val pageOriginX: (pageIndex: Int) -> Float,
-    private val pageOriginY: (pageIndex: Int) -> Float,
+    /** Fills the matrix that takes a point of a page to the screen, which turns and scales it as the page is. */
+    private val pageToScreenOf: (pageIndex: Int, into: Matrix) -> Unit,
     private val redraw: () -> Unit,
     private val add: (pageIndex: Int, item: PageItem) -> Unit,
     density: Float,
 ) {
     private val guidePainter = AngleGuidePainter(density)
+    private val onScreen = Matrix()
     private var guideEndX = 0f
     private var guideEndY = 0f
     private var guideOn = false
@@ -165,28 +169,57 @@ internal class ShapeController(
         redraw()
     }
 
+    // A stroke the pen has drawn and held, shown as the shape it was closest to until the pen lifts.
+    private var snap: PageItem? = null
+    private var snapPage = -1
+
+    val hasSnap get() = snap != null
+
+    fun showSnap(pageIndex: Int, item: PageItem) {
+        snap = item
+        snapPage = pageIndex
+        redraw()
+    }
+
+    /** The pen lifted: the shape goes onto the page. */
+    fun commitSnap() {
+        val item = snap ?: return
+        val page = snapPage
+        cancelSnap()
+        add(page, item.withId(IdSource.Random.next()))
+    }
+
+    /** The pen lifted over something that takes the shape itself, such as an open note: hands it over without adding it to the page. */
+    fun takeSnap(): PageItem? {
+        val item = snap
+        cancelSnap()
+        return item
+    }
+
+    fun cancelSnap() {
+        snap = null
+        snapPage = -1
+        redraw()
+    }
+
     fun draw(canvas: Canvas) {
+        val held = snap
+        if (held != null) {
+            pageToScreenOf(snapPage, onScreen)
+            canvas.withMatrix(onScreen) { painter.paint(this, held) }
+        }
         val item = preview
         val path = pathPreview
         if (item == null && path == null) return
-        val scale = viewport.pxPerPt
-        canvas.withTranslation(viewport.toScreenX(pageOriginX(pageIndex)), viewport.toScreenY(pageOriginY(pageIndex))) {
-            withScale(scale, scale, 0f, 0f) {
-                if (item != null) painter.paint(this, item)
-                if (path != null) painter.paint(this, path)
-            }
+        pageToScreenOf(pageIndex, onScreen)
+        canvas.withMatrix(onScreen) {
+            if (item != null) painter.paint(this, item)
+            if (path != null) painter.paint(this, path)
         }
         if (guideOn) {
-            val ox = pageOriginX(pageIndex)
-            val oy = pageOriginY(pageIndex)
-            guidePainter.draw(
-                canvas,
-                viewport.toScreenX(ox + startX),
-                viewport.toScreenY(oy + startY),
-                viewport.toScreenX(ox + guideEndX),
-                viewport.toScreenY(oy + guideEndY),
-                AngleGuide.angle(startX, startY, guideEndX, guideEndY),
-            )
+            val ends = floatArrayOf(startX, startY, guideEndX, guideEndY)
+            onScreen.mapPoints(ends)
+            guidePainter.draw(canvas, ends[0], ends[1], ends[2], ends[3], AngleGuide.angle(startX, startY, guideEndX, guideEndY))
         }
     }
 

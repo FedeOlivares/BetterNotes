@@ -37,6 +37,7 @@ import app.betternotes.ui.theme.opensFrom
 
 /** What the "+" panel can start. */
 internal class NewItemActions(
+    val notebook: () -> Unit,
     val text: () -> Unit,
     val canvas: () -> Unit,
     val audio: () -> Unit,
@@ -103,6 +104,11 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
                 )
             }
         }
+        // Create Notebook spans both columns, above Text and Canvas.
+        Row(Modifier.padding(horizontal = PanelSide)) {
+            StartTile(LibraryIcons.Notebook, R.string.library_new_notebook, null, Modifier.weight(1f), choose(actions.notebook))
+        }
+        Spacer(Modifier.height(17.dp))
         Row(Modifier.padding(horizontal = PanelSide), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             StartTile(LibraryIcons.TextCursor, R.string.library_new_text, null, Modifier.weight(1f), choose(actions.text))
             StartTile(LibraryIcons.Canvas, R.string.library_new_canvas, null, Modifier.weight(1f), choose(actions.canvas))

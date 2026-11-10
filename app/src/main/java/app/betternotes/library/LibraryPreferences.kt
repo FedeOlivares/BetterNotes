@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import app.betternotes.core.library.LibrarySort
+import app.betternotes.ui.theme.TemplateLanguage
+import app.betternotes.ui.theme.TemplateText
 import app.betternotes.ui.theme.ThemeMode
 
 enum class LibraryLayout { GRID, LIST }
@@ -26,6 +28,22 @@ class LibraryPreferences private constructor(context: Context) {
     /** What the greeting calls the owner. Null until they have been asked, since there is no account. */
     var userName by mutableStateOf(preferences.getString(KEY_NAME, null))
         private set
+
+    /** The language of the words on built-in templates: auto follows the app's language. Shared with the painters. */
+    var templateLanguage: TemplateLanguage
+        get() = TemplateText.chosen
+        private set(value) {
+            TemplateText.chosen = value
+        }
+
+    init {
+        templateLanguage = TemplateLanguage.fromKey(preferences.getString(KEY_TEMPLATE_LANGUAGE, null))
+    }
+
+    fun updateTemplateLanguage(value: TemplateLanguage) {
+        templateLanguage = value
+        preferences.edit { putString(KEY_TEMPLATE_LANGUAGE, value.key) }
+    }
 
     fun updateLayout(value: LibraryLayout) {
         layout = value
@@ -58,6 +76,7 @@ class LibraryPreferences private constructor(context: Context) {
         private const val KEY_SORT = "library_sort"
         private const val KEY_LAYOUT = "library_layout"
         private const val KEY_NAME = "user_name"
+        private const val KEY_TEMPLATE_LANGUAGE = "template_language"
 
         private var instance: LibraryPreferences? = null
 

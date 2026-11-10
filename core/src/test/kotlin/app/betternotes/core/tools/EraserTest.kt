@@ -13,6 +13,7 @@ import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.stroke
 import app.betternotes.core.template.PageBackground
@@ -30,6 +31,24 @@ class EraserTest {
         EraseSession(1, content, mode, radius, ids)
 
     private fun PageContent.strokeAt(i: Int) = this[i] as StrokeItem
+
+    @Test
+    fun `erasing on an open note works inside it and leaves the page alone`() {
+        val inNote = stroke(2, 0f, 10f, 100f, 10f, width = 0f)
+        val onPage = stroke(3, 150f, 60f, 250f, 60f, width = 0f)
+        val note = StickyNoteItem(1, Frame(100f, 50f, 200f, 100f), 0, isOpen = true, items = listOf(inNote))
+        val content = PageContent(listOf(note, onPage))
+        val erase = NoteEraseSession(1, content, 0, EraseMode.PARTIAL, 10f, DEFAULT_ERASABLE, false)
+        // The page point (150, 60) is (50, 10) in the note, the middle of its line, and the page's own line starts right there too.
+        erase.eraseTo(150f, 60f)
+        val inside = (content[0] as StickyNoteItem).items
+        assertEquals(2, inside.size)
+        assertEquals(onPage, content[1])
+        // One edit of the note, from how it was to how it is now.
+        val edit = erase.finish() as app.betternotes.core.edit.ItemsEdit
+        assertEquals(listOf<app.betternotes.core.model.PageItem>(note), edit.removed)
+        assertEquals(listOf(content[0]), edit.added)
+    }
 
     @Test
     fun `erasing the middle splits a stroke and interpolates the cuts`() {

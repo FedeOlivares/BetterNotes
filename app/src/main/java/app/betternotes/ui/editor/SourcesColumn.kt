@@ -55,8 +55,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import app.betternotes.R
+import app.betternotes.library.ThumbnailRenderer
 import app.betternotes.ui.icons.EditorIcons
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.ui.theme.opensFrom
@@ -156,11 +161,32 @@ internal fun SourcesColumn(
             Spacer(Modifier.height(34.dp))
             SectionRow(stringResource(R.string.sources_tabs)) { notices.notBuilt() }
             Spacer(Modifier.height(34.dp))
-            SectionRow(stringResource(R.string.sources_count, 1)) { state.sourcesAddOpen = true }
+            // The binder: the notebook itself, the sources made from here, and notebooks linked as sources.
+            val entries by produceState(emptyList<SourceEntry>(), state.sourcesVersion) {
+                value = withContext(Dispatchers.IO) { actions.sources() }
+            }
+            val currentId = actions.currentSourceId()
+            SectionRow(stringResource(R.string.sources_count, entries.size.coerceAtLeast(1))) { state.sourcesAddOpen = true }
             Spacer(Modifier.height(10.dp))
-            if (info != null) SourceCard(state, info)
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (entry in entries) {
+                    SourceCard(
+                        entry,
+                        current = entry.id == currentId,
+                        onOpen = {
+                            if (entry.id != currentId) actions.onOpenSource(entry)
+                            onClose()
+                        },
+                        onRemove = {
+                            actions.onRemoveSource(entry)
+                            state.sourcesVersion++
+                        },
+                    )
+                }
+            }
         }
-        if (state.sourcesAddOpen) AddToNote(state, sources, recorder, notices, onClose)
+        if (state.sourcesAddOpen) AddToNote(state, actions, sources, recorder, notices, onClose)
+        if (state.notebookPickerOpen) NotebookPicker(state, actions, onClose)
     }
 }
 
@@ -192,42 +218,85 @@ private fun SectionRow(label: String, onAdd: () -> Unit) {
     }
 }
 
-/** The note itself is its first source: its pages, with the first one as the picture. */
+/** One line of the binder: a picture of its first page, its name and its pages. The one open now is marked. */
 @Composable
-private fun SourceCard(state: EditorState, info: DocumentInfo) {
+private fun SourceCard(entry: SourceEntry, current: Boolean, onOpen: () -> Unit, onRemove: () -> Unit) {
     val colors = LocalEditorColors.current
-    val first = remember { state.pages().firstOrNull() }
-    val thumbnail by produceState<Bitmap?>(null, first?.id, state.historyVersion) {
-        value = first?.let { state.thumbnail(it.id, THUMBNAIL_PX) }
+    val thumbnail by produceState<Bitmap?>(null, entry.id) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                ThumbnailRenderer.render(entry.store)
+            } catch (_: Exception) {
+                null
+            }
+        }
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
-            .background(colors.field)
-            .clickable {
-                state.sourcesOpen = false
-                state.pagesOpen = true
-            }
+            .background(if (current) colors.accentContainer else colors.field)
+            .clickable(role = Role.Button, onClick = onOpen)
             .padding(10.dp),
     ) {
         Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(colors.pill)) {
             thumbnail?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         }
         Spacer(Modifier.width(14.dp))
-        Column {
-            Text(info.title, color = colors.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text(stringResource(R.string.sources_pages, info.pageCount), color = colors.label, fontSize = 13.sp)
+        Column(Modifier.weight(1f)) {
+            Text(entry.title, color = colors.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(stringResource(R.string.sources_pages, entry.pageCount), color = colors.label, fontSize = 13.sp)
+        }
+        if (entry.kind != SourceKind.OWNER) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onRemove),
+            ) { Icon(EditorIcons.Trash, stringResource(R.string.sources_remove), tint = colors.label, modifier = Modifier.size(20.dp)) }
         }
     }
 }
 
+/** The library's notebooks that can be linked into the binder. */
+@Composable
+private fun NotebookPicker(state: EditorState, actions: EditorActions, closeColumn: () -> Unit) {
+    val colors = LocalEditorColors.current
+    val notebooks = remember { actions.linkableNotebooks() }
+    androidx.compose.material3.AlertDialog(
+        modifier = Modifier.opensFrom(OpenFrom.Center),
+        onDismissRequest = { state.notebookPickerOpen = false },
+        title = { Text(stringResource(R.string.add_notebook)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                if (notebooks.isEmpty()) Text(stringResource(R.string.sources_no_notebooks), color = colors.label, fontSize = 15.sp)
+                for ((id, name) in notebooks) {
+                    Text(
+                        name,
+                        color = colors.title,
+                        fontSize = 17.sp,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(role = Role.Button) {
+                                state.notebookPickerOpen = false
+                                state.onAddSource?.invoke(SourceRequest.Notebook(id))
+                            }
+                            .padding(vertical = 12.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = { state.notebookPickerOpen = false }) { Text(stringResource(R.string.scan_cancel)) }
+        },
+    )
+}
 private class AddOption(val icon: ImageVector, val title: Int, val subtitle: Int, val action: () -> Unit)
 
 /** The sheet that lists what can be added to the note. Each card does what the toolbar's tool does. */
 @Composable
-private fun AddToNote(state: EditorState, sources: ImageSources, recorder: RecorderState, notices: Notices, closeColumn: () -> Unit) {
+private fun AddToNote(state: EditorState, actions: EditorActions, sources: ImageSources, recorder: RecorderState, notices: Notices, closeColumn: () -> Unit) {
     val colors = LocalEditorColors.current
     fun done(action: () -> Unit): () -> Unit = {
         state.sourcesAddOpen = false
@@ -235,13 +304,18 @@ private fun AddToNote(state: EditorState, sources: ImageSources, recorder: Recor
         action()
     }
     val options = listOf(
-        AddOption(EditorIcons.Text, R.string.add_text, R.string.add_text_detail, done { state.select(ActiveTool.TEXT) }),
-        AddOption(EditorIcons.Mic, R.string.add_audio, R.string.add_audio_detail, done { recorder.menuOpen = true }),
-        AddOption(EditorIcons.Pen, R.string.add_canvas, R.string.add_canvas_detail, done { notices.notBuilt() }),
-        AddOption(EditorIcons.Image, R.string.add_photos, R.string.add_photos_detail, done { sources.pickPhoto() }),
-        AddOption(EditorIcons.Camera, R.string.add_take_photo, R.string.add_take_photo_detail, done { sources.takePhoto() }),
-        AddOption(EditorIcons.Scan, R.string.add_scan, R.string.add_scan_detail, done { sources.scan() }),
-        AddOption(EditorIcons.Tray, R.string.add_file, R.string.add_file_detail, done { sources.pickDocument() }),
+        // Everything here becomes a source of the binder, with a canvas of its own. What goes on the open canvas is added
+        // from the toolbar's tools.
+        AddOption(EditorIcons.Mic, R.string.add_audio, R.string.add_audio_source_detail, done { sources.sourceAudio() }),
+        AddOption(EditorIcons.Pen, R.string.add_canvas, R.string.add_canvas_detail, done { state.onAddSource?.invoke(SourceRequest.Canvas) }),
+        AddOption(EditorIcons.Image, R.string.add_photos, R.string.add_photos_detail, done { sources.sourcePhoto() }),
+        AddOption(EditorIcons.Camera, R.string.add_take_photo, R.string.add_take_photo_detail, done { sources.sourceCamera() }),
+        AddOption(EditorIcons.Scan, R.string.add_scan, R.string.add_scan_detail, done { sources.sourceCamera() }),
+        AddOption(EditorIcons.Tray, R.string.add_file, R.string.add_file_detail, done { sources.sourceFile() }),
+        AddOption(EditorIcons.Folder, R.string.add_notebook, R.string.add_notebook_detail, {
+            state.sourcesAddOpen = false
+            state.notebookPickerOpen = true
+        }),
     )
     Box(
         Modifier

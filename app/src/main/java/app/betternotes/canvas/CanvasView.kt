@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import app.betternotes.pdf.PdfThumbnails
 import android.graphics.Canvas
+import android.graphics.DashPathEffect
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
@@ -12,14 +13,17 @@ import android.graphics.RectF
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
+import android.view.View
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
 import android.widget.OverScroller
 import androidx.core.graphics.createBitmap
 import androidx.core.view.isVisible
 import androidx.ink.authoring.InProgressStrokeId
+import app.betternotes.core.model.InkTool
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
 import androidx.ink.brush.InputToolType
@@ -28,27 +32,41 @@ import androidx.ink.strokes.MutableStrokeInputBatch
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInput
 import androidx.input.motionprediction.MotionEventPredictor
+import app.betternotes.core.template.CoverDesign
+import app.betternotes.core.template.toItems
 import app.betternotes.core.edit.BatchEdit
+import app.betternotes.core.template.PageBackground
 import app.betternotes.core.edit.InsertPage
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.edit.Edit
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.edit.MovePage
 import app.betternotes.core.edit.RemovePage
+import app.betternotes.core.edit.SetCover
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
+import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.gesture.GestureConfig
 import app.betternotes.core.gesture.GestureListener
 import app.betternotes.core.gesture.GestureRecognizer
 import app.betternotes.core.gesture.HoldDetector
 import app.betternotes.core.gesture.InputMode
+import app.betternotes.core.gesture.TwoFingerAction
+import app.betternotes.core.gesture.snappedRotation
+import app.betternotes.core.gesture.RotationStep
+import app.betternotes.core.gesture.RotationGesture
 import app.betternotes.core.gesture.PointerKind
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.layout.ScrollDirection
 import app.betternotes.audio.Waveforms
 import app.betternotes.core.model.AudioBar
 import app.betternotes.core.model.AudioItem
+import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.ImageItem
+import app.betternotes.core.model.PageContent
+import app.betternotes.core.model.withId
+import app.betternotes.core.model.withLocked
 import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.Page
@@ -61,11 +79,24 @@ import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TapePathItem
+import app.betternotes.core.planner.PlannerAction
+import app.betternotes.core.template.PageTemplate
+import app.betternotes.core.planner.PlannerPage
+import app.betternotes.core.planner.PlannerPages
+import app.betternotes.core.planner.PlannerPlan
+import app.betternotes.core.planner.PlannerSetup
+import app.betternotes.core.planner.plannerActionAt
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.Document
 import app.betternotes.core.search.TextMatch
+import app.betternotes.search.MlKitRecognizer
+import app.betternotes.search.WordStroke
 import app.betternotes.core.settings.AppSettings
 import app.betternotes.core.settings.EditorAction
 import app.betternotes.core.settings.OneFingerSetting
@@ -74,13 +105,18 @@ import app.betternotes.core.settings.StylusButtonListener
 import app.betternotes.core.settings.StylusButtons
 import app.betternotes.core.settings.StylusEraserEnd
 import app.betternotes.core.tools.EraseMode
+import app.betternotes.core.tools.FittedShape
+import app.betternotes.core.tools.ShapeFit
 import app.betternotes.core.tools.DEFAULT_ERASABLE
 import app.betternotes.core.tools.EraseSession
+import app.betternotes.core.tools.Erasing
+import app.betternotes.core.tools.NoteEraseSession
 import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.Selection
 import app.betternotes.core.tools.Stabilizer
 import app.betternotes.core.tools.StrokeGestures
+import app.betternotes.core.tools.StrokeSmoothing
 import app.betternotes.core.tools.selectWithLasso
 import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
@@ -96,8 +132,12 @@ import app.betternotes.core.tools.typedText
 import app.betternotes.core.tools.withCell
 import app.betternotes.core.tools.withText
 import java.io.File
+import java.io.IOException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -112,21 +152,41 @@ sealed interface CanvasTool {
         /** After a circle-ish stroke, touching its line selects what it surrounds. */
         val circleToLasso: Boolean = false,
         /** 1 is the pen itself; each level above follows it more slowly. */
-        val stabilization: Int = 1,
+        val stabilization: Int = 0,
     ) : CanvasTool
-    data class Eraser(val mode: EraseMode, val radiusPt: Float, val kinds: Set<ItemKind> = DEFAULT_ERASABLE) : CanvasTool
+    data class Eraser(
+        val mode: EraseMode,
+        val radiusPt: Float,
+        val kinds: Set<ItemKind> = DEFAULT_ERASABLE,
+        val lockedToo: Boolean = false,
+    ) : CanvasTool
 
     /** Shows where the pen is, with a fading tail, and leaves nothing on the page. */
     data object Laser : CanvasTool
 
     /** Selects items and moves or resizes the selection. */
-    data class Lasso(val rectangle: Boolean, val kinds: Set<ItemKind>, val fullOnly: Boolean, val anyPortion: Boolean = false) : CanvasTool
+    data class Lasso(
+        val rectangle: Boolean,
+        val kinds: Set<ItemKind>,
+        val fullOnly: Boolean,
+        val anyPortion: Boolean = false,
+        val lockedToo: Boolean = false,
+    ) : CanvasTool
 
     /** Drags out a new shape. */
     data class Shape(val options: ShapeOptions) : CanvasTool
 
     /** Lays a strip of tape between where the pen lands and lifts. */
     data class Tape(val options: TapeOptions) : CanvasTool
+
+    /** The next touch hands its place on the screen to [onPick], which takes the color under it. */
+    data class Pick(val onPick: (x: Float, y: Float) -> Unit) : CanvasTool
+
+    /** Fills the closed region the pen lands in with a color, as one vector item that goes under everything else on the page. */
+    data class Fill(val color: Int, val opacity: Float) : CanvasTool
+
+    /** Puts a saved sticker, its items with the top left corner at the origin, where the pen lands. [assetFile] finds the files of its pictures. */
+    data class Sticker(val items: List<PageItem>, val assetFile: (String) -> File?) : CanvasTool
 
     /** Puts an emoji where the pen lands, at a size in points. */
     data class Emoji(val text: String, val sizePt: Int) : CanvasTool
@@ -146,23 +206,82 @@ sealed interface CanvasTool {
  * it, so that the canvas can end the edit when the pen comes down somewhere else.
  */
 class TextEditRequest(
-    val initial: String,
+    initial: String,
+    left: Float,
+    top: Float,
+    width: Float,
+    height: Float,
+    textSizePx: Float,
+    val color: Int,
+    val style: TextStyle,
+    private val commit: (String) -> Unit,
+    /** How far the page is turned, in degrees clockwise, about ([pivotX], [pivotY]) on the screen. */
+    turnDegrees: Float = 0f,
+    pivotX: Float = 0f,
+    pivotY: Float = 0f,
+) {
+    // The box follows the page as it is panned and zoomed, so these change while it is shown.
+    var left by mutableFloatStateOf(left)
+        private set
+    var top by mutableFloatStateOf(top)
+        private set
+    var width by mutableFloatStateOf(width)
+        private set
+    var height by mutableFloatStateOf(height)
+        private set
+    var textSizePx by mutableFloatStateOf(textSizePx)
+        private set
+    var turnDegrees by mutableFloatStateOf(turnDegrees)
+        private set
+    var pivotX by mutableFloatStateOf(pivotX)
+        private set
+    var pivotY by mutableFloatStateOf(pivotY)
+        private set
+
+    /** What is typed so far. Handwriting that has been read is added to it from outside. */
+    var text by mutableStateOf(initial)
+
+    /** Where the end of the text sits in the box, which is where the next word goes, in pixels from the box's corner. */
+    var endX by mutableFloatStateOf(0f)
+    var endY by mutableFloatStateOf(0f)
+    var lineHeight by mutableFloatStateOf(textSizePx)
+
+    var commitNow: () -> Unit = {}
+
+    fun finish(text: String) = commit(text)
+
+    /** Adds [word] after what is there, with a space between if needed. */
+    fun append(word: String) {
+        text = if (text.isEmpty() || text.last().isWhitespace()) text + word else "$text $word"
+    }
+
+    fun moveTo(
+        left: Float, top: Float, width: Float, height: Float, textSizePx: Float,
+        turnDegrees: Float, pivotX: Float, pivotY: Float,
+    ) {
+        this.left = left
+        this.top = top
+        this.width = width
+        this.height = height
+        this.textSizePx = textSizePx
+        this.turnDegrees = turnDegrees
+        this.pivotX = pivotX
+        this.pivotY = pivotY
+    }
+}
+
+/** A request to play a video where it sits, in view pixels. */
+class VideoPlayRequest(
+    val file: File,
     val left: Float,
     val top: Float,
     val width: Float,
     val height: Float,
-    val textSizePx: Float,
-    val color: Int,
-    val style: TextStyle,
-    private val commit: (String) -> Unit,
-) {
-    var commitNow: () -> Unit = {}
-
-    fun finish(text: String) = commit(text)
-}
-
-/** A request to play a video where it sits, in view pixels. */
-class VideoPlayRequest(val file: File, val left: Float, val top: Float, val width: Float, val height: Float)
+    /** How far the page is turned, in degrees clockwise, about ([pivotX], [pivotY]) on the screen. */
+    val turnDegrees: Float = 0f,
+    val pivotX: Float = 0f,
+    val pivotY: Float = 0f,
+)
 
 /** Reports what happens in the view, for the performance probe. */
 internal interface CanvasObserver {
@@ -199,6 +318,28 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     var onTextEdit: (TextEditRequest?) -> Unit = {}
 
     private var textEdit: TextEditRequest? = null
+    private var textEditIndex = 0
+    private var textEditBox = Frame(0f, 0f, 0f, 0f)
+    private var textEditSize = 0f
+
+    /** Puts the text box being typed in back over its place on the page, after the page was moved or zoomed. */
+    private fun followTextEdit() {
+        val request = textEdit ?: return
+        val layout = layout ?: return
+        val index = textEditIndex
+        val scale = viewport.pxPerPt
+        val box = textEditBox
+        request.moveTo(
+            viewport.toScreenX(layout.originX(index) + box.left),
+            viewport.toScreenY(layout.originY(index) + box.top),
+            box.width * scale,
+            box.height * scale,
+            textEditSize * scale,
+            layout.turn(index),
+            viewport.toScreenX(layout.centerX(index)),
+            viewport.toScreenY(layout.centerY(index)),
+        )
+    }
 
     /** Whether the loupe is showing. */
     var loupeOpen: Boolean
@@ -219,19 +360,24 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun setLoupeArea(left: Float, top: Float, right: Float, bottom: Float) {
         loupe.area.set(left, top, right, bottom)
         if (loupeOpen && loupe.box.isEmpty) recenterLoupe()
+        // The box keeps the window's proportions when the window is made taller or shorter.
+        if (!loupe.box.isEmpty && loupe.area.width() > 0f && loupe.area.height() > 0f) {
+            loupe.box.bottom = loupe.box.top + loupe.box.width() * loupe.area.height() / loupe.area.width()
+        }
         loupe.invalidate()
     }
 
     /** Puts the loupe's box in the middle of the view. */
     fun recenterLoupe() {
-        val layout = layout ?: return
-        if (width == 0 || loupe.area.isEmpty) return
+        if (layout == null || width == 0 || loupe.area.isEmpty) return
         loupe.pageIndex = currentPage
         val world = viewport.visibleWorld(width, height)
         val boxWidth = world.width * LOUPE_BOX_SHARE
         val boxHeight = boxWidth * loupe.area.height() / loupe.area.width()
-        val left = world.centerX - boxWidth / 2f - layout.originX(loupe.pageIndex)
-        val top = world.centerY - boxHeight / 2f - layout.originY(loupe.pageIndex)
+        val left = world.centerX - boxWidth / 2f
+        // In the middle of what shows above the window, so the whole box can be seen and taken hold of.
+        val centerY = viewport.toWorldY(loupe.area.top / 2f)
+        val top = centerY - boxHeight / 2f
         loupe.box.set(left, top, left + boxWidth, top + boxHeight)
         overlay.invalidate()
         loupe.invalidate()
@@ -239,30 +385,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Moves the loupe's box along the line of writing, by its own width. At the page's edge it starts the next line. */
     fun stepLoupe(forward: Boolean) {
+        val layout = layout ?: return
         val size = pages.getOrNull(loupe.pageIndex)?.size
         val step = loupe.box.width() * LOUPE_STEP_SHARE * if (forward) 1f else -1f
         loupe.box.offset(step, 0f)
         if (size != null) {
-            if (forward && loupe.box.left >= size.widthPt) {
-                loupe.box.offsetTo(0f, loupe.box.top + loupe.box.height())
-            } else if (!forward && loupe.box.right <= 0f) {
-                loupe.box.offsetTo((size.widthPt - loupe.box.width()).coerceAtLeast(0f), loupe.box.top - loupe.box.height())
+            val ox = layout.originX(loupe.pageIndex)
+            val oy = layout.originY(loupe.pageIndex)
+            if (forward && loupe.box.left - ox >= size.widthPt) {
+                loupe.box.offsetTo(ox, loupe.box.top + loupe.box.height())
+            } else if (!forward && loupe.box.right - ox <= 0f) {
+                loupe.box.offsetTo(ox + (size.widthPt - loupe.box.width()).coerceAtLeast(0f), loupe.box.top - loupe.box.height())
             }
+            if (oy.isNaN()) return
         }
         overlay.invalidate()
         loupe.invalidate()
     }
 
     private fun drawLoupeBox(canvas: Canvas) {
-        val layout = layout
         if (!loupeOpen || layout == null || loupe.box.isEmpty) return
-        val x = layout.originX(loupe.pageIndex)
-        val y = layout.originY(loupe.pageIndex)
         canvas.drawRect(
-            viewport.toScreenX(x + loupe.box.left),
-            viewport.toScreenY(y + loupe.box.top),
-            viewport.toScreenX(x + loupe.box.right),
-            viewport.toScreenY(y + loupe.box.bottom),
+            viewport.toScreenX(loupe.box.left),
+            viewport.toScreenY(loupe.box.top),
+            viewport.toScreenX(loupe.box.right),
+            viewport.toScreenY(loupe.box.bottom),
             loupeBoxPaint,
         )
     }
@@ -329,7 +476,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         clampPan()
         if (last) settlePan()
         tiles.invalidate()
-        onViewMoved()
+        viewMoved()
         overlay.invalidate()
     }
 
@@ -342,7 +489,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         layout.moveToPage(viewport, index, width, height, pageMarginPx)
         clampPan()
         settlePan()
-        onViewMoved()
+        viewMoved()
     }
 
     /** Called whenever [canUndo] or [canRedo] may have changed. */
@@ -408,6 +555,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Called for a stylus button or shortcut's action that isn't the canvas's, as for choosing a tool. */
     var onToolAction: (EditorAction) -> Boolean = { false }
+
+    /** Called with the selected items when the button that saves them as a sticker is pressed. */
+    var onSaveSticker: (List<PageItem>) -> Unit = {}
 
     /** Called when a circle drawn with the pen has been touched and the lasso should take over. */
     var onLassoRequested: () -> Unit = {}
@@ -487,6 +637,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private val tiles = TileLayerView(context, viewport, ::paintTile, backdropColor)
     private val wet = InProgressStrokesView(context).apply { textureBitmapStore = BrushTextures }
+    private val flight = WordFlightView(context)
     private val overlay = CanvasOverlayView(context, viewport)
     private val loupe = LoupeView(context).apply {
         visibility = GONE
@@ -544,6 +695,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             viewport.panX = scroller.currX.toFloat()
             viewport.panY = scroller.currY.toFloat()
             tiles.invalidate()
+            // The selection's box and handles are drawn on the overlay in screen positions, so they follow the page as it flies.
+            overlay.invalidate()
             onViewMoved()
             postOnAnimation(this)
         }
@@ -552,9 +705,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     // The stroke or eraser drag in progress.
     private var currentEvent: MotionEvent? = null
     private var strokeId: InProgressStrokeId? = null
+
+    // ---- Turning a page: it turns about its middle, and the pages after it make room ----
+
+    /** How far the page in view is turned, in degrees clockwise. */
+    var rotationDegrees = 0f
+        private set
+
+    /** Called when the turn of the page in view changes, and again with `turning` false once the fingers lift. */
+    var onRotationChanged: (degrees: Float, turning: Boolean) -> Unit = { _, _ -> }
+
+    /** Called when a finger taps where the turn indicator sits while it is hidden. */
+    var onRotationBadgeTapped: () -> Unit = {}
+
+    private val twist = RotationGesture()
+    private var twistId0 = -1
+    private var twistId1 = -1
+
+    /** The page that two fingers are turning, while they do, counted from 0. */
+    private var turningPage = -1
+    private var badgeFingerId = -1
+    private var badgeDownX = 0f
+    private var badgeDownY = 0f
     private var strokeWaitingForEvent = false
     private var strokeStartedInThisEvent = false
-    private var erase: EraseSession? = null
+    private var erase: Erasing? = null
     private var drawPointerId = -1
     private var drawPageIndex = -1
     private var drawStyle = InkStyle()
@@ -576,6 +751,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var lineGuideEndY = 0f
     private var drawScribble = false
     private var drawCircle = false
+    private var holdFit: FittedShape? = null
     private var lastLoop: LoopMark? = null
     private var stabilizer: Stabilizer? = null
     private val stabilized = FloatArray(2)
@@ -614,8 +790,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private val shapes by lazy {
         ShapeController(
             viewport,
-            { index -> layout?.originX(index) ?: 0f },
-            { index -> layout?.originY(index) ?: 0f },
+            { index, into -> pageToScreenMatrix(index, into) },
             { overlay.invalidate() },
             { index, item ->
                 val open = editor
@@ -635,10 +810,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         LassoController(
             viewport,
             resources.displayMetrics.density,
-            { index -> layout?.originX(index) ?: 0f },
-            { index -> layout?.originY(index) ?: 0f },
+            { index, into -> pageToScreenMatrix(index, into) },
+            { index -> layout?.turn(index) ?: 0f },
             { overlay.invalidate() },
-        )
+        ).also { controller ->
+            controller.onSelectionChanged = { onSelectionChanged(it?.items) }
+            controller.onCopied = { onItemsCopied(it) }
+            controller.onMenu = { onSelectionMenu() }
+            controller.onSaveSticker = { onSaveSticker(it) }
+        }
     }
 
     private class PendingStroke(
@@ -648,7 +828,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val stickyId: Long?,
         val scribbleToErase: Boolean = false,
         val circleToLasso: Boolean = false,
-    )
+        /** Handwriting for a text box: kept as ink until it is read, and never added to the page. */
+        val handwriting: Boolean = false,
+        val toScreen: Matrix? = null,
+    ) {
+        /** Set when the pen is held at the end of the line: the line is then smoothed when it is finished. */
+        var smoothOnFinish = false
+    }
 
     /** The last circle-ish stroke, which a touch on its line turns into a selection. */
     private class LoopMark(val pageId: Long, val item: StrokeItem)
@@ -661,11 +847,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         addView(tiles, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(wet, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(flight, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(loupe, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         overlay.extraDraw = { canvas ->
             drawAudioBars(canvas)
             drawLineGuide(canvas)
+            drawPageGrid(canvas)
             lasso.draw(canvas)
+            drawFillReveal(canvas)
             shapes.draw(canvas)
             drawLoupeBox(canvas)
         }
@@ -728,15 +917,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val index = editor.document.indexOfPage(match.pageId)
         if (index < 0 || width == 0) return
         stopFling()
-        val originX = layout.originX(index)
-        val originY = layout.originY(index)
         val visible = viewport.visibleWorld(width, height)
         if (match.rects.isEmpty()) {
             layout.moveToPage(viewport, index, width, height, pageMarginPx)
         } else {
             val first = match.rects[0]
             val box = match.rects.fold(first) { all, rect -> all.union(rect) }
-            val target = Bounds(box.left + originX, box.top + originY, box.right + originX, box.bottom + originY)
+            layout.pageToWorld(index, box.centerX, box.centerY, mapped)
+            val target = Bounds(mapped[0] - box.width / 2f, mapped[1] - box.height / 2f, mapped[0] + box.width / 2f, mapped[1] + box.height / 2f)
             if (visible.contains(target)) return
             viewport.panX = width / 2f - target.centerX * viewport.pxPerPt
             viewport.panY = height / 2f - target.centerY * viewport.pxPerPt
@@ -778,6 +966,54 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     val hasSelection get() = lasso.hasSelection
+
+    /** Whether the selection's options bar is open, which takes the place of the "..." button. */
+    var selectionMenuOpen: Boolean
+        get() = lasso.menuOpen
+        set(value) {
+            lasso.menuOpen = value
+        }
+
+    /** Where the options bar goes: its right edge and its top on the screen, or null with nothing selected. */
+    fun selectionMenuAnchor(): FloatArray? {
+        val anchor = lasso.menuAnchor() ?: return null
+        return anchor
+    }
+
+    /** Called when the selection's "..." button is pressed. */
+    var onSelectionMenu: () -> Unit = {}
+
+    /** Called with the items the selection's copy button copied. */
+    var onItemsCopied: (List<PageItem>) -> Unit = {}
+
+    /** Called with the items of the lasso selection, or null when nothing is selected. */
+    var onSelectionChanged: (List<PageItem>?) -> Unit = {}
+
+    /** Changes the selected items as one edit that can be undone. */
+    fun changeSelection(change: (PageItem) -> PageItem) {
+        lasso.changeSelected(change)
+        syncChanges()
+    }
+
+    /** Moves the selection to the front, middle or back of the page's stack. Post-its stay at the bottom, except on the cover. */
+    fun arrangeSelection(place: app.betternotes.core.edit.ZPlace) {
+        lasso.arrangeSelected(place)
+        syncChanges()
+    }
+
+    /** True when the selection is on the cover page. */
+    fun selectionOnCover() = lasso.selectionOnCover()
+
+    /** Changes the selected items on the page as a slider moves; [finishAdjustSelection] records the whole change. */
+    fun adjustSelection(change: (PageItem) -> PageItem) {
+        lasso.adjustSelected(change)
+        syncChanges()
+    }
+
+    fun finishAdjustSelection() {
+        lasso.finishAdjust()
+        syncChanges()
+    }
 
     /** The look of the tape in the lasso selection, if there is any. */
     fun selectedTape(): TapeLook? = lasso.selectedTape()
@@ -879,6 +1115,315 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (done) syncChanges()
     }
 
+    private var resetAnimator: android.animation.ValueAnimator? = null
+
+    /** Turns the page in view back upright, sliding the pages after it back up as it goes, and remembers that. */
+    fun resetRotation() {
+        val layout = layout ?: return
+        val index = currentPageIndex
+        if (index < 0) return
+        resetAnimator?.cancel()
+        val from = layout.turn(index)
+        if (from == 0f) {
+            finishTurn(index)
+            return
+        }
+        resetAnimator = android.animation.ValueAnimator.ofFloat(from, 0f).apply {
+            duration = RESET_TURN_MS
+            addUpdateListener { animation ->
+                val here = layout.centerY(index)
+                val hereX = layout.centerX(index)
+                turnPage(index, animation.animatedValue as Float)
+                // The page keeps its place on the screen while the room it takes changes.
+                viewport.panX += (hereX - layout.centerX(index)) * viewport.pxPerPt
+                viewport.panY += (here - layout.centerY(index)) * viewport.pxPerPt
+                tiles.invalidate()
+                viewMoved()
+                onRotationChanged(rotationDegrees, true)
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    resetAnimator = null
+                    finishTurn(index)
+                }
+            })
+            start()
+        }
+    }
+
+    private fun updatePageToScreen() {
+        screenToPage.invert(pageToScreen)
+    }
+
+    /** Shows the turn of the page in view on the indicator. Each page keeps its own. */
+    private fun syncBadgeToPage() {
+        val layout = layout ?: return
+        if (width == 0 || twist.active) return
+        val index = currentPageIndex
+        if (index !in 0 until layout.pageCount) return
+        val turn = layout.turn(index)
+        if (turn != rotationDegrees) {
+            rotationDegrees = turn
+            onRotationChanged(turn, false)
+        }
+    }
+
+    private fun viewMoved() {
+        followTextEdit()
+        // Ink waiting to be read stays where it was drawn on the screen, so it is read before the page moves from under it.
+        if (written.isNotEmpty() && !writingStroke) {
+            removeCallbacks(wordEnd)
+            convertWord()
+        }
+        syncBadgeToPage()
+        overlay.invalidate()
+        onViewMoved()
+    }
+
+    /** Draws page [index] turned by [degrees], and the pages after it slide to keep their gap from it. */
+    private fun turnPage(index: Int, degrees: Float) {
+        val layout = layout ?: return
+        layout.setTurn(index, degrees)
+        rotationDegrees = degrees
+        tiles.invalidateAll()
+        overlay.invalidate()
+        loupe.invalidate()
+    }
+
+    /** The turn of page [index] is final: it is remembered, and the view settles. */
+    private fun finishTurn(index: Int) {
+        val editor = editor ?: return
+        val layout = layout ?: return
+        val page = editor.document.pages.getOrNull(index) ?: return
+        editor.setPageRotation(page.id, layout.turn(index))
+        clampPan()
+        settlePan()
+        tiles.invalidateAll()
+        overlay.invalidate()
+        loupe.invalidate()
+        rotationDegrees = layout.turn(index)
+        onRotationChanged(rotationDegrees, false)
+    }
+
+    // ---- Two fingers twisting turn the page ----
+
+    private fun twoFingers(event: MotionEvent) =
+        event.pointerCount == 2 &&
+            event.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER &&
+            event.getToolType(1) == MotionEvent.TOOL_TYPE_FINGER
+
+    private fun twistAllowed() =
+        recognizer.config.twoFingers == TwoFingerAction.ZOOM_AND_PAN &&
+            strokeId == null && !rulerVisible && editor != null
+
+    /**
+     * Follows two fingers on the glass and turns the page they are on once they twist. Until then every touch goes on as
+     * usual, so a pinch or a pan is not changed. Returns true for touches the twist has taken.
+     */
+    private fun followTwist(event: MotionEvent): Boolean {
+        if (!twistAllowed()) {
+            if (twist.tracking) endTwist()
+            return false
+        }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                // Fingers in the loupe's window write or move there, and do not turn the page.
+                val inLoupe = loupeOpen && (loupe.contains(event.getX(0), event.getY(0)) || loupe.contains(event.getX(1), event.getY(1)))
+                if (twoFingers(event) && !inLoupe) {
+                    twistId0 = event.getPointerId(0)
+                    twistId1 = event.getPointerId(1)
+                    twist.start(event.getX(0), event.getY(0), event.getX(1), event.getY(1))
+                } else if (twist.tracking) {
+                    endTwist()
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!twist.tracking) return false
+                if (!twoFingers(event) || event.getPointerId(0) != twistId0 || event.getPointerId(1) != twistId1) {
+                    endTwist()
+                    return false
+                }
+                val wasActive = twist.active
+                val step = twist.move(event.getX(0), event.getY(0), event.getX(1), event.getY(1))
+                if (!wasActive && twist.active && !beginTwist(event)) return false
+                if (step != null) applyTwist(step)
+                return twist.active
+            }
+            MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (twist.tracking) {
+                    val took = twist.active
+                    endTwist()
+                    return took
+                }
+            }
+        }
+        return false
+    }
+
+    /**
+     * The twist is past its threshold: the page under the fingers is the one that turns, and the recognizer lets go of them.
+     * Returns false for a page that cannot turn, which leaves the touch to the recognizer.
+     */
+    private fun beginTwist(event: MotionEvent): Boolean {
+        val layout = layout
+        val pages = editor?.document?.pages
+        val middleX = viewport.toWorldX((event.getX(0) + event.getX(1)) / 2f)
+        val middleY = viewport.toWorldY((event.getY(0) + event.getY(1)) / 2f)
+        val index = layout?.pageIndexAt(middleX, middleY)?.takeIf { it >= 0 } ?: currentPageIndex
+        val page = pages?.getOrNull(index)
+        // A page of a PDF, or an infinite canvas, is not turned.
+        if (layout == null || page == null || page.size == null || page.source != PageSource.Blank) {
+            twist.end()
+            return false
+        }
+        turningPage = index
+        removeCallbacks(deadlineCheck)
+        recognizer.pointerCancel(twistId0, event.eventTime)
+        recognizer.pointerCancel(twistId1, event.eventTime)
+        pinchedThisGesture = true
+        stopFling()
+        onRotationChanged(layout.turn(index), true)
+        return true
+    }
+
+    /** Turns, scales and pans so that the page keeps following the fingers. */
+    private fun applyTwist(step: RotationStep) {
+        val layout = layout ?: return
+        val index = turningPage
+        if (index < 0) return
+        val here = FloatArray(2)
+        // The point of the page that was under the fingers' middle before this move.
+        layout.worldToPage(index, viewport.toWorldX(step.focusX - step.dx), viewport.toWorldY(step.focusY - step.dy), here)
+        if (step.scale != 1f) {
+            editor?.pdf?.pinching = true
+            viewport.zoomTo(viewport.zoom * step.scale, step.focusX - step.dx, step.focusY - step.dy)
+            onZoomChanged(viewport.zoom)
+        }
+        turnPage(index, normalizeDegrees(layout.turn(index) + step.degrees))
+        // Where that point lies now, against where the fingers are: the pan makes up the difference.
+        val world = FloatArray(2)
+        layout.pageToWorld(index, here[0], here[1], world)
+        viewport.panX += step.focusX - viewport.toScreenX(world[0])
+        viewport.panY += step.focusY - viewport.toScreenY(world[1])
+        tiles.invalidate()
+        viewMoved()
+        onRotationChanged(rotationDegrees, true)
+    }
+
+    private fun endTwist() {
+        val wasActive = twist.active
+        val index = turningPage
+        twist.end()
+        twistId0 = -1
+        twistId1 = -1
+        turningPage = -1
+        if (!wasActive || index < 0) return
+        val layout = layout ?: return
+        // Once turned, the page keeps whatever angle it was left at: it does not snap to upright or to a right angle, so one degree
+        // off stays one degree off. Turning it again has to get past the start threshold first.
+        finishTurn(index)
+    }
+
+    private fun normalizeDegrees(degrees: Float): Float {
+        var d = degrees % FULL_TURN_DEGREES
+        if (d > HALF_TURN_DEGREES) d -= FULL_TURN_DEGREES
+        if (d <= -HALF_TURN_DEGREES) d += FULL_TURN_DEGREES
+        return d
+    }
+
+    /**
+     * A quick tap of one finger where the turn indicator sits shows it, while the page is turned. The touch is taken, so a
+     * finger that draws leaves no dot there.
+     */
+    private fun watchBadge(raw: MotionEvent): Boolean {
+        if (rotationDegrees == 0f || loupeOpen) {
+            badgeFingerId = -1
+            return false
+        }
+        when (raw.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val inside = raw.getToolType(0) == MotionEvent.TOOL_TYPE_FINGER && inBadgeZone(raw.x, raw.y)
+                badgeFingerId = if (inside) raw.getPointerId(0) else -1
+                badgeDownX = raw.x
+                badgeDownY = raw.y
+                return inside
+            }
+            MotionEvent.ACTION_MOVE, MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP -> return badgeFingerId >= 0
+            MotionEvent.ACTION_UP -> {
+                val mine = badgeFingerId >= 0
+                badgeFingerId = -1
+                if (mine) {
+                    val slop = ViewConfiguration.get(context).scaledTouchSlop
+                    if (raw.eventTime - raw.downTime <= FINGER_TAP_MS && hypot(raw.x - badgeDownX, raw.y - badgeDownY) <= slop) {
+                        onRotationBadgeTapped()
+                    }
+                }
+                return mine
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                val mine = badgeFingerId >= 0
+                badgeFingerId = -1
+                return mine
+            }
+        }
+        return false
+    }
+
+    private var loupeFingerId = -1
+
+    /** The point of page [index] under a screen point, for tests. */
+    internal fun pagePointForTest(screenX: Float, screenY: Float, index: Int) = floatArrayOf(pageX(screenX, screenY, index), pageY(screenX, screenY, index))
+
+    /** How far page [index] is drawn turned, for tests. */
+    internal fun pageTurnForTest(index: Int) = layout?.turn(index) ?: 0f
+
+    /** Where page [index] starts in the document, for tests. */
+    internal fun pageOriginYForTest(index: Int) = layout?.originY(index) ?: 0f
+
+    /** The loupe's box on the page, for tests. */
+    internal fun loupeBoxForTest() = android.graphics.RectF(loupe.box)
+
+    /** A finger on the loupe's box on the page carries the box along, as the pen does. Returns true for the touches it takes. */
+    private fun dragLoupeByFinger(raw: MotionEvent): Boolean {
+        if (!loupeOpen) {
+            loupeFingerId = -1
+            return false
+        }
+        fun flat(index: Int) = floatArrayOf(raw.getX(index), raw.getY(index))
+        when (raw.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                if (raw.getToolType(0) != MotionEvent.TOOL_TYPE_FINGER || loupe.contains(raw.x, raw.y)) return false
+                val at = flat(0)
+                if (startDraggingLoupeBox(raw.getPointerId(0), at[0], at[1])) {
+                    loupeFingerId = raw.getPointerId(0)
+                    return true
+                }
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (loupeFingerId < 0) return false
+                val index = raw.findPointerIndex(loupeFingerId)
+                if (index >= 0) {
+                    val at = flat(index)
+                    onDrawMove(loupeFingerId, at[0], at[1])
+                }
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_POINTER_UP -> return loupeFingerId >= 0
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val mine = loupeFingerId >= 0
+                loupeFingerId = -1
+                loupeBoxPointer = -1
+                return mine
+            }
+        }
+        return false
+    }
+
+    private fun inBadgeZone(x: Float, y: Float): Boolean {
+        val density = resources.displayMetrics.density
+        return abs(x - width / 2f) <= BADGE_HALF_WIDTH_DP * density && y >= height - BADGE_ZONE_HEIGHT_DP * density
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         // Sets up the front buffer now, rather than making the first stroke wait for it.
@@ -886,6 +1431,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onDetachedFromWindow() {
+        readerThread?.let { thread ->
+            thread.execute {
+                reader?.close()
+                reader = null
+            }
+            thread.shutdown()
+        }
+        readerThread = null
         super.onDetachedFromWindow()
         removeCallbacks(deadlineCheck)
         removeCallbacks(holdCheck)
@@ -896,6 +1449,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        lasso.viewWidthPx = w
+        lasso.viewHeightPx = h
         maskIsCurrent = false
         placeFirstPage()
         clampPan()
@@ -935,6 +1490,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     // Drawing has no click to perform: a tap only ever means something to the recognizer.
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (dragLoupeByFinger(event) || watchBadge(event) || followTwist(event)) return true
+        return handleTouch(event)
+    }
+
+    private fun handleTouch(event: MotionEvent): Boolean {
         observer?.onTouch(event)
         if (handleRulerTouch(event)) return true
         trackStylusButtons(event)
@@ -959,6 +1519,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         if (action == MotionEvent.ACTION_MOVE) addToStroke(event)
         trackFingerTap(event)
+        trackTableTap(event)
+        trackPlannerTap(event)
         strokeStartedInThisEvent = false
         currentEvent = null
         scheduleDeadline()
@@ -993,17 +1555,220 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
-    /** What a finger tap does that only the pen could before: touch a circle drawn for circle to lasso, or a button of a lasso selection. */
-    private fun fingerTapped(x: Float, y: Float) {
+    private var tableTapPossible = false
+    private var tableTapDownX = 0f
+    private var tableTapDownY = 0f
+    private var lastTableTapId = 0L
+    private var lastTableTapMs = 0L
+    private var lastTableTapX = 0f
+    private var lastTableTapY = 0f
+
+    /** Two quick, still taps of the pen or a finger on one table open its editing handles, whatever the tool is. */
+    private fun trackTableTap(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                tableTapPossible = event.getToolType(0) != MotionEvent.TOOL_TYPE_ERASER
+                tableTapDownX = event.x
+                tableTapDownY = event.y
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> tableTapPossible = false
+            MotionEvent.ACTION_MOVE -> {
+                if (tableTapPossible && hypot(event.x - tableTapDownX, event.y - tableTapDownY) > ViewConfiguration.get(context).scaledTouchSlop) {
+                    tableTapPossible = false
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                val tapped = tableTapPossible && event.eventTime - event.downTime <= TABLE_TAP_MS
+                tableTapPossible = false
+                if (tapped) tableTapped(event.x, event.y, event.eventTime, event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS)
+            }
+            MotionEvent.ACTION_CANCEL -> tableTapPossible = false
+        }
+    }
+
+    // ---- Planner ----
+
+    /** Told when a tap lands on a planner part that needs the editor's own screen: the weekday menu or the cover's years. */
+    var onPlannerAction: (PlannerAction, PlannerPage) -> Unit = { _, _ -> }
+
+    private var plannerPlan: PlannerPlan? = null
+    private var plannerTapPossible = false
+    private var plannerTapDownX = 0f
+    private var plannerTapDownY = 0f
+
+    /** The dates of the open planner, or null when the notebook is not one. */
+    val plannerSetup: PlannerSetup? get() = editor?.document?.let { PlannerPages.setupOf(it) }
+
+    private fun planFor(setup: PlannerSetup): PlannerPlan = plannerPlan?.takeIf { it.setup == setup } ?: PlannerPlan(setup).also { plannerPlan = it }
+
+    /** A quick, still tap of the pen or a finger on a planner's tab or link, whatever the tool is. */
+    private fun trackPlannerTap(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                plannerTapPossible = event.getToolType(0) != MotionEvent.TOOL_TYPE_ERASER && editor?.document?.kind == DocumentKind.PLANNER
+                plannerTapDownX = event.x
+                plannerTapDownY = event.y
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> plannerTapPossible = false
+            MotionEvent.ACTION_MOVE -> {
+                if (plannerTapPossible && hypot(event.x - plannerTapDownX, event.y - plannerTapDownY) > ViewConfiguration.get(context).scaledTouchSlop) {
+                    plannerTapPossible = false
+                }
+            }
+            MotionEvent.ACTION_UP -> {
+                val tapped = plannerTapPossible && event.eventTime - event.downTime <= TABLE_TAP_MS
+                plannerTapPossible = false
+                if (tapped) plannerTapped(event.x, event.y, event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS)
+            }
+            MotionEvent.ACTION_CANCEL -> plannerTapPossible = false
+        }
+    }
+
+    private fun plannerTapped(x: Float, y: Float, byPen: Boolean) {
+        val open = editor ?: return
+        val document = open.document
+        val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
+        if (index < 0) return
+        val page = document.pages[index]
+        val template = page.background.template as? PageTemplate.Planner ?: return
+        val size = page.size ?: return
+        val action = plannerActionAt(template.page, template.setup, size, pageX(x, y, index), pageY(x, y, index)) ?: return
+        // The pen draws a dot with each tap in an ink tool. It is taken back, so a tap on a tab leaves no mark.
+        if (byPen && tool is CanvasTool.Ink) removeTapDot(page.id)
+        when (action) {
+            is PlannerAction.Go -> {
+                val target = planFor(template.setup).indexOf(action.page)
+                if (target >= 0) goToPage(target + if (document.coverId != null) 1 else 0)
+            }
+            else -> onPlannerAction(action, template.page)
+        }
+    }
+
+    private fun removeTapDot(pageId: Long) {
+        val open = editor ?: return
+        postDelayed({
+            val content = open.content(pageId)
+            val last = content.size - 1
+            val dot = (if (last >= 0) content[last] else null) as? StrokeItem ?: return@postDelayed
+            if (dot.bounds.width < TAP_DOT_PT && dot.bounds.height < TAP_DOT_PT && open.canUndo) open.undo()
+        }, TAP_DOT_WAIT_MS)
+    }
+
+    /**
+     * Gives the planner the dates of [setup], as one undoable step, and goes to [stayOn] (the cover when null) in the new pages.
+     * A page that is still there keeps what was drawn on it.
+     */
+    fun setPlannerSetup(setup: PlannerSetup, stayOn: PlannerPage?) {
+        val open = editor ?: return
+        val edit = PlannerPages.change(open.document, setup) ?: return
+        lasso.clear()
+        open.perform(edit)
+        syncChanges()
+        val target = if (stayOn == null) 0 else open.document.pages.indexOfFirst { (it.background.template as? PageTemplate.Planner)?.page == stayOn }
+        goToPage(target.coerceAtLeast(0))
+    }
+
+    /** The semester dates of the open planner, as days since 1970 (0 for none): a start and an end for each of four semesters. */
+    val plannerSemesters: List<Int> get() = editor?.document?.let { PlannerPages.semestersOf(it) }.orEmpty()
+
+    /** Sets or clears ([epochDay] null) a semester date on every page that shows it, as one undoable step. */
+    fun setSemesterDate(semester: Int, end: Boolean, epochDay: Int?) {
+        val open = editor ?: return
+        val edit = PlannerPages.setSemesterDate(open.document, semester, end, epochDay) ?: return
+        open.perform(edit)
+        syncChanges()
+    }
+
+    /** The title on the planner's cover, shown when it is edited. */
+    val plannerTitle: String get() = editor?.document?.let { PlannerPages.titleOf(it) }.orEmpty()
+
+    /** Puts [title] on the planner's cover as one undoable step. An empty title brings the default back. */
+    fun setPlannerTitle(title: String) {
+        val open = editor ?: return
+        val edit = PlannerPages.retitle(open.document, title) ?: return
+        open.perform(edit)
+        syncChanges()
+    }
+
+    private fun tableTapped(x: Float, y: Float, timeMs: Long, byPen: Boolean) {
         val editor = editor ?: return
         val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
         if (index < 0) return
         val pageId = editor.document.pages[index].id
+        val table = topItemOfType<TableItem>(pageId, pageX(x, y, index), pageY(x, y, index))?.second
+        if (table == null) {
+            lastTableTapId = 0L
+            return
+        }
+        val near = hypot(x - lastTableTapX, y - lastTableTapY) <= TABLE_DOUBLE_TAP_REACH_DP * resources.displayMetrics.density
+        if (lastTableTapId == table.id && timeMs - lastTableTapMs <= TABLE_DOUBLE_TAP_MS && near) {
+            lastTableTapId = 0L
+            openTableEditor(index, pageId, table.id, cleanDots = byPen && tool is CanvasTool.Ink)
+        } else {
+            lastTableTapId = table.id
+            lastTableTapMs = timeMs
+            lastTableTapX = x
+            lastTableTapY = y
+        }
+    }
+
+    /** Selects the table and shows its editing handles, with the lasso to work them. */
+    private fun openTableEditor(index: Int, pageId: Long, tableId: Long, cleanDots: Boolean = false) {
+        val open = editor ?: return
+        fun show(): Boolean {
+            val at = indexOfItem(pageId, tableId)
+            if (at < 0) return false
+            lasso.editTable(index, Selection(pageId, intArrayOf(at), listOf(open.content(pageId)[at])))
+            onLassoRequested()
+            syncChanges()
+            return true
+        }
+        if (!show()) return
+        if (cleanDots) {
+            // The pen draws a dot with each tap in an ink tool. They are taken back once the second one has been saved.
+            postDelayed({
+                repeat(2) {
+                    val content = open.content(pageId)
+                    val last = content.size - 1
+                    val dot = (if (last >= 0) content[last] else null) as? StrokeItem ?: return@repeat
+                    if (dot.bounds.width < TAP_DOT_PT && dot.bounds.height < TAP_DOT_PT && open.canUndo) open.undo()
+                }
+                show()
+            }, TAP_DOT_WAIT_MS)
+        }
+    }
+
+    /**
+     * A press on a button of the selection that lies outside every page, which happens when the selection runs to the page's edge, as a
+     * cover's background does: the buttons sit just under it. True when one was pressed and did its action.
+     */
+    private fun pressSelectionButtonOffPage(x: Float, y: Float, reachDp: Float): Boolean {
+        val index = lasso.selectionPageIndex()
+        if (index < 0) return false
+        return lasso.pressButton(index, pageX(x, y, index), pageY(x, y, index), reachDp)
+    }
+
+    /** What a finger tap does that only the pen could before: touch a circle drawn for circle to lasso, or a button of a lasso selection. */
+    private fun fingerTapped(x: Float, y: Float) {
+        val editor = editor ?: return
+        if (tool is CanvasTool.Lasso && pressSelectionButtonOffPage(x, y, FINGER_BUTTON_REACH_DP)) {
+            syncChanges()
+            return
+        }
+        val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
+        if (index < 0) return
+        val pageId = editor.document.pages[index].id
         when (val current = tool) {
+            // Picking a color works with a finger too: a quick touch takes the color under it.
+            is CanvasTool.Pick -> current.onPick(x, y)
             is CanvasTool.Ink -> if (current.circleToLasso && lastLoop != null) {
-                selectLoopAt(index, pageId, pageX(x, index), pageY(y, index), byFinger = true)
+                selectLoopAt(index, pageId, pageX(x, y, index), pageY(x, y, index), byFinger = true)
             }
-            is CanvasTool.Lasso -> if (lasso.pressButton(index, pageX(x, index), pageY(y, index), FINGER_BUTTON_REACH_DP)) syncChanges()
+            is CanvasTool.Lasso -> {
+                val px = pageX(x, y, index)
+                val py = pageY(x, y, index)
+                if (lasso.pressButton(index, px, py, FINGER_BUTTON_REACH_DP) || lasso.pressTableButton(index, px, py, FINGER_BUTTON_REACH_DP)) syncChanges()
+            }
             else -> Unit
         }
     }
@@ -1119,6 +1884,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     // ---- Drawing ----
 
     override fun onDrawStart(pointerId: Int, kind: PointerKind, x: Float, y: Float) {
+        (tool as? CanvasTool.Pick)?.let { pick ->
+            pick.onPick(x, y)
+            return
+        }
         if (tool is CanvasTool.Laser && kind != PointerKind.STYLUS_ERASER) {
             laserPointer = pointerId
             overlay.laserStart(x, y)
@@ -1129,50 +1898,65 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val layout = layout ?: return
         drawingInLoupe = loupeOpen && loupe.contains(x, y)
         if (loupeOpen && !drawingInLoupe && startDraggingLoupeBox(pointerId, x, y)) return
+        // The selection's buttons are always on the screen, but not always on its page: pressing one is found by the selection's page.
+        if (tool is CanvasTool.Lasso && !drawingInLoupe && pressSelectionButtonOffPage(x, y, BUTTON_REACH_OFF_PAGE_DP)) {
+            syncChanges()
+            return
+        }
         val index = if (drawingInLoupe) loupe.pageIndex else layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
         if (index < 0) return
         val page = editor.document.pages[index]
         drawPointerId = pointerId
         drawPageIndex = index
+        if (kind != PointerKind.STYLUS_ERASER && !holdErasing && !drawingInLoupe && tool is CanvasTool.Text && textEdit != null && writingReady) {
+            startHandwriting(x, y)
+            return
+        }
         endTextEdit()
         strokeStickyId = null
-        if (kind != PointerKind.STYLUS_ERASER && pressAudio(pointerId, index, page.id, pageX(x, index), pageY(y, index), x, y)) return
-        if (kind != PointerKind.STYLUS_ERASER && handlePlacement(index, pageX(x, index), pageY(y, index))) return
+        if (kind != PointerKind.STYLUS_ERASER && pressAudio(pointerId, index, page.id, pageX(x, y, index), pageY(x, y, index), x, y)) return
+        if (kind != PointerKind.STYLUS_ERASER && handlePlacement(index, pageX(x, y, index), pageY(x, y, index))) return
 
         val tool = tool
         if (kind == PointerKind.STYLUS_ERASER || holdErasing || tool is CanvasTool.Eraser) {
             val eraser = tool as? CanvasTool.Eraser ?: DEFAULT_ERASER
-            erase = EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt, kinds = eraser.kinds)
+            // On an open note the eraser works inside it, on what is in it. Under a closed note it works on the page as always.
+            val onNote = topItemOfType<StickyNoteItem>(page.id, pageX(x, y, index), pageY(x, y, index))?.takeIf { it.second.isOpen }
+            erase = if (onNote != null) {
+                NoteEraseSession(page.id, editor.content(page.id), onNote.first, eraser.mode, eraser.radiusPt, eraser.kinds, eraser.lockedToo)
+            } else {
+                EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt, kinds = eraser.kinds, includeLocked = eraser.lockedToo)
+            }
             eraseAt(x, y)
         } else if (tool is CanvasTool.Lasso) {
             lassoPointer = pointerId
             editor.content(page.id)
-            if (lasso.pressButton(index, pageX(x, index), pageY(y, index))) {
+            if (lasso.pressButton(index, pageX(x, y, index), pageY(x, y, index)) || lasso.pressTableButton(index, pageX(x, y, index), pageY(x, y, index))) {
                 syncChanges()
                 return
             }
-            lasso.start(index, pageX(x, index), pageY(y, index), tool.rectangle, tool.kinds, tool.fullOnly, tool.anyPortion)
+            lasso.start(index, pageX(x, y, index), pageY(x, y, index), tool.rectangle, tool.kinds, tool.fullOnly, tool.anyPortion, tool.lockedToo)
             syncChanges()
         } else if (tool is CanvasTool.Shape) {
             shapePointer = pointerId
-            shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
+            shapes.start(index, pageX(x, y, index), pageY(x, y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
         } else if (tool is CanvasTool.Tape) {
             shapePointer = pointerId
             if (tool.options.lineMode == TapeLineMode.ALWAYS) {
-                shapes.start(index, pageX(x, index), pageY(y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
+                shapes.start(index, pageX(x, y, index), pageY(x, y, index)) { x0, y0, x1, y1 -> tool.options.item(0L, x0, y0, x1, y1) }
             } else {
                 // Never straight, or straight once the pen is held: the tape follows the pen.
-                shapes.startTape(index, pageX(x, index), pageY(y, index), tool.options)
+                shapes.startTape(index, pageX(x, y, index), pageY(x, y, index), tool.options)
                 tapeHoldMs = if (tool.options.lineMode == TapeLineMode.HOLD) tool.options.holdMs.toLong() else 0L
                 if (tapeHoldMs > 0L) postDelayed(tapeHold, tapeHoldMs)
             }
         } else if (tool is CanvasTool.Ink) {
-            if (tool.circleToLasso && selectLoopAt(index, page.id, pageX(x, index), pageY(y, index))) return
+            if (tool.circleToLasso && selectLoopAt(index, page.id, pageX(x, y, index), pageY(x, y, index))) return
             drawStyle = tool.style
             holdDelayMs = tool.holdToLineMs.toLong()
             drawScribble = tool.scribbleToErase
             drawCircle = tool.circleToLasso
-            stabilizer = if (tool.stabilization > 1) Stabilizer(tool.stabilization) else null
+            stabilizer = if (tool.stabilization > 0) Stabilizer(tool.stabilization) else null
             val reach = RULER_EDGE_REACH_DP * resources.displayMetrics.density
             strokeEdge = if (drawingInLoupe) Ruler.NO_EDGE else overlay.ruler?.edgeNear(x, y, reach) ?: Ruler.NO_EDGE
             // A stroke that starts when a tap times out has no event yet, and ink needs one.
@@ -1183,12 +1967,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     override fun onDrawMove(pointerId: Int, x: Float, y: Float) {
         if (pointerId == loupeBoxPointer) {
-            val layout = layout ?: return
-            val index = loupe.pageIndex
-            loupe.box.offsetTo(
-                viewport.toWorldX(x) - layout.originX(index) - loupeBoxGrabX,
-                viewport.toWorldY(y) - layout.originY(index) - loupeBoxGrabY,
-            )
+            loupe.box.offsetTo(viewport.toWorldX(x) - loupeBoxGrabX, viewport.toWorldY(y) - loupeBoxGrabY)
             overlay.invalidate()
             loupe.invalidate()
             return
@@ -1202,19 +1981,27 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return
         }
         if (pointerId == lassoPointer) {
-            lasso.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+            lasso.move(pageX(x, y, drawPageIndex), pageY(x, y, drawPageIndex))
             return
         }
         if (pointerId == shapePointer) {
             if (shapes.isLayingTape) {
                 val slop = HOLD_SLOP_DP * resources.displayMetrics.density / viewport.pxPerPt
-                if (shapes.moveTape(pageX(x, drawPageIndex), pageY(y, drawPageIndex), slop) && tapeHoldMs > 0L) {
+                if (shapes.moveTape(pageX(x, y, drawPageIndex), pageY(x, y, drawPageIndex), slop) && tapeHoldMs > 0L) {
                     removeCallbacks(tapeHold)
                     postDelayed(tapeHold, tapeHoldMs)
                 }
             } else {
-                shapes.move(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+                if (areaKind != AreaKind.NONE && areaMoveMs == 0L) {
+                    val slop = HOLD_SLOP_DP * resources.displayMetrics.density / viewport.pxPerPt
+                    if (abs(pageX(x, y, drawPageIndex) - areaX) > slop || abs(pageY(x, y, drawPageIndex) - areaY) > slop) areaMoveMs = SystemClock.uptimeMillis()
+                }
+                shapes.move(pageX(x, y, drawPageIndex), pageY(x, y, drawPageIndex))
             }
+            return
+        }
+        if (writingStroke && pointerId == drawPointerId) {
+            writeReach = max(writeReach, hypot(x - writeDownX, y - writeDownY))
             return
         }
         if (erase != null) eraseAt(x, y)
@@ -1246,6 +2033,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             if (areaKind != AreaKind.NONE) finishAreaDrag() else shapes.end()
             return
         }
+        if (writingStroke && pointerId == drawPointerId) {
+            endHandwritingStroke()
+            return
+        }
         strokeWaitingForEvent = false
         val session = erase
         if (session != null) {
@@ -1253,9 +2044,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             erase = null
             return
         }
+        if (shapes.hasSnap) {
+            removeCallbacks(holdCheck)
+            commitSnap()
+            return
+        }
         val id = strokeId ?: return
         val event = currentEvent ?: return
         removeCallbacks(holdCheck)
+        // Smoothed only if the pen was still held when it lifted; moving on after the hold takes it back.
+        pendingStrokes[id]?.let { if (it.smoothOnFinish && !hold.isHeld(event.eventTime, holdDelayMs)) it.smoothOnFinish = false }
         if (straightening) {
             finishStraightStroke(event, id)
         } else if (stabilizer != null) {
@@ -1294,12 +2092,28 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             shapes.cancel()
             return
         }
+        if (writingStroke && pointerId == drawPointerId) {
+            writingStroke = false
+            strokeWaitingForEvent = false
+            strokeId?.let {
+                wet.cancelStroke(it, currentEvent)
+                pendingStrokes.remove(it)
+            }
+            strokeId = null
+            return
+        }
         strokeWaitingForEvent = false
         val session = erase
         if (session != null) {
             session.finish()?.let { editor?.discard(it) }
             erase = null
             redrawChanges(drawPageIndex)
+            return
+        }
+        if (shapes.hasSnap) {
+            removeCallbacks(holdCheck)
+            snapStickyId = null
+            shapes.cancelSnap()
             return
         }
         val id = strokeId ?: return
@@ -1332,7 +2146,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val (at, note) = sticky
             when {
                 !note.isOpen -> setSticky(page.id, at, note.copy(isOpen = true))
-                note.isInFoldCorner(x, y) -> setSticky(page.id, at, note.copy(isOpen = false))
+                note.isInFoldCorner(x, y) -> foldNote(page.id, at, note)
                 tool is CanvasTool.Ink -> {
                     strokeStickyId = note.id
                     return false
@@ -1342,6 +2156,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             return true
         }
         when (val current = tool) {
+            is CanvasTool.Sticker -> beginAreaDrag(AreaKind.STAMP, index, x, y, NoteOptions(), current)
+            is CanvasTool.Fill -> fillAt(index, page.id, x, y, current)
             is CanvasTool.Emoji -> {
                 val size = current.sizePt.toFloat()
                 val box = size * EMOJI_BOX_OF_SIZE
@@ -1352,8 +2168,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     size,
                     NoteOptions.TEXT_COLOR,
                 )
-                editor.perform(ItemsEdit.addOnTop(page.id, content, item))
-                syncChanges()
+                if (!addToOpenNote(page.id, x, y, listOf(item))) {
+                    editor.perform(ItemsEdit.addOnTop(page.id, content, item))
+                    syncChanges()
+                }
             }
             is CanvasTool.Sticky -> beginAreaDrag(AreaKind.STICKY, index, x, y, current.options)
             is CanvasTool.Text -> {
@@ -1362,7 +2180,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             is CanvasTool.Table -> {
                 val found = topItemOfType<TableItem>(page.id, x, y)?.second
-                if (found != null) {
+                if (found != null && lastTableTapId == found.id && SystemClock.uptimeMillis() - lastTableTapMs <= TABLE_DOUBLE_TAP_MS) {
+                    lastTableTapId = 0L
+                    openTableEditor(index, page.id, found.id)
+                } else if (found != null) {
                     editCell(index, page.id, found, found.cellAt(x, y))
                 } else {
                     editor.perform(ItemsEdit.addOnTop(page.id, content, current.options.newTable(x, y)))
@@ -1371,6 +2192,269 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             else -> return false
         }
+        return true
+    }
+
+    private var gridCross = false
+    private var gridThirds = false
+    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = GRID_COLOR
+    }
+    private val gridMatrix = Matrix()
+
+    /** Shows or hides the guide lines drawn over each page: a dotted cross through its middle, and its thirds. */
+    fun setGrid(cross: Boolean, thirds: Boolean) {
+        gridCross = cross
+        gridThirds = thirds
+        overlay.invalidate()
+    }
+
+    /** The guide lines belong to the page, so they move and turn with it. On a canvas with no pages they sit on the view. */
+    private fun drawPageGrid(canvas: Canvas) {
+        if (!gridCross && !gridThirds) return
+        val layout = layout ?: return
+        val density = resources.displayMetrics.density
+        if (layout.isInfinite) {
+            gridPaint.strokeWidth = GRID_WIDTH_DP * density
+            gridPaint.pathEffect = DashPathEffect(floatArrayOf(GRID_DASH_DP * density, GRID_GAP_DP * density), 0f)
+            drawGridLines(canvas, 0f, 0f, width.toFloat(), height.toFloat())
+            return
+        }
+        val here = layout.pageIndexAt(viewport.toWorldX(width / 2f), viewport.toWorldY(height / 2f)).let { if (it < 0) currentPageIndex else it }
+        val unit = density / viewport.pxPerPt
+        gridPaint.strokeWidth = GRID_WIDTH_DP * unit
+        gridPaint.pathEffect = DashPathEffect(floatArrayOf(GRID_DASH_DP * unit, GRID_GAP_DP * unit), 0f)
+        for (index in (here - GRID_PAGES_AROUND).coerceAtLeast(0)..(here + GRID_PAGES_AROUND).coerceAtMost(layout.pageCount - 1)) {
+            pageToScreenMatrix(index, gridMatrix)
+            canvas.save()
+            canvas.concat(gridMatrix)
+            drawGridLines(canvas, 0f, 0f, layout.pageWidth(index), layout.pageHeight(index))
+            canvas.restore()
+        }
+    }
+
+    private fun drawGridLines(canvas: Canvas, left: Float, top: Float, right: Float, bottom: Float) {
+        val w = right - left
+        val h = bottom - top
+        if (gridCross) {
+            canvas.drawLine(left + w / 2f, top, left + w / 2f, bottom, gridPaint)
+            canvas.drawLine(left, top + h / 2f, right, top + h / 2f, gridPaint)
+        }
+        if (gridThirds) {
+            for (k in 1..2) {
+                canvas.drawLine(left + w * k / 3f, top, left + w * k / 3f, bottom, gridPaint)
+                canvas.drawLine(left, top + h * k / 3f, right, top + h * k / 3f, gridPaint)
+            }
+        }
+    }
+
+    private val fillBucket = FillBucket()
+    private val fillWork = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var fillRunning = false
+
+    private var reveal: FillItem? = null
+    private var revealIndex = 0
+    private var revealX = 0f
+    private var revealY = 0f
+    private var revealStartMs = 0L
+    private val revealMatrix = Matrix()
+    private val revealPath = Path()
+    private val revealPainter = ItemPainter()
+
+    /** Draws the fill growing out of the tap as a circle until it covers every edge. */
+    private fun drawFillReveal(canvas: Canvas) {
+        val fill = reveal ?: return
+        val progress = ((SystemClock.uptimeMillis() - revealStartMs).toFloat() / FILL_REVEAL_MS).coerceIn(0f, 1f)
+        val box = fill.bounds
+        val far = maxOf(
+            hypot(box.left - revealX, box.top - revealY),
+            hypot(box.right - revealX, box.top - revealY),
+            hypot(box.left - revealX, box.bottom - revealY),
+            hypot(box.right - revealX, box.bottom - revealY),
+        )
+        pageToScreenMatrix(revealIndex, revealMatrix)
+        revealPath.rewind()
+        revealPath.addCircle(revealX, revealY, far * progress, Path.Direction.CW)
+        canvas.save()
+        canvas.concat(revealMatrix)
+        canvas.clipPath(revealPath)
+        revealPainter.paint(canvas, fill)
+        canvas.restore()
+        if (progress < 1f) overlay.invalidate()
+    }
+
+    /** Called when the paint bucket found nothing to fill where it was used. */
+    var onFillFailed: () -> Unit = {}
+
+    /** Called when a fill has been put on the page. */
+    var onFillDone: () -> Unit = {}
+
+    /** Finds the closed region around a point off the main thread, then adds it under everything as one edit that can be undone. */
+    private fun fillAt(index: Int, pageId: Long, x: Float, y: Float, bucket: CanvasTool.Fill) {
+        val open = editor ?: return
+        if (fillRunning) return
+        // On an open note the bucket works on the note: what is in it, and what lies on it on the page, such as a sticker put there. All in
+        // page coordinates, as on the page, with the edge of the note as the last line. The fill belongs to the note.
+        val onNote = topItemOfType<StickyNoteItem>(pageId, x, y)?.takeIf { it.second.isOpen }
+        val note = onNote?.second
+        val pageItems = open.content(pageId).toList()
+        val items = if (note == null) {
+            pageItems
+        } else {
+            val move = Affine.translate(note.frame.left, note.frame.top)
+            note.items.map { it.transformed(move) } +
+                pageItems.drop(onNote.first + 1).filter { it !is StickyNoteItem && it.bounds.intersects(note.frame.bounds) }
+        }
+        val size = if (note != null) null else open.document.pages[index].size
+        // One percent of the view's width, so a gap a pen could leave without lifting does not stop the fill.
+        val gapPt = width * FILL_GAP_OF_WIDTH / viewport.pxPerPt
+        val scale = viewport.pxPerPt
+        val viewWidthPt = width / scale
+        val viewHeightPt = height / scale
+        fillRunning = true
+        fillWork.execute {
+            val fill = try {
+                fillBucket.fill(items, size, x, y, gapPt, bucket.color, bucket.opacity, scale, viewWidthPt, viewHeightPt, note?.frame?.bounds, open::imageNow)
+            } catch (e: OutOfMemoryError) {
+                null
+            }
+            post {
+                fillRunning = false
+                val still = editor
+                if (still !== open || fill == null) {
+                    if (fill == null) onFillFailed()
+                    return@post
+                }
+                // The color spreads from the tap to every edge in a moment, then becomes part of the page.
+                reveal = fill
+                revealIndex = index
+                revealX = x
+                revealY = y
+                revealStartMs = SystemClock.uptimeMillis()
+                overlay.invalidate()
+                postDelayed({
+                    reveal = null
+                    if (editor === open) {
+                        if (note != null) fillInNote(pageId, note, x, y, fill) else {
+                            open.perform(fillEdit(pageId, open.content(pageId), x, y, fill))
+                            syncChanges()
+                        }
+                        onFillDone()
+                    }
+                    overlay.invalidate()
+                }, FILL_REVEAL_MS)
+            }
+        }
+    }
+
+    /** Like [fillEdit], for a note: the fill, in the note's coordinates, joins what is in it, and the note is changed as one edit. */
+    private fun fillInNote(pageId: Long, was: StickyNoteItem, pageX: Float, pageY: Float, fill: FillItem) {
+        val at = indexOfItem(pageId, was.id)
+        val note = editor?.content(pageId)?.takeIf { at >= 0 }?.get(at) as? StickyNoteItem ?: return
+        // The fill came in page coordinates and goes in the note's own.
+        val x = pageX - note.frame.left
+        val y = pageY - note.frame.top
+        val local = fill.transformed(Affine.translate(-note.frame.left, -note.frame.top))
+        val inside = note.items.toMutableList()
+        val under = inside.indexOfLast { it is FillItem && it.contains(x, y) }
+        if (under < 0) {
+            inside.add(0, local)
+        } else {
+            val old = inside[under] as FillItem
+            val same = old.area > 0f && abs(local.area - old.area) <= SAME_FILL_AREA * old.area
+            if (same) inside[under] = local else inside.add(under + 1, local)
+        }
+        setSticky(pageId, at, note.copy(items = inside))
+    }
+
+    /**
+     * How a new [fill] joins the page. Under everything when nothing is filled where it was used. Where something is, it takes the place
+     * of that fill when it covers about the same area, which is the same region painted again, so the new color replaces the old. When it
+     * covers less, say because lines were drawn in the old fill since, it goes just above it, still below whatever was drawn after.
+     */
+    private fun fillEdit(pageId: Long, content: PageContent, x: Float, y: Float, fill: FillItem): ItemsEdit {
+        var under = -1
+        for (i in content.size - 1 downTo 0) {
+            val item = content[i]
+            if (item is FillItem && item.contains(x, y)) {
+                under = i
+                break
+            }
+        }
+        if (under < 0) return ItemsEdit(pageId, IntArray(0), emptyList(), intArrayOf(0), listOf(fill))
+        val old = content[under] as FillItem
+        val same = old.area > 0f && abs(fill.area - old.area) <= SAME_FILL_AREA * old.area
+        return if (same) {
+            ItemsEdit.replace(pageId, content, intArrayOf(under), listOf(fill))
+        } else {
+            ItemsEdit(pageId, IntArray(0), emptyList(), intArrayOf(under + 1), listOf(fill))
+        }
+    }
+
+    /**
+     * If an open note lies under ([x], [y]), puts [items] in it, in its own coordinates, as one edit that can be undone, and returns
+     * true. They then fold away with the note and move with it. Notes do not nest, so a note among them keeps them on the page.
+     */
+    private fun addToOpenNote(pageId: Long, x: Float, y: Float, items: List<PageItem>): Boolean {
+        if (items.any { it is StickyNoteItem }) return false
+        val (at, note) = topItemOfType<StickyNoteItem>(pageId, x, y) ?: return false
+        if (!note.isOpen) return false
+        val inside = items.map { it.transformed(Affine.translate(-note.frame.left, -note.frame.top)) }
+        setSticky(pageId, at, note.copy(items = note.items + inside))
+        return true
+    }
+
+    /** Puts a copy of a sticker with its middle at the point, as one edit, and selects it so it can be moved or resized at once. */
+    private fun placeSticker(
+        index: Int,
+        pageId: Long,
+        x: Float,
+        y: Float,
+        sticker: CanvasTool.Sticker,
+        /** If given, the sticker is scaled to fit in this frame, in the middle of it, instead of put at its own size at the point. */
+        fit: Frame? = null,
+        select: Boolean = true,
+    ) {
+        val open = editor ?: return
+        val box = sticker.items.map { it.bounds }.reduce { a, b -> a.union(b) }
+        val scaleBy = if (fit == null) 1f else minOf(fit.width / box.width.coerceAtLeast(1f), fit.height / box.height.coerceAtLeast(1f))
+        val move = if (fit == null) {
+            Affine.translate(x - box.width / 2f, y - box.height / 2f)
+        } else {
+            val left = fit.left + (fit.width - box.width * scaleBy) / 2f
+            val top = fit.top + (fit.height - box.height * scaleBy) / 2f
+            Affine(a = scaleBy, b = 0f, c = 0f, d = scaleBy, e = left - scaleBy * box.left, f = top - scaleBy * box.top)
+        }
+        val placed = sticker.items.map { item ->
+            // Its pictures are copied into this document, unless it already has them.
+            if (item is ImageItem) {
+                val target = open.assetFile(item.assetId)
+                val source = sticker.assetFile(item.assetId)
+                if (!target.exists() && source != null && source.exists()) source.copyTo(target)
+            }
+            item.transformed(move).withId(IdSource.Random.next()).withLocked(false)
+        }
+        // A sticker put on an open note belongs to it, and folds away with it.
+        if (addToOpenNote(pageId, x, y, placed)) return
+        val content = open.content(pageId)
+        val at = IntArray(placed.size) { content.size + it }
+        open.perform(ItemsEdit(pageId, IntArray(0), emptyList(), at, placed))
+        if (select) {
+            lasso.select(index, Selection(pageId, at, placed))
+            onLassoRequested()
+        }
+        syncChanges()
+    }
+
+    /** Drops a sticker dragged from the list at a place on the screen, without selecting it. False if that is not on a page. */
+    fun dropSticker(screenX: Float, screenY: Float, sticker: CanvasTool.Sticker): Boolean {
+        val open = editor ?: return false
+        val layout = layout ?: return false
+        val index = layout.pageIndexAt(viewport.toWorldX(screenX), viewport.toWorldY(screenY))
+        if (index < 0) return false
+        val page = open.document.pages[index]
+        placeSticker(index, page.id, pageX(screenX, screenY, index), pageY(screenX, screenY, index), sticker, select = false)
         return true
     }
 
@@ -1389,6 +2473,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 viewport.toScreenY(layout.originY(index) + video.frame.top),
                 video.frame.width * scale,
                 video.frame.height * scale,
+                layout.turn(index),
+                viewport.toScreenX(layout.centerX(index)),
+                viewport.toScreenY(layout.centerY(index)),
             ),
         )
         return true
@@ -1396,11 +2483,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     private inline fun <reified T : PageItem> topItemOfType(pageId: Long, x: Float, y: Float): Pair<Int, T>? {
         val content = editor?.content(pageId) ?: return null
+        var lockedHit: Pair<Int, T>? = null
         for (i in content.size - 1 downTo 0) {
             val item = content[i]
-            if (item is T && item.bounds.contains(x, y)) return i to item
+            if (item is T && item.bounds.contains(x, y)) {
+                // Locked items are a layer below the rest, so an item that is not locked wins.
+                if (!item.locked) return i to item
+                if (lockedHit == null) lockedHit = i to item
+            }
         }
-        return null
+        return lockedHit
     }
 
     private fun indexOfItem(pageId: Long, id: Long): Int {
@@ -1415,7 +2507,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         syncChanges()
     }
 
-    private fun addToSticky(editor: NoteEditor, pageId: Long, stickyId: Long, stroke: StrokeItem): Boolean {
+    private fun addToSticky(editor: NoteEditor, pageId: Long, stickyId: Long, stroke: PageItem): Boolean {
         val at = indexOfItem(pageId, stickyId)
         val note = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? StickyNoteItem ?: return false
         val relative = stroke.transformed(Affine.translate(-note.frame.left, -note.frame.top))
@@ -1423,17 +2515,26 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         return true
     }
 
-    private enum class AreaKind { NONE, STICKY, TEXT }
+    private enum class AreaKind { NONE, STICKY, TEXT, STAMP }
 
     private var areaKind = AreaKind.NONE
     private var areaIndex = 0
     private var areaX = 0f
     private var areaY = 0f
     private var areaOptions = NoteOptions()
+    private var areaDownMs = 0L
+    private var areaMoveMs = 0L
+    private var areaSticker: CanvasTool.Sticker? = null
+
+    /** Asked for when a note or sticker made by holding and dragging is done: the tool in use before it comes back. */
+    var onReturnTool: () -> Unit = {}
 
     /** A touch that places a note or text: a tap puts one at the default size, and a drag sizes it. */
-    private fun beginAreaDrag(kind: AreaKind, index: Int, x: Float, y: Float, options: NoteOptions) {
+    private fun beginAreaDrag(kind: AreaKind, index: Int, x: Float, y: Float, options: NoteOptions, sticker: CanvasTool.Sticker? = null) {
         areaKind = kind
+        areaDownMs = SystemClock.uptimeMillis()
+        areaMoveMs = 0L
+        areaSticker = sticker
         areaIndex = index
         areaX = x
         areaY = y
@@ -1457,12 +2558,23 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val open = editor ?: return
         val page = open.document.pages.getOrNull(areaIndex) ?: return
         val dragged = shapes.takePreview()?.frame?.takeIf { it.width >= MIN_AREA_PT && it.height >= MIN_AREA_PT }
+        // Sized by dragging, or held: the tool in use before comes back. A tap, which puts one down at its default size, does not.
+        val held = (if (areaMoveMs == 0L) SystemClock.uptimeMillis() else areaMoveMs) - areaDownMs >= HOLD_TO_SIZE_MS
         when (kind) {
             AreaKind.STICKY -> {
                 val note = areaOptions.newSticky(areaX, areaY).let { if (dragged != null) it.copy(frame = dragged) else it }
                 open.perform(ItemsEdit.addOnTop(page.id, open.content(page.id), note))
                 syncChanges()
-                editStickyText(areaIndex, page.id, note)
+                if (held || dragged != null) onReturnTool()
+            }
+            AreaKind.STAMP -> {
+                val sticker = areaSticker ?: return
+                when {
+                    dragged != null -> placeSticker(areaIndex, page.id, areaX, areaY, sticker, fit = dragged, select = false)
+                    held -> placeSticker(areaIndex, page.id, areaX, areaY, sticker, select = false)
+                    else -> placeSticker(areaIndex, page.id, areaX, areaY, sticker)
+                }
+                if (held || dragged != null) onReturnTool()
             }
             AreaKind.TEXT -> {
                 val item = TextItem(
@@ -1482,16 +2594,41 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Folds every open sticky note on the page. Returns true if there was one. */
     private fun closeOpenStickies(pageId: Long): Boolean {
         val open = editor ?: return false
-        val content = open.content(pageId)
         var closed = false
-        for (i in 0 until content.size) {
-            val note = content[i] as? StickyNoteItem ?: continue
-            if (!note.isOpen) continue
-            setSticky(pageId, i, note.copy(isOpen = false))
-            closed = true
+        var i = 0
+        // Folding a note takes the items on it off the page, so the content is read again each time.
+        while (i < open.content(pageId).size) {
+            val note = open.content(pageId)[i] as? StickyNoteItem
+            if (note != null && note.isOpen && !note.keepOpen) {
+                foldNote(pageId, i, note)
+                closed = true
+            }
+            i++
         }
         return closed
     }
+
+    /**
+     * Folds the open [note] at index [at]. Whatever lies on it on the page (stickers, pictures, anything above it and wholly within it,
+     * however it got there) goes into it, so it folds away with the note and comes back when the note opens. One edit.
+     */
+    private fun foldNote(pageId: Long, at: Int, note: StickyNoteItem) {
+        val open = editor ?: return
+        val content = open.content(pageId)
+        val on = (at + 1 until content.size).filter { i ->
+            val item = content[i]
+            !item.locked && item !is StickyNoteItem && item !is VideoItem && item !is AudioItem && note.frame.holds(item.bounds)
+        }
+        if (on.isEmpty()) return setSticky(pageId, at, note.copy(isOpen = false))
+        val inside = on.map { content[it].transformed(Affine.translate(-note.frame.left, -note.frame.top)) }
+        val folded = note.copy(isOpen = false, items = note.items + inside)
+        open.perform(ItemsEdit(pageId, intArrayOf(at) + on.toIntArray(), listOf<PageItem>(note) + on.map { content[it] }, intArrayOf(at), listOf(folded)))
+        syncChanges()
+    }
+
+    private fun Frame.holds(box: Bounds) =
+        box.left >= left - ON_NOTE_SLACK_PT && box.top >= top - ON_NOTE_SLACK_PT &&
+            box.right <= left + width + ON_NOTE_SLACK_PT && box.bottom <= top + height + ON_NOTE_SLACK_PT
 
     private fun StickyNoteItem.isInFoldCorner(x: Float, y: Float): Boolean {
         val reach = STICKY_CORNER_DP * resources.displayMetrics.density / viewport.pxPerPt
@@ -1578,8 +2715,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             color,
             style,
             commit,
+            layout.turn(index),
+            viewport.toScreenX(layout.centerX(index)),
+            viewport.toScreenY(layout.centerY(index)),
         )
         textEdit = request
+        checkWritingReady()
+        textEditIndex = index
+        textEditBox = box
+        textEditSize = size
         onTextEdit(request)
     }
 
@@ -1592,8 +2736,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Adds a page like the one at [after], right behind it. */
     fun addPage(after: Int) {
         val open = editor ?: return
-        val like = open.document.pages.getOrNull(after) ?: return
-        open.perform(InsertPage(after + 1, Page(IdSource.Random.next(), like.size, like.background)))
+        val pages = open.document.pages
+        val tapped = pages.getOrNull(after) ?: return
+        // A new page is never like the cover: it follows the first page behind it, or the paper of the notebook.
+        val like = if (tapped.isCover) pages.getOrNull(after + 1) ?: tapped else tapped
+        open.perform(InsertPage(after + 1, Page(IdSource.Random.next(), like.size, if (like.isCover) PageBackground() else like.background)))
         syncChanges()
     }
 
@@ -1619,10 +2766,54 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
+    /** Sets this notebook's own template language ("en" or "es"), draws its pages again, and keeps it with the notebook. */
+    fun setTemplateLanguage(code: String) {
+        val open = editor ?: return
+        open.store.writeTemplateLanguage(code, touch = true)
+        app.betternotes.ui.theme.TemplateText.documentLanguage = code
+        tiles.invalidateAll()
+        overlay.invalidate()
+    }
+
+    /** A notebook can take a cover unless it is a canvas or a typed notebook. */
+    val canHaveCover get() = editor?.document?.let {
+        it.kind != DocumentKind.PLANNER && (it.coverId != null || (it.canAddPages && it.pages.first().size != null))
+    } == true
+
+    /** Adds, changes (keeping what was drawn on it) or takes out the cover, as one undoable step. Null takes it out. */
+    fun setCover(coverId: String?, landscape: Boolean? = null, editable: Boolean = false) {
+        val open = editor ?: return
+        val pages = open.document.pages
+        val before = pages.first().takeIf { it.isCover }
+        // The cover may be turned to the other orientation, which swaps its width and height; null leaves it as it is.
+        val base = pages.first().size ?: return
+        val size = if (landscape != null && (base.widthPt > base.heightPt) != landscape) PageSize(base.heightPt, base.widthPt) else base
+        // An editable cover holds its design as items of its own: the drawn design is turned off (the custom cover) and the
+        // design's fills, lines and dots are put on the page beneath whatever is already drawn there.
+        val design = if (editable) CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID } else null
+        val storedId = if (design != null) CoverDesign.CUSTOM_ID else coverId
+        val after = when {
+            coverId == null -> null
+            before != null -> before.copy(cover = storedId, size = size)
+            else -> Page(IdSource.Random.next(), size, cover = storedId)
+        }
+        if (before == after || (before == null && !open.document.canAddPages)) return
+        lasso.clear()
+        val edit: Edit = if (design != null && after != null) {
+            val items = design.toItems(size.widthPt, size.heightPt)
+            BatchEdit(listOf(SetCover(before, after), ItemsEdit(after.id, IntArray(0), emptyList(), IntArray(items.size) { it }, items)))
+        } else {
+            SetCover(before, after)
+        }
+        open.perform(edit)
+        syncChanges()
+        if (after != null) goToPage(0)
+    }
+
     fun deletePage(index: Int) {
         val open = editor ?: return
         val page = open.document.pages.getOrNull(index) ?: return
-        if (open.document.pages.size < 2) return
+        if (open.document.pages.size < 2 || page.isCover) return
         lasso.clear()
         open.perform(RemovePage(index, page))
         syncChanges()
@@ -1631,6 +2822,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     fun movePage(from: Int, to: Int) {
         val open = editor ?: return
         if (from !in open.document.pages.indices || to !in open.document.pages.indices) return
+        if (open.document.coverId != null && (from == 0 || to == 0)) return
         lasso.clear()
         open.perform(MovePage(from, to))
         syncChanges()
@@ -1735,16 +2927,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private fun drawLineGuide(canvas: Canvas) {
         if (!lineGuideOn || !straightening) return
         val layout = layout ?: return
-        val ox = layout.originX(drawPageIndex)
-        val oy = layout.originY(drawPageIndex)
-        angleGuide.draw(
-            canvas,
-            viewport.toScreenX(ox + strokeStartX),
-            viewport.toScreenY(oy + strokeStartY),
-            viewport.toScreenX(ox + lineGuideEndX),
-            viewport.toScreenY(oy + lineGuideEndY),
-            AngleGuide.angle(strokeStartX, strokeStartY, lineGuideEndX, lineGuideEndY),
-        )
+        val start = screenOf(drawPageIndex, strokeStartX, strokeStartY)
+        val end = screenOf(drawPageIndex, lineGuideEndX, lineGuideEndY)
+        angleGuide.draw(canvas, start[0], start[1], end[0], end[1], AngleGuide.angle(strokeStartX, strokeStartY, lineGuideEndX, lineGuideEndY))
     }
 
     private fun drawAudioBars(canvas: Canvas) {
@@ -1759,7 +2944,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val content = open.loadedPageOrNull(page.id) ?: return@forEachPageIn
             val ox = layout.originX(index)
             val oy = layout.originY(index)
-            val region = Bounds(view.left - ox, view.top - oy, view.right - ox, view.bottom - oy)
+            // A turned page is searched whole: its bars sit anywhere in it.
+            val region = if (layout.turn(index) == 0f) {
+                Bounds(view.left - ox, view.top - oy, view.right - ox, view.bottom - oy)
+            } else {
+                Bounds(-Float.MAX_VALUE / 4f, -Float.MAX_VALUE / 4f, Float.MAX_VALUE / 4f, Float.MAX_VALUE / 4f)
+            }
             content.forEachIntersecting(region) { _, item ->
                 if (item is AudioItem && AudioBar.isPlaced(item.frame)) {
                     val isPlaying = playback?.isPlaying(item.id) == true
@@ -1772,8 +2962,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     audioBars.draw(
                         canvas,
                         item,
-                        if (carried) audioPenX - item.frame.width * scale / 2f else viewport.toScreenX(ox + item.frame.left),
-                        if (carried) audioPenY - item.frame.height * scale / 2f else viewport.toScreenY(oy + item.frame.top),
+                        if (carried) audioPenX - item.frame.width * scale / 2f else screenOf(index, item.frame.left, item.frame.top)[0],
+                        if (carried) audioPenY - item.frame.height * scale / 2f else screenOf(index, item.frame.left, item.frame.top)[1],
                         scale,
                         isPlaying,
                         if (isPlaying) playback?.fraction(item.id) ?: 0f else 0f,
@@ -1824,7 +3014,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     }
                 }
             }
-            AudioTouch.SEEKING -> audio?.seek(item, AudioBar.fractionAt(item.frame, pageX(x, audioPage)))
+            AudioTouch.SEEKING -> audio?.seek(item, AudioBar.fractionAt(item.frame, pageX(x, y, audioPage)))
             AudioTouch.MOVING -> Unit
             AudioTouch.NONE -> Unit
         }
@@ -1861,7 +3051,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             AudioBar.Zone.COLLAPSE -> replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, false)))
             AudioBar.Zone.EXPAND -> replaceAudio(pageId, at, item.copy(frame = AudioBar.withOpen(item.frame, true)))
-            AudioBar.Zone.WAVE -> playback.seek(item, AudioBar.fractionAt(item.frame, audioDownX.let { pageX(it, audioPage) }))
+            AudioBar.Zone.WAVE -> playback.seek(item, AudioBar.fractionAt(item.frame, audioDownX.let { pageX(it, audioDownY, audioPage) }))
         }
     }
 
@@ -1897,7 +3087,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         val found = item ?: return false
         val wasCollapsed = AudioBar.isPlaced(found.frame) && !AudioBar.isOpen(found.frame)
-        val moved = found.copy(frame = AudioBar.centeredAt(pageX(screenX, target), pageY(screenY, target), open = !wasCollapsed))
+        val moved = found.copy(frame = AudioBar.centeredAt(pageX(screenX, screenY, target), pageY(screenX, screenY, target), open = !wasCollapsed))
         if (fromPage == targetPage.id) {
             replaceAudio(fromPage, at, moved)
         } else {
@@ -1991,45 +3181,305 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
+    /**
+     * Puts items copied earlier in the middle of the view, as new items. Pictures, videos and recordings whose file this
+     * document does not have are left out.
+     */
+    fun pasteItems(items: List<PageItem>) {
+        val open = editor ?: return
+        val usable = items.filter { item ->
+            when (item) {
+                is ImageItem -> assetFile(item.assetId) != null
+                is VideoItem -> assetFile(item.assetId) != null
+                is AudioItem -> assetFile(item.assetId) != null
+                else -> true
+            }
+        }
+        if (usable.isEmpty()) return
+        placeInView { pageId, x, y, _, _ ->
+            val box = usable.map { it.bounds }.reduce(Bounds::union)
+            val move = Affine.translate(x - box.centerX, y - box.centerY)
+            val placed = usable.map { it.transformed(move).withId(IdSource.Random.next()).withLocked(false) }
+            val content = open.content(pageId)
+            val at = IntArray(placed.size) { content.size + it }
+            open.perform(ItemsEdit(pageId, IntArray(0), emptyList(), at, placed))
+        }
+    }
+
     private inline fun placeInView(place: (pageId: Long, x: Float, y: Float, maxWidth: Float, maxHeight: Float) -> Unit) {
         val open = editor ?: return
         val layout = layout ?: return
         val index = currentPage
         val page = open.document.pages.getOrNull(index) ?: return
         val world = viewport.visibleWorld(width, height)
+        layout.worldToPage(index, world.centerX, world.centerY, mapped)
         place(
             page.id,
-            world.centerX - layout.originX(index),
-            world.centerY - layout.originY(index),
+            mapped[0],
+            mapped[1],
             world.width * PLACED_SHARE_OF_VIEW,
             world.height * PLACED_SHARE_OF_VIEW,
         )
         syncChanges()
     }
 
+
+    // ---- Writing by hand into a text box ----
+
+    /** One stroke of handwriting waiting to be read: the pen's path in view pixels, and when, from the stroke's start. */
+    private class WrittenStroke(val screen: FloatArray, val timeMs: LongArray, val widthPx: Float)
+
+    private class ReadWord(
+        val request: TextEditRequest,
+        val text: String,
+        val strokes: List<FloatArray>,
+        val widthPx: Float,
+        val ids: List<InProgressStrokeId>,
+    )
+
+    /** How long the pen rests after a stroke for the word to count as finished. */
+    var handwritingPauseMs = WORD_PAUSE_MS
+
+    private val written = ArrayList<WrittenStroke>()
+    private val writtenIds = ArrayList<InProgressStrokeId>()
+    private val writingWet = HashSet<InProgressStrokeId>()
+    private val landing = ArrayDeque<ReadWord>()
+    private var recognizing = 0
+    private var writingStroke = false
+    private var writingReady = false
+    private var writeDownX = 0f
+    private var writeDownY = 0f
+    private var writeDownMs = 0L
+    private var writeReach = 0f
+    private val wordEnd = Runnable { convertWord() }
+    private var reader: MlKitRecognizer? = null
+    private var readerThread: ExecutorService? = null
+
+    private fun readerThread() = readerThread ?: Executors.newSingleThreadExecutor { Thread(it, "word-ink").apply { isDaemon = true } }
+        .also { readerThread = it }
+
+    private fun reader() = reader ?: MlKitRecognizer().also { reader = it }
+
+    /** Handwriting is read only once the models are on the device, so until then the pen acts as it always did. */
+    private fun checkWritingReady() {
+        if (writingReady) return
+        readerThread().execute {
+            val ready = try {
+                reader().isReady
+            } catch (_: RuntimeException) {
+                false
+            }
+            post { writingReady = ready }
+        }
+    }
+
+    private fun startHandwriting(x: Float, y: Float) {
+        writingStroke = true
+        writeDownX = x
+        writeDownY = y
+        writeDownMs = SystemClock.uptimeMillis()
+        writeReach = 0f
+        removeCallbacks(wordEnd)
+        strokeStickyId = null
+        drawStyle = WRITING_STYLE
+        holdDelayMs = 0L
+        drawScribble = false
+        drawCircle = false
+        stabilizer = null
+        strokeEdge = Ruler.NO_EDGE
+        val event = currentEvent
+        if (event != null) startStroke(event) else strokeWaitingForEvent = true
+    }
+
+    private fun inkPending() = written.isNotEmpty() || recognizing > 0 || landing.isNotEmpty() || flight.isFlying
+
+    private fun endHandwritingStroke() {
+        writingStroke = false
+        strokeWaitingForEvent = false
+        val id = strokeId
+        strokeId = null
+        val touch = TAP_REACH_DP * resources.displayMetrics.density
+        val tapped = !inkPending() && writeReach < touch && SystemClock.uptimeMillis() - writeDownMs < TAP_MAX_MS
+        if (tapped) {
+            // A touch with nothing written is what it was before: it ends the typing and puts a box or an edit where it landed.
+            if (id != null) {
+                wet.cancelStroke(id, currentEvent)
+                pendingStrokes.remove(id)
+            }
+            endTextEdit()
+            val index = drawPageIndex
+            handlePlacement(index, pageX(writeDownX, writeDownY, index), pageY(writeDownX, writeDownY, index))
+            if (areaKind != AreaKind.NONE) {
+                shapePointer = -1
+                finishAreaDrag()
+            }
+            return
+        }
+        val event = currentEvent ?: return
+        if (id != null) wet.finishStroke(event, drawPointerId, id)
+    }
+
+    private fun collectWritten(id: InProgressStrokeId, stroke: Stroke, pending: PendingStroke) {
+        val points = stroke.inputs.toStrokePoints()
+        val screen = FloatArray(points.size * 2)
+        for (i in 0 until points.size) {
+            screen[2 * i] = points.x(i)
+            screen[2 * i + 1] = points.y(i)
+        }
+        pending.toScreen?.mapPoints(screen)
+        written += WrittenStroke(screen, LongArray(points.size) { points.timeMs(it).toLong() }, pending.style.width * viewport.pxPerPt)
+        writtenIds += id
+        writingWet += id
+        removeCallbacks(wordEnd)
+        if (!writingStroke) postDelayed(wordEnd, handwritingPauseMs)
+    }
+
+    /** The pen has rested: what was written since is one word, which is read off the main thread. */
+    private fun convertWord() {
+        if (written.isEmpty()) return
+        val strokes = written.toList()
+        val ids = writtenIds.toList()
+        written.clear()
+        writtenIds.clear()
+        val request = textEdit
+        if (request == null || !writingReady) return dropWet(ids)
+        recognizing++
+        val ink = strokes.map { s ->
+            WordStroke(
+                FloatArray(s.timeMs.size) { s.screen[2 * it] },
+                FloatArray(s.timeMs.size) { s.screen[2 * it + 1] },
+                s.timeMs,
+            )
+        }
+        val before = request.text.takeLast(PRE_CONTEXT_CHARS)
+        val widthPx = strokes.maxOf { it.widthPx }
+        val screens = strokes.map { it.screen }
+        readerThread().execute {
+            val text = try {
+                reader().readWord(ink, before)
+            } catch (_: IOException) {
+                null
+            } catch (_: RuntimeException) {
+                null
+            }
+            post {
+                recognizing--
+                if (text == null || textEdit !== request) {
+                    dropWet(ids)
+                } else {
+                    landing += ReadWord(request, text, screens, widthPx, ids)
+                    flyNextWord()
+                }
+            }
+        }
+    }
+
+    /** Words land one at a time, so each finds the end of the text where the one before left it. */
+    private fun flyNextWord() {
+        if (flight.isFlying) return
+        val next = landing.removeFirstOrNull() ?: return
+        val request = next.request
+        if (textEdit !== request) {
+            dropWet(next.ids)
+            return flyNextWord()
+        }
+        val target = WordTarget(
+            left = request.left + request.endX,
+            leadingSpace = request.text.isNotEmpty() && !request.text.last().isWhitespace(),
+            lineTop = request.top + request.endY,
+            lineHeight = request.lineHeight,
+            textSizePx = request.textSizePx,
+            color = request.color,
+            bold = request.style.bold,
+            italic = request.style.italic,
+            turnDegrees = request.turnDegrees,
+            pivotX = request.pivotX,
+            pivotY = request.pivotY,
+        )
+        // The flight draws the ink from where it lay, so taking the pen's own ink away shows no change.
+        flight.fly(next.strokes, next.widthPx, WRITING_STYLE.color, next.text, target) {
+            if (textEdit === request) request.append(next.text)
+            flyNextWord()
+        }
+        dropWet(next.ids)
+    }
+
+    private fun dropWet(ids: List<InProgressStrokeId>) {
+        if (ids.isEmpty()) return
+        val set = ids.toSet()
+        writingWet.removeAll(set)
+        wet.removeFinishedStrokes(set)
+    }
+
+    /** Ends any word being written, without adding it. */
+    private fun discardWriting() {
+        removeCallbacks(wordEnd)
+        if (!inkPending() && writingWet.isEmpty()) return
+        dropWet(writtenIds.toList())
+        written.clear()
+        writtenIds.clear()
+        for (word in landing) dropWet(word.ids)
+        landing.clear()
+        flight.clear()
+    }
+
     /** Finishes any text being typed. */
     fun endTextEdit() {
+        discardWriting()
         val request = textEdit ?: return
         textEdit = null
         request.commitNow()
         onTextEdit(null)
     }
 
-    private fun pageX(screenX: Float, index: Int) =
-        if (drawingInLoupe) loupe.pageX(screenX) else viewport.toWorldX(screenX) - (layout?.originX(index) ?: 0f)
+    private val mapped = FloatArray(2)
 
-    private fun pageY(screenY: Float, index: Int) =
-        if (drawingInLoupe) loupe.pageY(screenY) else viewport.toWorldY(screenY) - (layout?.originY(index) ?: 0f)
+    /** The point of page [index] that lies under a point of the screen, or under the loupe's window when drawing in it. */
+    private fun pageAt(screenX: Float, screenY: Float, index: Int, axis: Int): Float {
+        val layout = layout ?: return 0f
+        val worldX = if (drawingInLoupe) loupe.worldX(screenX) else viewport.toWorldX(screenX)
+        val worldY = if (drawingInLoupe) loupe.worldY(screenY) else viewport.toWorldY(screenY)
+        layout.worldToPage(index, worldX, worldY, mapped)
+        return mapped[axis]
+    }
+
+    private fun pageX(screenX: Float, screenY: Float, index: Int) = pageAt(screenX, screenY, index, 0)
+
+    private fun pageY(screenX: Float, screenY: Float, index: Int) = pageAt(screenX, screenY, index, 1)
+
+    /** Where a point of page [index] shows on the screen, x then y. */
+    private fun screenOf(index: Int, pageX: Float, pageY: Float): FloatArray {
+        val layout = layout ?: return floatArrayOf(pageX, pageY)
+        layout.pageToWorld(index, pageX, pageY, mapped)
+        return floatArrayOf(viewport.toScreenX(mapped[0]), viewport.toScreenY(mapped[1]))
+    }
+
+    /** Fills [out] with the matrix that takes a point of page [index] to the screen: the page's turn, then the zoom and pan. */
+    private fun pageToScreenMatrix(index: Int, out: Matrix) {
+        val layout = layout
+        val scale = viewport.pxPerPt
+        if (layout == null) {
+            out.setScale(scale, scale)
+            out.postTranslate(viewport.panX, viewport.panY)
+            return
+        }
+        out.setTranslate(-layout.pageWidth(index) / 2f, -layout.pageHeight(index) / 2f)
+        out.postRotate(layout.turn(index))
+        out.postTranslate(layout.centerX(index), layout.centerY(index))
+        out.postScale(scale, scale)
+        out.postTranslate(viewport.panX, viewport.panY)
+    }
 
     /** The pen on the loupe's box, away from anything else, carries the box along. */
     private fun startDraggingLoupeBox(pointerId: Int, x: Float, y: Float): Boolean {
-        val layout = layout ?: return false
-        val pageX = viewport.toWorldX(x) - layout.originX(loupe.pageIndex)
-        val pageY = viewport.toWorldY(y) - layout.originY(loupe.pageIndex)
-        if (!loupe.box.contains(pageX, pageY)) return false
+        val worldX = viewport.toWorldX(x)
+        val worldY = viewport.toWorldY(y)
+        // A little past the box's edge counts, so a finger need not land on the thin outline.
+        val slop = LOUPE_GRAB_SLOP_DP * resources.displayMetrics.density / viewport.pxPerPt
+        if (!RectF(loupe.box).apply { inset(-slop, -slop) }.contains(worldX, worldY)) return false
         loupeBoxPointer = pointerId
-        loupeBoxGrabX = pageX - loupe.box.left
-        loupeBoxGrabY = pageY - loupe.box.top
+        loupeBoxGrabX = worldX - loupe.box.left
+        loupeBoxGrabY = worldY - loupe.box.top
         return true
     }
 
@@ -2045,11 +3495,20 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val scale = viewport.pxPerPt
         // Stroke coordinates are the page's own, so a page can move without touching its ink.
         if (drawingInLoupe) {
-            loupe.screenToPage(screenToPage)
+            // The window shows the document, and the page it lies on may be turned.
+            loupe.screenToWorld(screenToPage)
+            val worldToPage = Matrix()
+            pageToScreenMatrix(drawPageIndex, worldToPage)
+            val pageToWorld = Matrix().apply {
+                setTranslate(-layout.pageWidth(drawPageIndex) / 2f, -layout.pageHeight(drawPageIndex) / 2f)
+                postRotate(layout.turn(drawPageIndex))
+                postTranslate(layout.centerX(drawPageIndex), layout.centerY(drawPageIndex))
+            }
+            pageToWorld.invert(worldToPage)
+            screenToPage.postConcat(worldToPage)
         } else {
-            screenToPage.setTranslate(-viewport.panX, -viewport.panY)
-            screenToPage.postScale(1f / scale, 1f / scale)
-            screenToPage.postTranslate(-layout.originX(drawPageIndex), -layout.originY(drawPageIndex))
+            pageToScreenMatrix(drawPageIndex, pageToScreen)
+            pageToScreen.invert(screenToPage)
         }
         updateWetMask(layout, drawPageIndex)
         if (strokeEdge != Ruler.NO_EDGE) {
@@ -2059,7 +3518,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val steady = stabilizer
         val id = if (steady != null) {
             strokeStartMs = event.eventTime
-            screenToPage.invert(pageToScreen)
+            updatePageToScreen()
             val index = event.findPointerIndex(drawPointerId).coerceAtLeast(0)
             wet.startStroke(
                 stabilizedInput(event.getX(index), event.getY(index), event.eventTime, event.getPressure(index)),
@@ -2069,7 +3528,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         } else {
             wet.startStroke(event, drawPointerId, InkBrushes.brush(drawStyle), screenToPage)
         }
-        pendingStrokes[id] = PendingStroke(editor, page.id, drawStyle, strokeStickyId, drawScribble, drawCircle)
+        pendingStrokes[id] = PendingStroke(
+            editor, page.id, drawStyle, strokeStickyId, drawScribble, drawCircle,
+            writingStroke, if (writingStroke) Matrix(pageToScreen) else null,
+        )
         strokeId = id
         strokeStartedInThisEvent = true
         if (holdDelayMs > 0L) watchForHold(event)
@@ -2082,7 +3544,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (strokeStartedInThisEvent) return
         if (holdDelayMs > 0L || straightening) {
             val index = event.findPointerIndex(drawPointerId)
-            if (index >= 0) hold.move(event.getX(index), event.getY(index), event.eventTime)
+            if (index >= 0) {
+                hold.move(event.getX(index), event.getY(index), event.eventTime)
+                if (!straightening) {
+                    for (h in 0 until event.historySize) {
+                        traceAdd(event.getHistoricalX(index, h), event.getHistoricalY(index, h))
+                        tracePressure(event.getHistoricalPressure(index, h))
+                    }
+                    traceAdd(event.getX(index), event.getY(index))
+                    tracePressure(event.getPressure(index))
+                }
+            }
         }
         if (straightening) {
             moveStraightEnd(id, event.eventTime)
@@ -2151,7 +3623,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         screenToPage.mapPoints(start)
         strokeStartX = start[0]
         strokeStartY = start[1]
-        screenToPage.invert(pageToScreen)
+        updatePageToScreen()
         val id = wet.startStroke(strokeInput(strokeStartX, strokeStartY, 0L), InkBrushes.brush(drawStyle), pageToScreen)
         pendingStrokes[id] = PendingStroke(editor, pageId, drawStyle, strokeStickyId, drawScribble, drawCircle)
         strokeId = id
@@ -2170,6 +3642,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         screenToPage.mapPoints(start)
         strokeStartX = start[0]
         strokeStartY = start[1]
+        traceSize = 0
+        tracePressureSum = 0f
+        tracePressureCount = 0
+        traceAdd(x, y)
         postDelayed(holdCheck, holdDelayMs)
     }
 
@@ -2178,19 +3654,105 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (strokeId == null || straightening) return
         val now = SystemClock.uptimeMillis()
         if (hold.isHeld(now, holdDelayMs)) {
-            straighten()
+            if (!snapToShape()) {
+                val fit = holdFit
+                // A line that is already straight is made so. Anything else, a curve or a shape that is not one of the usual ones, is smoothed.
+                if (strokeEdge != Ruler.NO_EDGE || traceSize < 8 || (fit is FittedShape.Line && fit.headLength == 0f)) {
+                    straighten()
+                } else {
+                    smoothHeldStroke()
+                }
+            }
         } else {
             postDelayed(holdCheck, (hold.heldAtMs(holdDelayMs) - now).coerceIn(MIN_HOLD_CHECK_MS, holdDelayMs))
         }
     }
 
+    // The pen's path so far on the page, as x,y pairs, kept while a hold can still turn the stroke into a shape.
+    private var trace = FloatArray(TRACE_START_FLOATS)
+    private var traceSize = 0
+    private val traceAt = FloatArray(2)
+    private var tracePressureSum = 0f
+    private var tracePressureCount = 0
+
+    private fun tracePressure(pressure: Float) {
+        tracePressureSum += pressure
+        tracePressureCount++
+    }
+
+    private fun traceAdd(screenX: Float, screenY: Float) {
+        traceAt[0] = screenX
+        traceAt[1] = screenY
+        screenToPage.mapPoints(traceAt)
+        if (traceSize + 2 > trace.size) trace = trace.copyOf(trace.size * 2)
+        trace[traceSize++] = traceAt[0]
+        trace[traceSize++] = traceAt[1]
+    }
+
+    /**
+     * The pen has been held still. If the stroke so far is closest to an ellipse, rectangle, triangle, other polygon,
+     * arrow or smooth curve, it is taken off the wet layer and that shape is shown instead, to be put on the page when the
+     * pen lifts, as one edit like any shape. A stroke that is only a straight line is left to [straighten].
+     */
+    private fun snapToShape(): Boolean {
+        holdFit = null
+        val old = strokeId ?: return false
+        if (strokeEdge != Ruler.NO_EDGE || traceSize < 8) return false
+        val pending = pendingStrokes[old] ?: return false
+        val fit = ShapeFit.fit(trace.copyOf(traceSize)) ?: return false
+        holdFit = fit
+        if (fit is FittedShape.Line && fit.headLength == 0f) return false
+        // A simple curve, with one handle between its ends, gets that handle. One that would need more is too complex for handles: its own
+        // line is smoothed instead.
+        if (fit is FittedShape.Path && fit.smooth && !fit.closed && fit.points.size / 2 - 2 > 1) return false
+        pendingStrokes.remove(old)
+        wet.cancelStroke(old)
+        stabilizer = null
+        strokeId = null
+        snapEditor = pending.editor
+        snapPageId = pending.pageId
+        snapStickyId = pending.stickyId
+        // The shape's line is as wide as the pen's line was on average, which presses wider or thinner than the set width.
+        val meanPressure = if (tracePressureCount > 0) tracePressureSum / tracePressureCount else 0.5f
+        val style = pending.style.copy(width = pending.style.width * InkBrushes.meanWidthFactor(pending.style, meanPressure))
+        shapes.showSnap(drawPageIndex, ShapeFit.toItem(fit, style))
+        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        return true
+    }
+
+    // Where a shape being held will go when the pen lifts: the page, or the open note the stroke was drawn in.
+    private var snapEditor: NoteEditor? = null
+    private var snapPageId = 0L
+    private var snapStickyId: Long? = null
+
+    /** The pen lifted with a shape held: it goes onto the page, or into the open note, as one edit. */
+    private fun commitSnap() {
+        val sticky = snapStickyId
+        snapStickyId = null
+        val editor = snapEditor
+        if (sticky == null || editor == null) {
+            shapes.commitSnap()
+            return
+        }
+        val item = shapes.takeSnap() ?: return
+        addToSticky(editor, snapPageId, sticky, item.withId(IdSource.Random.next()))
+        syncChanges()
+    }
+
     /** Replaces the wet stroke with a line from where it began to where the pen is. */
+    /** The pen is held at the end of a line that is not a plain straight one or a usual shape: when it lifts, the line is smoothed. */
+    private fun smoothHeldStroke() {
+        val id = strokeId ?: return
+        pendingStrokes[id]?.smoothOnFinish = true
+        performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
     private fun straighten() {
         val old = strokeId ?: return
         val pending = pendingStrokes.remove(old) ?: return
         wet.cancelStroke(old)
         stabilizer = null
-        screenToPage.invert(pageToScreen)
+        updatePageToScreen()
         val first = strokeInput(strokeStartX, strokeStartY, 0L)
         val id = wet.startStroke(first, InkBrushes.brush(drawStyle), pageToScreen)
         pendingStrokes[id] = pending
@@ -2245,7 +3807,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     private fun eraseAt(x: Float, y: Float) {
-        erase?.eraseTo(pageX(x, drawPageIndex), pageY(y, drawPageIndex))
+        erase?.eraseTo(pageX(x, y, drawPageIndex), pageY(x, y, drawPageIndex))
         redrawChanges(drawPageIndex)
     }
 
@@ -2255,23 +3817,28 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
      */
     private fun updateWetMask(layout: DocumentLayout, index: Int) {
         val size = editor?.document?.pages?.get(index)?.size
-        val page = if (drawingInLoupe) RectF(loupe.area) else size?.let {
-            val originX = layout.originX(index)
-            val originY = layout.originY(index)
-            RectF(
-                viewport.toScreenX(originX),
-                viewport.toScreenY(originY),
-                viewport.toScreenX(originX + it.widthPt),
-                viewport.toScreenY(originY + it.heightPt),
-            )
+        val pageOutline = Path()
+        val page = if (drawingInLoupe) {
+            RectF(loupe.area)
+        } else {
+            size?.let {
+                // The page as it lies on the screen, which is a turned rectangle when the page is turned.
+                val onScreen = Matrix()
+                pageToScreenMatrix(index, onScreen)
+                pageOutline.addRect(0f, 0f, it.widthPt, it.heightPt, Path.Direction.CW)
+                pageOutline.transform(onScreen)
+                RectF().also { box -> pageOutline.computeBounds(box, true) }
+            }
         }
-        if (maskIsCurrent && page == maskedPage) return
-        maskIsCurrent = true
+        val turnedHere = !drawingInLoupe && layout.turn(index) != 0f
+        if (maskIsCurrent && page == maskedPage && !turnedHere) return
+        maskIsCurrent = !turnedHere
         maskedPage = page
         val mask = Path()
         if (page != null) {
             mask.addRect(0f, 0f, width.toFloat(), height.toFloat(), Path.Direction.CW)
-            mask.op(Path().apply { addRect(page, Path.Direction.CW) }, Path.Op.DIFFERENCE)
+            val shown = if (drawingInLoupe || pageOutline.isEmpty) Path().apply { addRect(page, Path.Direction.CW) } else pageOutline
+            mask.op(shown, Path.Op.DIFFERENCE)
         }
         for (overlay in overlayBounds) {
             mask.op(Path().apply { addRect(overlay, Path.Direction.CW) }, Path.Op.UNION)
@@ -2282,22 +3849,38 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
         for ((id, stroke) in strokes) {
             val pending = pendingStrokes.remove(id) ?: continue
+            if (pending.handwriting) {
+                collectWritten(id, stroke, pending)
+                continue
+            }
             val editor = pending.editor
-            val item = StrokeItem(IdSource.Random.next(), pending.style, stroke.inputs.toStrokePoints())
+            val drawn = StrokeItem(IdSource.Random.next(), pending.style, stroke.inputs.toStrokePoints())
+            // Held at its end, the line is what was drawn but with its wobble gone. The gestures below look at what was drawn.
+            val item = if (pending.smoothOnFinish) drawn.copy(points = StrokeSmoothing.smoothBy(drawn.points, HOLD_SMOOTHING_SIGMA_PT)) else drawn
             val stickyId = pending.stickyId
             if (stickyId != null && addToSticky(editor, pending.pageId, stickyId, item)) continue
             lastLoop = null
-            if (pending.scribbleToErase && StrokeGestures.isScribble(item.points)) {
-                scribbleOut(editor, pending.pageId, item)
+            if (pending.scribbleToErase && StrokeGestures.isScribble(drawn.points)) {
+                scribbleOut(editor, pending.pageId, drawn)
                 continue
             }
-            editor.strokes.put(item, stroke)
+            // The ink the wet layer made is of the line as drawn, so a smoothed line is built afresh.
+            if (item === drawn) editor.strokes.put(item, stroke)
             editor.perform(ItemsEdit.addOnTop(pending.pageId, editor.content(pending.pageId), item))
-            if (pending.circleToLasso && StrokeGestures.isClosedLoop(item.points)) lastLoop = LoopMark(pending.pageId, item)
+            if (item.style.tool != InkTool.HIGHLIGHTER) holdWet += id
+            if (pending.circleToLasso && StrokeGestures.isClosedLoop(drawn.points)) lastLoop = LoopMark(pending.pageId, item)
         }
         syncChanges()
-        wet.removeFinishedStrokes(strokes.keys)
+        // A finished stroke stays on the wet layer until the tiles have drawn it, or it would vanish for as long as a slow tile takes,
+        // such as one with a large see-through picture. Marker strokes go at once: shown twice they would look darker for a moment.
+        val now = strokes.keys.filter { it !in holdWet && it !in writingWet }.toSet()
+        if (now.isNotEmpty()) wet.removeFinishedStrokes(now)
+        val later = strokes.keys.filter { it in holdWet && it !in writingWet }.toSet()
+        holdWet.removeAll(later)
+        if (later.isNotEmpty()) tiles.afterPaints(WET_HOLD_PAINTS) { wet.removeFinishedStrokes(later) }
     }
+
+    private val holdWet = HashSet<InProgressStrokeId>()
 
     /** Erases whole strokes and shapes along a scribble. The scribble itself is not kept. */
     private fun scribbleOut(editor: NoteEditor, pageId: Long, scribble: StrokeItem) {
@@ -2341,6 +3924,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             circleLasso.kinds,
             circleLasso.fullOnly,
             circleLasso.anyPortion,
+            circleLasso.lockedToo,
         )
         val picked = inside.indices.indices.filter { inside.indices[it] != own }
         if (picked.isEmpty()) return false
@@ -2371,7 +3955,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         clampPan()
         tiles.invalidate()
-        onViewMoved()
+        viewMoved()
         overlay.invalidate()
     }
 
@@ -2434,28 +4018,119 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (editor?.pdf?.endPinch() == true) tiles.invalidateAll()
         tiles.settle()
         retainNearbyPages()
+        // Rounding the pan to whole pixels moves the page a little, and the selection with it.
+        followTextEdit()
+        overlay.invalidate()
     }
 
     private fun clampPan() {
         if (width > 0) layout?.clampPan(viewport, width, height, pageMarginPx)
     }
 
+    /**
+     * The middle of the empty room past the last page, on the screen, when there is room to render at least a share
+     * of a page there, and null when there is not or no page can be added.
+     */
+    fun addPageSpot(): FloatArray? {
+        val layout = layout ?: return null
+        val pages = editor?.document?.pages ?: return null
+        if (!canAddPages || layout.isInfinite || pages.isEmpty() || width == 0) return null
+        val last = pages.lastIndex
+        val gap = DocumentLayout.DEFAULT_GAP_PT
+        val length = layout.lengthAlong(last)
+        val end = layout.bounds
+        val spot: FloatArray
+        val free: Float
+        when (scrollDirection) {
+            ScrollDirection.VERTICAL -> {
+                val start = end.bottom + gap
+                free = viewport.toWorldY(height.toFloat()) - start
+                // The middle of the empty space on the screen, and the middle of the screen across.
+                val middle = start + free / 2f
+                spot = floatArrayOf(width / 2f, viewport.toScreenY(middle))
+            }
+            ScrollDirection.LEFT_TO_RIGHT -> {
+                val start = end.right + gap
+                free = viewport.toWorldX(width.toFloat()) - start
+                val middle = start + free / 2f
+                spot = floatArrayOf(viewport.toScreenX(middle), height / 2f)
+            }
+            ScrollDirection.RIGHT_TO_LEFT -> {
+                val start = end.left - gap
+                free = start - viewport.toWorldX(0f)
+                val middle = start - free / 2f
+                spot = floatArrayOf(viewport.toScreenX(middle), height / 2f)
+            }
+        }
+        if (free < length * ADD_PAGE_MIN_SHARE) return null
+        val margin = pageMarginPx
+        spot[0] = spot[0].coerceIn(margin, width - margin)
+        spot[1] = spot[1].coerceIn(margin, height - margin)
+        return spot
+    }
+
+    /**
+     * The middle of the room before the first page, on the screen, once enough of it shows, and null when the notebook has a
+     * cover or cannot take one.
+     */
+    fun addCoverSpot(): FloatArray? {
+        val layout = layout ?: return null
+        val document = editor?.document ?: return null
+        if (layout.startRoomPt <= 0f || width == 0 || document.coverId != null || !document.canAddPages) return null
+        val end = layout.bounds
+        val room = layout.startRoomPt
+        val spot: FloatArray
+        val free: Float
+        when (scrollDirection) {
+            ScrollDirection.VERTICAL -> {
+                free = end.top - viewport.toWorldY(0f)
+                spot = floatArrayOf(viewport.toScreenX(end.centerX), viewport.toScreenY(end.top - minOf(free, room) / 2f))
+            }
+            ScrollDirection.LEFT_TO_RIGHT -> {
+                free = end.left - viewport.toWorldX(0f)
+                spot = floatArrayOf(viewport.toScreenX(end.left - minOf(free, room) / 2f), viewport.toScreenY(end.centerY))
+            }
+            ScrollDirection.RIGHT_TO_LEFT -> {
+                free = viewport.toWorldX(width.toFloat()) - end.right
+                spot = floatArrayOf(viewport.toScreenX(end.right + minOf(free, room) / 2f), viewport.toScreenY(end.centerY))
+            }
+        }
+        if (free < room * ADD_COVER_MIN_SHARE) return null
+        spot[0] = spot[0].coerceIn(pageMarginPx, width - pageMarginPx)
+        spot[1] = spot[1].coerceIn(pageMarginPx, height - pageMarginPx)
+        return spot
+    }
+
     // ---- Document ----
 
-    private fun rebuildLayout() {
+    private fun rebuildLayout(keepView: Boolean = false) {
         val document = editor?.document ?: return
-        layout = DocumentLayout(document.pages, scrollDirection)
+        layout = DocumentLayout(document.pages, scrollDirection).also { built ->
+            // Where pages can be added, the view may go on past the last one, to the room for a new page.
+            if (canAddPages && !built.isInfinite) built.endRoomPt = built.lengthAlong(document.pages.lastIndex) * ADD_PAGE_ROOM
+            // The view may go up to half a page before the first, so every part of the page can be reached comfortably.
+            // With no cover, "Add cover" sits in that room.
+            if (!built.isInfinite) built.startRoomPt = built.lengthAlong(0) * ADD_COVER_ROOM
+        }
         layoutVersion = document.version
-        placeFirstPage()
+        if (!keepView) placeFirstPage()
         clampPan()
         tiles.invalidateAll()
     }
+
+    /** Set before a notebook opens to have it open on its cover. Cleared once the first page is placed. */
+    var startOnCover = false
 
     private fun placeFirstPage() {
         if (hasPlacedPage || width == 0) return
         val layout = layout ?: return
         val saved = if (continueFromLastPage) editor?.lastPageIndex() ?: -1 else -1
-        layout.moveToPage(viewport, saved.coerceAtLeast(0), width, height, pageMarginPx)
+        // A notebook with a cover opens on its first note page, page 1; the cover, page 0, is a scroll up away.
+        val first = if (editor?.document?.coverId != null) 1 else 0
+        // Asked for the cover, as after Edit in the New Notebook dialog: it opens on page 0.
+        val index = if (startOnCover) 0 else saved.coerceAtLeast(first)
+        startOnCover = false
+        layout.moveToPage(viewport, index, width, height, pageMarginPx)
         settlePan()
         hasPlacedPage = true
     }
@@ -2492,7 +4167,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             if (size == null) {
                 layout.bounds
             } else {
-                Bounds.ofSize(layout.originX(index), layout.originY(index), size.widthPt, size.heightPt)
+                layout.roomBounds(index)
             },
         )
     }
@@ -2566,7 +4241,36 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val HOLD_SLOP_DP = 3f
         const val AUDIO_HOLD_MS = 400L
         const val FINGER_TAP_MS = 300L
+        const val FILL_GAP_OF_WIDTH = 0.01f
+        const val SAME_FILL_AREA = 0.15f
+        const val WET_HOLD_PAINTS = 3
+        const val GRID_COLOR = 0xFF8E9096.toInt()
+        const val GRID_WIDTH_DP = 1.5f
+        const val GRID_DASH_DP = 3f
+        const val GRID_GAP_DP = 6f
+        const val GRID_PAGES_AROUND = 2
+        const val FILL_REVEAL_MS = 50L
+        const val TABLE_TAP_MS = 300L
+        const val TABLE_DOUBLE_TAP_MS = 450L
+        const val TABLE_DOUBLE_TAP_REACH_DP = 40f
+        const val TAP_DOT_PT = 6f
+        const val TAP_DOT_WAIT_MS = 200L
+        const val RESET_TURN_MS = 250L
+
+        /** How far past the last page the view may go, as a share of that page, and how much of a page must show to offer a new one. */
+        const val ADD_PAGE_ROOM = 0.6f
+
+        /** How far before the first page the view may go, as a share of the page's length, and how much of it shows the button. */
+        const val ADD_COVER_ROOM = 0.5f
+        const val ADD_COVER_MIN_SHARE = 0.3f
+        const val ADD_PAGE_MIN_SHARE = 0.3f
+        const val LOUPE_GRAB_SLOP_DP = 24f
+        const val BADGE_HALF_WIDTH_DP = 44f
+        const val BADGE_ZONE_HEIGHT_DP = 96f
+        const val FULL_TURN_DEGREES = 360f
+        const val HALF_TURN_DEGREES = 180f
         const val MIN_HOLD_CHECK_MS = 8L
+        const val TRACE_START_FLOATS = 1024
         const val PLACED_SHARE_OF_VIEW = 0.6f
         const val EMOJI_BOX_OF_SIZE = 1.5f
         const val VIDEO_BUTTON_REACH_PT = 24f
@@ -2574,11 +4278,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val LOUPE_STEP_SHARE = 0.8f
         const val LOUPE_BOX_COLOR = 0xFF4A9BF5.toInt()
         const val LOUPE_BOX_WIDTH_DP = 1.2f
+        /** The pen used for handwriting that becomes text. It is only ever shown, never saved. */
+        val WRITING_STYLE = InkStyle(width = 1.5f)
+
+        /** A pause this long after a stroke ends a written word. */
+        const val WORD_PAUSE_MS = 700L
+
+        /** How much typed text before a word helps to read it. */
+        const val PRE_CONTEXT_CHARS = 20
+
+        /** A touch that stays within this and ends within [TAP_MAX_MS] is a tap, not writing. */
+        const val TAP_REACH_DP = 6f
+        const val TAP_MAX_MS = 300L
+
         const val NEW_TEXT_WIDTH_PT = 200f
         const val NEW_TEXT_HEIGHT_PT = 60f
         const val CELL_INSET_PT = 3f
         const val STICKY_CORNER_DP = 40f
+        const val ON_NOTE_SLACK_PT = 2f
         const val MIN_AREA_PT = 30f
+
+        /** How strongly a line held at its end is smoothed: very (see [StrokeSmoothing]), so that only the shape of the line is left. */
+        val HOLD_SMOOTHING_SIGMA_PT = 7 * StrokeSmoothing.SIGMA_PT_PER_LEVEL * 1.2f
+
+        /** How long a touch must be held before it moves for it to size a note or sticker and then give back the tool. */
+        const val HOLD_TO_SIZE_MS = 350L
         const val AREA_EDGE_COLOR = 0xFF4A9BF5.toInt()
         const val AREA_FILL_COLOR = 0x224A9BF5
 
@@ -2600,6 +4324,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val FINGER_LOOP_REACH_MM = 5f
         private const val MM_PER_INCH = 25.4f
         const val FINGER_BUTTON_REACH_DP = 30f
+        const val BUTTON_REACH_OFF_PAGE_DP = 18f
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
 

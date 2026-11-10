@@ -185,6 +185,13 @@ class CodecTest {
     }
 
     @Test
+    fun `the planning pages survive a round trip`() {
+        val planning = listOf(PageTemplate.Semester, PageTemplate.MindMap, PageTemplate.WeekPlanner)
+        val document = Document(1, "p", DocumentKind.NOTE, 1, 2, planning.mapIndexed { i, t -> Page(i + 1L, PageSize(100f, 200f), PageBackground(0, t)) })
+        assertSameDocument(document, DocumentCodec.decode(DocumentCodec.encode(document)))
+    }
+
+    @Test
     fun `canvas and pdf documents survive a round trip`() {
         val canvas = Document(1, "c", DocumentKind.CANVAS, 1, 2, listOf(Page(5, null)))
         assertSameDocument(canvas, DocumentCodec.decode(DocumentCodec.encode(canvas)))
@@ -238,9 +245,9 @@ class CodecTest {
 
     @Test
     fun `a newer version is refused, not skipped`() {
-        val newer = encodeWithVersion("BNPG", 5)
+        val newer = encodeWithVersion("BNPG", 7)
         val thrown = assertThrows(UnsupportedVersionException::class.java) { PageCodec.decode(newer) }
-        assertEquals(5, thrown.version)
+        assertEquals(7, thrown.version)
     }
 
     /** Builds a well-formed file with a bad body, to check values the checksum cannot catch. */
@@ -424,6 +431,95 @@ class CodecTest {
         val moved = styled.copy(base = PageTemplate.Cornell(), frameLines = listOf(0.1f, 0.7f, 0.4f))
         assertEquals(moved, roundTrip(moved, 3))
         assertEquals(emptyList<Float>(), roundTrip(moved, 2).frameLines)
+    }
+
+    @Test
+    fun `page format 5 keeps the lock, keep open, opacity and no overlap, and older pages open without them`() {
+        val stroke = StrokeItem(
+            1L,
+            InkStyle(tool = InkTool.HIGHLIGHTER, noOverlap = true),
+            StrokePointsBuilder().apply {
+                add(1f, 2f, 0.5f, 0.1f, 3.2f, 0f)
+                add(3f, 4f, timeMs = 4.2f)
+            }.build(),
+            locked = true,
+        )
+        val image = ImageItem(2L, Frame(0f, 0f, 50f, 40f), "a.jpg", opacity = 0.4f, locked = true)
+        val note = StickyNoteItem(3L, Frame(5f, 6f, 200f, 200f), 0xFFFBDD8C.toInt(), isOpen = true, keepOpen = true, locked = true)
+        val text = TextItem(4L, Frame(0f, 0f, 10f, 10f), "hi", locked = true)
+        val tape = TapePathItem(5L, floatArrayOf(0f, 0f, 9f, 9f), 6f, 0xFF123456.toInt(), locked = true)
+        val items = listOf(stroke, image, note, text, tape)
+        val back = PageCodec.decode(PageCodec.encode(items))
+        assertEquals(items, back)
+        assertTrue(back.all { it.locked })
+
+        val older = PageCodec.decode(PageCodec.encode(items, version = 4))
+        assertTrue(older.none { it.locked })
+        assertEquals(1f, (older[1] as ImageItem).opacity, 0f)
+        assertEquals(false, (older[2] as StickyNoteItem).keepOpen)
+        assertEquals(false, (older[0] as StrokeItem).style.noOverlap)
+        assertEquals(image.copy(opacity = 1f, locked = false), older[1])
+    }
+
+    @Test
+    fun `document format 4 keeps the angle a page is shown at, and older documents open upright`() {
+        val page = Page(1, PageSize(100f, 200f), rotation = 37.5f)
+        val document = Document(1, "t", DocumentKind.NOTE, 0, 0, listOf(page))
+        assertEquals(37.5f, DocumentCodec.decode(DocumentCodec.encode(document)).pages[0].rotation, 0f)
+        assertEquals(0f, DocumentCodec.decode(DocumentCodec.encode(document, version = 3)).pages[0].rotation, 0f)
+    }
+
+    @Test
+    fun `document format 5 keeps the cover design, and older documents have no cover`() {
+        val size = PageSize(100f, 200f)
+        val document = Document(1, "t", DocumentKind.NOTE, 0, 0, listOf(Page(7, size, cover = "simple-red"), Page(8, size)))
+        val back = DocumentCodec.decode(DocumentCodec.encode(document))
+        assertEquals("simple-red", back.coverId)
+        assertEquals(null, back.pages[1].cover)
+        val older = DocumentCodec.decode(DocumentCodec.encode(document, version = 4))
+        assertEquals(null, older.coverId)
+    }
+
+    @Test
+    fun `the cover page is locked in place`() {
+        val size = PageSize(100f, 200f)
+        val cover = Document.withCover(
+            Document(1, "t", DocumentKind.NOTE, 0, 0, listOf(Page(8, size))),
+            "solid-blue",
+        )
+        assertEquals(2, cover.pages.size)
+        assertTrue(cover.pages[0].isCover)
+        assertTrue(cover.isLocked(cover.pages[0].id))
+        assertThrows(IllegalArgumentException::class.java) { cover.insertPage(0, Page(9, size)) }
+        assertThrows(IllegalArgumentException::class.java) { cover.removePage(0) }
+        assertThrows(IllegalArgumentException::class.java) { cover.movePage(1, 0) }
+        assertThrows(IllegalArgumentException::class.java) { cover.updatePage(cover.pages[0].copy(cover = null)) }
+        assertEquals(cover, Document.withCover(cover, "solid-red"))
+    }
+
+    @Test
+    fun `a cover is added, changed and taken out by one edit that undoes`() {
+        val size = PageSize(100f, 200f)
+        val document = Document(1, "t", DocumentKind.NOTE, 0, 0, listOf(Page(8, size)))
+        val target = object : app.betternotes.core.edit.EditTarget {
+            override val document = document
+            override fun content(pageId: Long) = throw UnsupportedOperationException()
+        }
+        val cover = Page(9, size, cover = "simple")
+        val add = app.betternotes.core.edit.SetCover(null, cover)
+        add.apply(target)
+        assertEquals(listOf(9L, 8L), document.pages.map { it.id })
+        val change = app.betternotes.core.edit.SetCover(cover, cover.copy(cover = "koi"))
+        change.apply(target)
+        assertEquals("koi", document.coverId)
+        change.revert(target)
+        assertEquals("simple", document.coverId)
+        val remove = app.betternotes.core.edit.SetCover(cover, null)
+        remove.apply(target)
+        assertEquals(null, document.coverId)
+        remove.revert(target)
+        add.revert(target)
+        assertEquals(listOf(8L), document.pages.map { it.id })
     }
 
     private fun String.decodeBase64() = Base64.getDecoder().decode(this)

@@ -3,6 +3,10 @@ package app.betternotes.core.format
 import app.betternotes.core.geometry.LengthUnit
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
+import app.betternotes.core.planner.PlannerKind
+import app.betternotes.core.planner.PlannerPage
+import app.betternotes.core.planner.PlannerPages
+import app.betternotes.core.planner.PlannerSetup
 import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageSource
@@ -29,6 +33,16 @@ private const val TEMPLATE_CUSTOM = 9
 private const val TEMPLATE_CORNELL_RULED = 10
 private const val TEMPLATE_ENGINEERING = 11
 private const val TEMPLATE_GUITAR_SCORE = 12
+private const val TEMPLATE_SEMESTER = 13
+private const val TEMPLATE_MIND_MAP = 14
+private const val TEMPLATE_WEEK_PLANNER = 15
+private const val TEMPLATE_PLANNER = 16
+
+/** A planner page that also has a title (the cover's). Pages without one keep tag 16, so files made before titles still open. */
+private const val TEMPLATE_PLANNER_TITLED = 17
+
+/** A planner page with semester dates (and a title, which may be empty): the index and the semester planning page once a date is typed. */
+private const val TEMPLATE_PLANNER_DATED = 18
 
 private const val ELEMENT_LINE = 0
 private const val ELEMENT_RECTANGLE = 1
@@ -39,7 +53,7 @@ private const val ELEMENT_STICKY = 4
 private const val SOURCE_BLANK = 0
 private const val SOURCE_PDF = 1
 
-internal val DOCUMENT_KINDS = WireEnum(DocumentKind.NOTE, DocumentKind.CANVAS, DocumentKind.PDF, DocumentKind.TEXT)
+internal val DOCUMENT_KINDS = WireEnum(DocumentKind.NOTE, DocumentKind.CANVAS, DocumentKind.PDF, DocumentKind.TEXT, DocumentKind.PLANNER)
 internal val LENGTH_UNITS = WireEnum(LengthUnit.PT, LengthUnit.INCH, LengthUnit.CM, LengthUnit.MM, LengthUnit.PX)
 
 /** The file describing a document and listing its pages in order. */
@@ -67,6 +81,12 @@ object DocumentCodec {
 
 private fun ByteWriter.page(page: Page) {
     long(page.id)
+    if (version >= 4) float(page.rotation)
+    // Version 5 added the cover: the id of the design, on the first page only.
+    if (version >= 5) {
+        bool(page.cover != null)
+        page.cover?.let { string(it) }
+    }
     bool(page.size != null)
     page.size?.let { pageSize(it) }
     int(page.background.color)
@@ -83,6 +103,8 @@ private fun ByteWriter.page(page: Page) {
 
 private fun ByteReader.page(): Page {
     val id = long()
+    val rotation = if (version >= 4) float() else 0f
+    val cover = if (version >= 5 && bool()) string() else null
     val size = if (bool()) pageSize() else null
     val background = PageBackground(int(), template())
     val source = when (val tag = byte()) {
@@ -90,7 +112,7 @@ private fun ByteReader.page(): Page {
         SOURCE_PDF -> PageSource.PdfPage(string(), varint())
         else -> throw CorruptFileException("Unknown page source $tag")
     }
-    return Page(id, size, background, source)
+    return Page(id, size, background, source, rotation, cover)
 }
 
 internal fun ByteWriter.pageSize(size: PageSize) {
@@ -173,6 +195,29 @@ internal fun ByteWriter.template(template: PageTemplate) {
             float(template.lineWidth)
             int(template.color)
         }
+        PageTemplate.Semester -> byte(TEMPLATE_SEMESTER)
+        PageTemplate.MindMap -> byte(TEMPLATE_MIND_MAP)
+        PageTemplate.WeekPlanner -> byte(TEMPLATE_WEEK_PLANNER)
+        is PageTemplate.Planner -> {
+            byte(
+                when {
+                    template.semesters.isNotEmpty() -> TEMPLATE_PLANNER_DATED
+                    template.title.isEmpty() -> TEMPLATE_PLANNER
+                    else -> TEMPLATE_PLANNER_TITLED
+                },
+            )
+            byte(template.page.kind.ordinal)
+            varint(template.page.arg)
+            varint(template.setup.startYear)
+            byte(template.setup.startMonth)
+            byte(template.setup.weekdayShift)
+            if (template.semesters.isNotEmpty()) {
+                string(template.title)
+                template.semesters.forEach { int(it) }
+            } else if (template.title.isNotEmpty()) {
+                string(template.title)
+            }
+        }
         is PageTemplate.Custom -> {
             byte(TEMPLATE_CUSTOM)
             customLayout(template.layout)
@@ -194,7 +239,27 @@ internal fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_CORNELL_RULED -> PageTemplate.CornellRuled(float(), float(), int())
     TEMPLATE_ENGINEERING -> PageTemplate.Engineering(float(), float(), int())
     TEMPLATE_GUITAR_SCORE -> PageTemplate.GuitarScore(float(), float(), float(), int())
+    TEMPLATE_SEMESTER -> PageTemplate.Semester
+    TEMPLATE_MIND_MAP -> PageTemplate.MindMap
+    TEMPLATE_WEEK_PLANNER -> PageTemplate.WeekPlanner
+    TEMPLATE_PLANNER -> plannerTemplate(titled = false, dated = false)
+    TEMPLATE_PLANNER_TITLED -> plannerTemplate(titled = true, dated = false)
+    TEMPLATE_PLANNER_DATED -> plannerTemplate(titled = true, dated = true)
     else -> throw CorruptFileException("Unknown template $tag")
+}
+
+private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean): PageTemplate {
+    val kinds = PlannerKind.entries
+    val kind = byte()
+    if (kind !in kinds.indices) throw CorruptFileException("Unknown planner page $kind")
+    val arg = varint()
+    val year = varint()
+    val month = byte()
+    val shift = byte()
+    if (year !in PlannerSetup.MIN_YEAR..PlannerSetup.MAX_YEAR || month !in 1..12 || shift !in 0..6) {
+        throw CorruptFileException("Planner dates out of range: $year, $month, $shift")
+    }
+    return PageTemplate.Planner(PlannerPage(kinds[kind], arg), PlannerSetup(year, month, shift), if (titled) string() else "", if (dated) List(PlannerPages.SEMESTER_DATES) { int() } else emptyList())
 }
 
 internal fun ByteWriter.customLayout(layout: CustomLayout) {
