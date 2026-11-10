@@ -245,6 +245,27 @@ data class TextStyle(
     val verticalAlign: VerticalAlign = VerticalAlign.TOP,
 )
 
+/**
+ * How a part of a text differs from the text as a whole: a field left null keeps what the text box itself says.
+ * Only the look of the letters can differ; the alignment belongs to the whole box.
+ */
+data class SpanLook(
+    val bold: Boolean? = null,
+    val italic: Boolean? = null,
+    val underline: Boolean? = null,
+    val strikethrough: Boolean? = null,
+    val size: Float? = null,
+) {
+    val isPlain get() = bold == null && italic == null && underline == null && strikethrough == null && size == null
+}
+
+/** The letters from [start] up to [end], counted in characters of the text, that look as [look] says. */
+data class TextSpan(val start: Int, val end: Int, val look: SpanLook)
+
+/**
+ * A text box. [spans] hold the parts that differ from [style] and [textSize]; they never overlap, never touch a part
+ * that looks the same, and stay inside the text. Use [TextSpans] to change them.
+ */
 data class TextItem(
     override val id: Long,
     val frame: Frame,
@@ -253,11 +274,69 @@ data class TextItem(
     val color: Int = 0xFF000000.toInt(),
     val style: TextStyle = TextStyle(),
     override val locked: Boolean = false,
+    val spans: List<TextSpan> = emptyList(),
 ) : PageItem {
     override val bounds get() = frame.bounds
 
-    override fun transformed(t: Affine) =
-        copy(frame = frame.transformed(t), textSize = textSize * t.meanScale)
+    override fun transformed(t: Affine) = copy(
+        frame = frame.transformed(t),
+        textSize = textSize * t.meanScale,
+        spans = spans.map { span -> span.look.size?.let { span.copy(look = span.look.copy(size = it * t.meanScale)) } ?: span },
+    )
+}
+
+/** Changing the parts of a text that look different, one character at a time, then joining what looks alike. */
+object TextSpans {
+    /** The look of each of the [length] characters. */
+    fun looks(spans: List<TextSpan>, length: Int): Array<SpanLook> {
+        val looks = Array(length) { SpanLook() }
+        for (span in spans) for (i in span.start.coerceAtLeast(0) until span.end.coerceAtMost(length)) looks[i] = span.look
+        return looks
+    }
+
+    /** The spans that give back [looks]: a run of the same look is one span, and a plain run is none. */
+    fun spansOf(looks: Array<SpanLook>): List<TextSpan> {
+        val out = ArrayList<TextSpan>()
+        var i = 0
+        while (i < looks.size) {
+            var j = i + 1
+            while (j < looks.size && looks[j] == looks[i]) j++
+            if (!looks[i].isPlain) out += TextSpan(i, j, looks[i])
+            i = j
+        }
+        return out
+    }
+
+    /** [spans] with [change] made to the look of the characters from [start] up to [end]. */
+    fun change(spans: List<TextSpan>, length: Int, start: Int, end: Int, change: (SpanLook) -> SpanLook): List<TextSpan> {
+        val looks = looks(spans, length)
+        for (i in start.coerceAtLeast(0) until end.coerceAtMost(length)) looks[i] = change(looks[i])
+        return spansOf(looks)
+    }
+
+    /**
+     * [spans] after the text went from [old] to [new] by typing, pasting or deleting in one place. What is typed
+     * looks like the letter before it, or like the first letter when it is typed at the start.
+     */
+    fun retext(spans: List<TextSpan>, old: String, new: String): List<TextSpan> {
+        if (spans.isEmpty() || old == new) return spans
+        var prefix = 0
+        val shorter = minOf(old.length, new.length)
+        while (prefix < shorter && old[prefix] == new[prefix]) prefix++
+        var suffix = 0
+        while (suffix < shorter - prefix && old[old.length - 1 - suffix] == new[new.length - 1 - suffix]) suffix++
+        val before = looks(spans, old.length)
+        val looks = Array(new.length) { SpanLook() }
+        for (i in 0 until prefix) looks[i] = before[i]
+        val inherited = when {
+            prefix > 0 -> before[prefix - 1]
+            old.isNotEmpty() -> before[0]
+            else -> SpanLook()
+        }
+        for (i in prefix until new.length - suffix) looks[i] = inherited
+        for (k in 1..suffix) looks[new.length - k] = before[old.length - k]
+        return spansOf(looks)
+    }
 }
 
 /**

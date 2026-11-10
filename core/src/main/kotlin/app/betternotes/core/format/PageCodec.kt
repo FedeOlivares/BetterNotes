@@ -18,6 +18,8 @@ import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.model.TapePattern
 import app.betternotes.core.model.TapeShadow
+import app.betternotes.core.model.SpanLook
+import app.betternotes.core.model.TextSpan
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.HorizontalAlign
@@ -47,6 +49,7 @@ private const val TAG_VIDEO = 10
 private const val TAG_TAPE_PATH = 11
 private const val TAG_FILL = 12
 private const val TAG_PATH_SHAPE = 13
+private const val TAG_SPANNED_TEXT = 14
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -226,8 +229,9 @@ private fun ByteWriter.item(item: PageItem) {
             if (version >= 5) float(item.opacity)
         }
         is TextItem -> {
-            val styled = item.style != TextStyle()
-            byte(if (styled) TAG_STYLED_TEXT else TAG_TEXT)
+            val spanned = item.spans.isNotEmpty() && version >= 7
+            val styled = spanned || item.style != TextStyle()
+            byte(if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
             long(item.id)
             locked(item)
             frame(item.frame)
@@ -241,6 +245,16 @@ private fun ByteWriter.item(item: PageItem) {
                 bool(item.style.strikethrough)
                 HORIZONTAL_ALIGNS.write(this, item.style.align)
                 VERTICAL_ALIGNS.write(this, item.style.verticalAlign)
+            }
+            if (spanned) {
+                varint(item.spans.size)
+                for (span in item.spans) {
+                    varint(span.start)
+                    varint(span.end)
+                    byte(packLook(span.look))
+                    bool(span.look.size != null)
+                    span.look.size?.let { float(it) }
+                }
             }
         }
         is StickyNoteItem -> {
@@ -398,6 +412,30 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
             verticalAlign = VERTICAL_ALIGNS.read(this),
         ),
     )
+    TAG_SPANNED_TEXT -> {
+        val id = long()
+        val locked = locked()
+        val frame = frame()
+        val text = string()
+        val size = float()
+        val color = int()
+        val style = TextStyle(
+            bold = bool(),
+            italic = bool(),
+            underline = bool(),
+            strikethrough = bool(),
+            align = HORIZONTAL_ALIGNS.read(this),
+            verticalAlign = VERTICAL_ALIGNS.read(this),
+        )
+        val spans = List(varint()) {
+            val start = varint()
+            val end = varint()
+            val packed = byte().toInt()
+            val sized = if (bool()) float() else null
+            TextSpan(start, end, unpackLook(packed, sized))
+        }
+        TextItem(id, frame, text, size, color, style, locked, spans)
+    }
     TAG_TEXT -> TextItem(
         id = long(),
         locked = locked(),
@@ -506,3 +544,22 @@ private fun ByteWriter.locked(item: PageItem) {
 }
 
 private fun ByteReader.locked() = if (version >= 5) bool() else false
+
+/** Four on, off or unset choices, two bits each: 0 unset, 1 off, 2 on. */
+private fun packLook(look: SpanLook): Int {
+    fun bits(v: Boolean?) = when (v) {
+        null -> 0
+        false -> 1
+        true -> 2
+    }
+    return bits(look.bold) or (bits(look.italic) shl 2) or (bits(look.underline) shl 4) or (bits(look.strikethrough) shl 6)
+}
+
+private fun unpackLook(packed: Int, size: Float?): SpanLook {
+    fun flag(shift: Int) = when ((packed shr shift) and 3) {
+        1 -> false
+        2 -> true
+        else -> null
+    }
+    return SpanLook(flag(0), flag(2), flag(4), flag(6), size)
+}

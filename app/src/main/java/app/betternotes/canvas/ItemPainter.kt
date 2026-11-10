@@ -37,6 +37,7 @@ import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
+import app.betternotes.core.model.TextSpan
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -68,7 +69,7 @@ internal class ItemPainter(
             is TapePathItem -> paintTapePath(canvas, item)
             is TableItem -> inFrame(canvas, item.frame) { paintTable(canvas, item) }
             is TextItem -> inFrame(canvas, item.frame) {
-                paintText(canvas, item.text, item.textSize, item.color, item.frame.width, item.frame.height, item.style)
+                paintText(canvas, item.text, item.textSize, item.color, item.frame.width, item.frame.height, item.style, item.spans)
             }
             is StickyNoteItem -> paintSticky(canvas, item)
             is ImageItem -> inFrame(canvas, item.frame) { paintImage(canvas, item) }
@@ -442,21 +443,28 @@ internal class ItemPainter(
         }
     }
 
-    private fun paintText(canvas: Canvas, value: String, size: Float, color: Int, width: Float, height: Float, style: TextStyle) {
+    private fun paintText(
+        canvas: Canvas, value: String, size: Float, color: Int, width: Float, height: Float, style: TextStyle,
+        spans: List<TextSpan> = emptyList(),
+    ) {
         if (value.isEmpty() || width <= 0f) return
         // Laid out at a larger size and scaled down, since text hints badly at sizes as small as points.
         text.color = color
         text.textSize = size * TEXT_LAYOUT_SCALE
-        text.isUnderlineText = style.underline
-        text.isStrikeThruText = style.strikethrough
+        // Parts that look different are marked on the text, which then needs a plain paint.
+        val spanned = spans.isNotEmpty()
+        text.isUnderlineText = !spanned && style.underline
+        text.isStrikeThruText = !spanned && style.strikethrough
         text.typeface = when {
+            spanned -> Typeface.DEFAULT
             style.bold && style.italic -> BOLD_ITALIC
             style.bold -> Typeface.DEFAULT_BOLD
             style.italic -> ITALIC
             else -> Typeface.DEFAULT
         }
+        val shown = if (spanned) spannedText(value, size * TEXT_LAYOUT_SCALE, style, spans.map { it.scaled(TEXT_LAYOUT_SCALE) }) else value
         val layout = StaticLayout.Builder
-            .obtain(value, 0, value.length, text, (width * TEXT_LAYOUT_SCALE).roundToInt().coerceAtLeast(1))
+            .obtain(shown, 0, value.length, text, (width * TEXT_LAYOUT_SCALE).roundToInt().coerceAtLeast(1))
             .setAlignment(
                 when (style.align) {
                     HorizontalAlign.START -> Layout.Alignment.ALIGN_NORMAL
@@ -594,3 +602,5 @@ internal class ItemPainter(
     }
 }
 
+
+private fun TextSpan.scaled(by: Float) = look.size?.let { copy(look = look.copy(size = it * by)) } ?: this

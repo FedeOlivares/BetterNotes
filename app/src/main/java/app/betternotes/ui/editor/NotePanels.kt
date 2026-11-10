@@ -59,6 +59,13 @@ import app.betternotes.canvas.TextEditRequest
 import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
+import app.betternotes.core.model.TextSpans
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.AnnotatedString
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.TableOptions
@@ -83,8 +90,8 @@ internal fun NoteRow(state: EditorState, options: NoteOptions, modifier: Modifie
                 }
                 PillDivider()
             }
-            ToolbarCellBox(onClick = { state.panelOpen = true }) { ValueText(options.textSize.toString()) }
-            StyleButtons(options.style, state::updateNoteStyle)
+            ToolbarCellBox(onClick = { state.panelOpen = true }) { ValueText(state.shownTextSize(options).toString()) }
+            StyleButtons(state.shownTextStyle(options), state::toggleStyle, state::updateNoteStyle)
             PillDivider()
             ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
                 state.panelOpen = !state.panelOpen
@@ -95,11 +102,11 @@ internal fun NoteRow(state: EditorState, options: NoteOptions, modifier: Modifie
 
 /** Bold, italic, underline, strike and the two alignments, applied through [update]. */
 @Composable
-private fun StyleButtons(style: TextStyle, update: (((TextStyle) -> TextStyle)) -> Unit) {
-    StyleToggle(EditorIcons.Bold, R.string.style_bold, style.bold) { update { it.copy(bold = !it.bold) } }
-    StyleToggle(EditorIcons.Italic, R.string.style_italic, style.italic) { update { it.copy(italic = !it.italic) } }
-    StyleToggle(EditorIcons.Underline, R.string.style_underline, style.underline) { update { it.copy(underline = !it.underline) } }
-    StyleToggle(EditorIcons.Strike, R.string.style_strike, style.strikethrough) { update { it.copy(strikethrough = !it.strikethrough) } }
+private fun StyleButtons(style: TextStyle, toggle: (StyleKind) -> Unit, update: (((TextStyle) -> TextStyle)) -> Unit) {
+    StyleToggle(EditorIcons.Bold, R.string.style_bold, style.bold) { toggle(StyleKind.BOLD) }
+    StyleToggle(EditorIcons.Italic, R.string.style_italic, style.italic) { toggle(StyleKind.ITALIC) }
+    StyleToggle(EditorIcons.Underline, R.string.style_underline, style.underline) { toggle(StyleKind.UNDERLINE) }
+    StyleToggle(EditorIcons.Strike, R.string.style_strike, style.strikethrough) { toggle(StyleKind.STRIKE) }
     ToolbarIcon(style.align.icon(), stringResource(R.string.panel_horizontal_alignment)) {
         update { it.copy(align = HorizontalAlign.entries[(it.align.ordinal + 1) % HorizontalAlign.entries.size]) }
     }
@@ -120,7 +127,10 @@ internal fun TextSelectionRow(state: EditorState, item: TextItem, modifier: Modi
             ToolbarIcon(EditorIcons.Plus, stringResource(R.string.panel_thicker)) {
                 state.changeSelectedText { it.copy(textSize = (it.textSize + 1f).coerceAtMost(NoteOptions.MAX_TEXT.toFloat())) }
             }
-            StyleButtons(item.style) { change -> state.changeSelectedText { it.copy(style = change(it.style)) } }
+            StyleButtons(
+                item.style,
+                { kind -> state.changeSelectedText { it.copy(style = it.style.toggled(kind)) } },
+            ) { change -> state.changeSelectedText { it.copy(style = change(it.style)) } }
         }
     }
 }
@@ -163,36 +173,33 @@ internal fun NotePanel(state: EditorState, notices: Notices, options: NoteOption
                 drawPath(cut, colors.panel)
             }
         }
-        LabeledRow(R.string.panel_font_size) { ValuePill { ValueText(options.textSize.toString()) } }
+        val shownSize = state.shownTextSize(options)
+        LabeledRow(R.string.panel_font_size) { ValuePill { ValueText(shownSize.toString()) } }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) {
-                state.updateNote { it.copy(textSize = (it.textSize - 1).coerceAtLeast(NoteOptions.MIN_TEXT)) }
+                state.setTextSize((shownSize - 1).coerceAtLeast(NoteOptions.MIN_TEXT))
             }
             PanelSlider(
-                fraction = (options.textSize - NoteOptions.MIN_TEXT).toFloat() / (NoteOptions.MAX_TEXT - NoteOptions.MIN_TEXT),
+                fraction = (shownSize - NoteOptions.MIN_TEXT).toFloat() / (NoteOptions.MAX_TEXT - NoteOptions.MIN_TEXT),
                 onChange = { f ->
                     val range = NoteOptions.MAX_TEXT - NoteOptions.MIN_TEXT
-                    state.updateNote { it.copy(textSize = NoteOptions.MIN_TEXT + (f * range).roundToInt()) }
+                    state.setTextSize(NoteOptions.MIN_TEXT + (f * range).roundToInt())
                 },
                 modifier = Modifier.weight(1f),
             )
             PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_thicker)) {
-                state.updateNote { it.copy(textSize = (it.textSize + 1).coerceAtMost(NoteOptions.MAX_TEXT)) }
+                state.setTextSize((shownSize + 1).coerceAtMost(NoteOptions.MAX_TEXT))
             }
         }
         PanelDivider()
-        val style = options.style
+        val style = state.shownTextStyle(options)
         LabeledRow(R.string.panel_style) {
             Segments(
                 listOf(
-                    Segment(EditorIcons.Bold, R.string.style_bold, style.bold) { state.updateNoteStyle { it.copy(bold = !it.bold) } },
-                    Segment(EditorIcons.Italic, R.string.style_italic, style.italic) { state.updateNoteStyle { it.copy(italic = !it.italic) } },
-                    Segment(EditorIcons.Underline, R.string.style_underline, style.underline) {
-                        state.updateNoteStyle { it.copy(underline = !it.underline) }
-                    },
-                    Segment(EditorIcons.Strike, R.string.style_strike, style.strikethrough) {
-                        state.updateNoteStyle { it.copy(strikethrough = !it.strikethrough) }
-                    },
+                    Segment(EditorIcons.Bold, R.string.style_bold, style.bold) { state.toggleStyle(StyleKind.BOLD) },
+                    Segment(EditorIcons.Italic, R.string.style_italic, style.italic) { state.toggleStyle(StyleKind.ITALIC) },
+                    Segment(EditorIcons.Underline, R.string.style_underline, style.underline) { state.toggleStyle(StyleKind.UNDERLINE) },
+                    Segment(EditorIcons.Strike, R.string.style_strike, style.strikethrough) { state.toggleStyle(StyleKind.STRIKE) },
                 ),
             )
         }
@@ -386,7 +393,10 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
     // Words read from handwriting arrive in the request, and the cursor goes to the end after them.
     LaunchedEffect(request) {
         androidx.compose.runtime.snapshotFlow { request.text }.collect { text ->
-            if (text != value.text) value = TextFieldValue(text, TextRange(text.length))
+            if (text != value.text) {
+                request.spans = TextSpans.retext(request.spans, value.text, text)
+                value = TextFieldValue(text, TextRange(text.length))
+            }
         }
     }
     val focus = remember(request) { FocusRequester() }
@@ -398,6 +408,32 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
         onDispose { request.commitNow = {} }
     }
     val style = request.style
+    val spans = request.spans
+    val pxPerPt = request.textSizePx / request.sizePt.coerceAtLeast(1f)
+    val transformation = remember(spans, style, pxPerPt, density) {
+        VisualTransformation { text ->
+            val styles = spans.mapNotNull { span ->
+                val end = span.end.coerceAtMost(text.length)
+                if (span.start >= end) return@mapNotNull null
+                val look = span.look
+                val lines = listOfNotNull(
+                    TextDecoration.Underline.takeIf { look.underline ?: style.underline },
+                    TextDecoration.LineThrough.takeIf { look.strikethrough ?: style.strikethrough },
+                )
+                AnnotatedString.Range(
+                    SpanStyle(
+                        fontWeight = look.bold?.let { if (it) FontWeight.Bold else FontWeight.Normal },
+                        fontStyle = look.italic?.let { if (it) FontStyle.Italic else FontStyle.Normal },
+                        textDecoration = if (look.underline != null || look.strikethrough != null) TextDecoration.combine(lines) else null,
+                        fontSize = look.size?.let { with(density) { (it * pxPerPt).toSp() } } ?: TextUnit.Unspecified,
+                    ),
+                    span.start,
+                    end,
+                )
+            }
+            TransformedText(AnnotatedString(text.text, styles), OffsetMapping.Identity)
+        }
+    }
     val decoration = listOfNotNull(
         TextDecoration.Underline.takeIf { style.underline },
         TextDecoration.LineThrough.takeIf { style.strikethrough },
@@ -405,9 +441,13 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
     BasicTextField(
         value = value,
         onValueChange = {
+            if (it.text != value.text) request.spans = TextSpans.retext(request.spans, value.text, it.text)
             value = it
             request.text = it.text
+            request.selectionStart = it.selection.min
+            request.selectionEnd = it.selection.max
         },
+        visualTransformation = transformation,
         onTextLayout = { layout ->
             val end = layout.getCursorRect(layout.layoutInput.text.length)
             request.endX = end.left

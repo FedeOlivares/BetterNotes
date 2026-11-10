@@ -87,10 +87,14 @@ import app.betternotes.core.planner.PlannerPlan
 import app.betternotes.core.planner.PlannerSetup
 import app.betternotes.core.planner.plannerActionAt
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import app.betternotes.core.model.SpanLook
 import app.betternotes.core.model.TextItem
+import app.betternotes.core.model.TextSpan
+import app.betternotes.core.model.TextSpans
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.Document
@@ -215,7 +219,8 @@ class TextEditRequest(
     val color: Int,
     style: TextStyle,
     sizePt: Float,
-    private val commit: (String, TextStyle, Float) -> Unit,
+    spans: List<TextSpan>,
+    private val commit: (String, TextStyle, Float, List<TextSpan>) -> Unit,
     /** How far the page is turned, in degrees clockwise, about ([pivotX], [pivotY]) on the screen. */
     turnDegrees: Float = 0f,
     pivotX: Float = 0f,
@@ -238,6 +243,41 @@ class TextEditRequest(
         private set
     var sizePt = sizePt
         private set
+
+    /** The parts of the text that look different from the rest, kept in step with what is typed. */
+    var spans by mutableStateOf(spans)
+
+    /** What is selected in the text, as the characters from [selectionStart] up to [selectionEnd]. */
+    var selectionStart by mutableIntStateOf(0)
+    var selectionEnd by mutableIntStateOf(0)
+    val hasSelection get() = selectionEnd > selectionStart && selectionEnd <= text.length
+
+    /** Whether every selected letter looks as [pick] says it does, with the text's own look where a span says nothing. */
+    fun selectionAll(pick: (SpanLook, TextStyle) -> Boolean): Boolean {
+        val looks = TextSpans.looks(spans, text.length)
+        return hasSelection && (selectionStart until selectionEnd).all { pick(looks[it], style) }
+    }
+
+    /** The size of the first selected letter, or of the whole text when nothing is selected. */
+    fun shownSize(): Float {
+        if (!hasSelection) return sizePt
+        return TextSpans.looks(spans, text.length)[selectionStart].size ?: sizePt
+    }
+
+    /** Gives the selected letters a new look. A look the same as the text's own is stored as no look at all. */
+    fun styleSelection(change: (SpanLook) -> SpanLook) {
+        if (!hasSelection) return
+        spans = TextSpans.change(spans, text.length, selectionStart, selectionEnd) { look ->
+            val next = change(look)
+            next.copy(
+                bold = next.bold.takeIf { it != style.bold },
+                italic = next.italic.takeIf { it != style.italic },
+                underline = next.underline.takeIf { it != style.underline },
+                strikethrough = next.strikethrough.takeIf { it != style.strikethrough },
+                size = next.size.takeIf { it != sizePt },
+            )
+        }
+    }
     var turnDegrees by mutableFloatStateOf(turnDegrees)
         private set
     var pivotX by mutableFloatStateOf(pivotX)
@@ -255,7 +295,7 @@ class TextEditRequest(
 
     var commitNow: () -> Unit = {}
 
-    fun finish(text: String) = commit(text, style, sizePt)
+    fun finish(text: String) = commit(text, style, sizePt, spans)
 
     fun restyle(style: TextStyle, sizePt: Float) {
         this.style = style
@@ -2694,7 +2734,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             size,
             NoteOptions.TEXT_COLOR,
             options.style,
-        ) { text, _, _ ->
+            emptyList(),
+        ) { text, _, _, _ ->
             val at = indexOfItem(pageId, note.id)
             val latest = editor?.content(pageId)?.takeIf { at >= 0 }?.get(at) as? StickyNoteItem
             if (latest != null && text != latest.typedText) setSticky(pageId, at, latest.withText(text, size, options.style))
@@ -2702,11 +2743,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     private fun editText(index: Int, pageId: Long, item: TextItem, isNew: Boolean) {
-        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style) { text, style, size ->
+        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style, item.spans) { text, style, size, spans ->
             val editor = editor ?: return@beginTextEdit
             val content = editor.content(pageId)
             val at = indexOfItem(pageId, item.id)
-            val edited = item.copy(text = text, style = style, textSize = size)
+            val edited = item.copy(text = text, style = style, textSize = size, spans = spans)
             when {
                 isNew && text.isNotEmpty() -> editor.perform(ItemsEdit.addOnTop(pageId, content, edited))
                 at >= 0 && text.isEmpty() -> editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(at)))
@@ -2732,7 +2773,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             table.columnWeights[column] / columnTotal * table.frame.width - 2 * CELL_INSET_PT,
             table.rowWeights[row] / rowTotal * table.frame.height - 2 * CELL_INSET_PT,
         )
-        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle()) { text, _, _ ->
+        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle(), emptyList()) { text, _, _, _ ->
             val editor = editor ?: return@beginTextEdit
             val at = indexOfItem(pageId, table.id)
             val latest = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? TableItem
@@ -2750,7 +2791,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         size: Float,
         color: Int,
         style: TextStyle,
-        commit: (String, TextStyle, Float) -> Unit,
+        spans: List<TextSpan>,
+        commit: (String, TextStyle, Float, List<TextSpan>) -> Unit,
     ) {
         val layout = layout ?: return
         val scale = viewport.pxPerPt
@@ -2764,6 +2806,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             color,
             style,
             size,
+            spans,
             commit,
             layout.turn(index),
             viewport.toScreenX(layout.centerX(index)),

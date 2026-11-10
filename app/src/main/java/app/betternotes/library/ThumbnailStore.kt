@@ -33,6 +33,7 @@ import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.StrokeItem
+import app.betternotes.canvas.spannedText
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.template.CoverDesign
 import app.betternotes.ui.theme.templateLanguage
@@ -262,7 +263,8 @@ internal object ThumbnailRenderer {
             color = item.color
             textSize = item.textSize
         }
-        val layout = StaticLayout.Builder.obtain(item.text, 0, item.text.length, paint, frame.width.toInt().coerceAtLeast(1)).build()
+        val shown = if (item.spans.isEmpty()) item.text else spannedText(item.text, item.textSize, item.style, item.spans)
+        val layout = StaticLayout.Builder.obtain(shown, 0, item.text.length, paint, frame.width.toInt().coerceAtLeast(1)).build()
         canvas.withTranslation(frame.left, frame.top) { layout.draw(this) }
     }
 

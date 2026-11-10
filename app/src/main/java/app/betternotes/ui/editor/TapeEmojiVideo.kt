@@ -432,6 +432,12 @@ private fun StickerTab(label: Int, selected: Boolean, modifier: Modifier, onClic
 private fun StickerGrid(state: EditorState) {
     val colors = LocalEditorColors.current
     var removing by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    var exportId by remember { mutableStateOf<Long?>(null) }
+    val exportTarget = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+        val id = exportId
+        if (uri != null && id != null) state.exportStickerPng(id, uri)
+    }
     val pickPack = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree -> if (tree != null) state.importStickerPack(tree) }
     Box(
         modifier = Modifier
@@ -466,8 +472,17 @@ private fun StickerGrid(state: EditorState) {
                             .aspectRatio(1f)
                             .clip(RoundedCornerShape(14.dp))
                             .background(if (id == state.sticker) colors.accentContainer else colors.field)
-                            .clickable(role = Role.Button) { if (removing) state.deleteSticker(id) else state.chooseSticker(id) }
-                            .stickerDragSource(state, id, enabled = !removing)
+                            .clickable(role = Role.Button) {
+                                when {
+                                    removing -> state.deleteSticker(id)
+                                    exporting -> {
+                                        exportId = id
+                                        exportTarget.launch("sticker-$id.png")
+                                    }
+                                    else -> state.chooseSticker(id)
+                                }
+                            }
+                            .stickerDragSource(state, id, enabled = !removing && !exporting)
                             .padding(8.dp),
                     ) {
                         StickerThumb(state, id, 72.dp)
@@ -485,11 +500,30 @@ private fun StickerGrid(state: EditorState) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(role = Role.Button) { removing = !removing }
+            .clickable(role = Role.Button) {
+                removing = !removing
+                exporting = false
+            }
             .padding(horizontal = PanelPadding, vertical = 14.dp),
     ) {
         Text(
             stringResource(if (removing) R.string.sticker_done_removing else R.string.sticker_remove),
+            color = colors.accent,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+        )
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button) {
+                exporting = !exporting
+                removing = false
+            }
+            .padding(horizontal = PanelPadding, vertical = 14.dp),
+    ) {
+        Text(
+            stringResource(if (exporting) R.string.sticker_done_exporting else R.string.sticker_export),
             color = colors.accent,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,

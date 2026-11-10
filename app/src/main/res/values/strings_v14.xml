@@ -7,6 +7,10 @@
     <string name="sticker_empty_short">No stickers yet</string>
     <string name="sticker_remove">Remove stickers</string>
     <string name="sticker_done_removing">Done removing</string>
+    <string name="sticker_export">Export a sticker as PNG</string>
+    <string name="sticker_done_exporting">Done exporting</string>
+    <string name="notice_sticker_exported">Sticker exported as PNG</string>
+    <string name="notice_sticker_export_failed">Could not export the sticker</string>
     <string name="notice_sticker_saved">Saved as a sticker</string>
     <string name="notice_sticker_failed">Could not save the sticker</string>
     <!-- Paint bucket -->

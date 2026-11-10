@@ -182,6 +182,19 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         }
     }
 
+    /** Writes sticker [id] as a PNG to the file the owner picked, and says whether it worked. */
+    fun exportStickerPng(id: Long, target: Uri) {
+        val resolver = canvas.context.contentResolver
+        stickerWork.execute {
+            val done = try {
+                resolver.openOutputStream(target)?.use { stickerStore.exportPng(id, it) } == true
+            } catch (e: java.io.IOException) {
+                false
+            }
+            canvas.post { say(if (done) R.string.notice_sticker_exported else R.string.notice_sticker_export_failed) }
+        }
+    }
+
     fun showStickerTab(on: Boolean) {
         stickerTab = on
         applyTool()
@@ -692,6 +705,46 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         if (activeTool == ActiveTool.TEXT) canvas.restyleTextEdit(note.style, note.textSize.toFloat())
     }
 
+    /** The open text box with letters selected in it, which the text row buttons then change instead of the whole text. */
+    private fun selectedLetters() = textEdit?.takeIf { activeTool == ActiveTool.TEXT && it.hasSelection }
+
+    /** The look the text row shows: that of the selected letters when some are selected, else the look of the whole text. */
+    fun shownTextStyle(options: NoteOptions): TextStyle {
+        val request = selectedLetters() ?: return options.style
+        return options.style.copy(
+            bold = request.selectionAll { look, base -> look.bold ?: base.bold },
+            italic = request.selectionAll { look, base -> look.italic ?: base.italic },
+            underline = request.selectionAll { look, base -> look.underline ?: base.underline },
+            strikethrough = request.selectionAll { look, base -> look.strikethrough ?: base.strikethrough },
+        )
+    }
+
+    fun shownTextSize(options: NoteOptions): Int = selectedLetters()?.shownSize()?.roundToInt() ?: options.textSize
+
+    /** Switches bold, italic, underline or strike for the selected letters, or for the whole text when none are selected. */
+    fun toggleStyle(kind: StyleKind) {
+        val request = selectedLetters()
+        if (request == null) {
+            updateNoteStyle { it.toggled(kind) }
+            return
+        }
+        val on = !shownTextStyle(note).has(kind)
+        request.styleSelection {
+            when (kind) {
+                StyleKind.BOLD -> it.copy(bold = on)
+                StyleKind.ITALIC -> it.copy(italic = on)
+                StyleKind.UNDERLINE -> it.copy(underline = on)
+                StyleKind.STRIKE -> it.copy(strikethrough = on)
+            }
+        }
+    }
+
+    /** Sets the size of the selected letters, or of the whole text when none are selected. */
+    fun setTextSize(size: Int) {
+        val request = selectedLetters()
+        if (request == null) updateNote { it.copy(textSize = size) } else request.styleSelection { it.copy(size = size.toFloat()) }
+    }
+
     /** Changes the selected text box, as one step that can be undone. */
     fun changeSelectedText(change: (TextItem) -> TextItem) = canvas.changeSelection { if (it is TextItem) change(it) else it }
 
@@ -1046,4 +1099,21 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         private val OPAQUE = 0xFF000000.toInt()
         const val DEFAULT_FILL = 0xFF5F9FFB.toInt()
     }
+}
+
+/** The four switches of a text's look that can differ from one part of it to another. */
+enum class StyleKind { BOLD, ITALIC, UNDERLINE, STRIKE }
+
+internal fun TextStyle.has(kind: StyleKind) = when (kind) {
+    StyleKind.BOLD -> bold
+    StyleKind.ITALIC -> italic
+    StyleKind.UNDERLINE -> underline
+    StyleKind.STRIKE -> strikethrough
+}
+
+internal fun TextStyle.toggled(kind: StyleKind) = when (kind) {
+    StyleKind.BOLD -> copy(bold = !bold)
+    StyleKind.ITALIC -> copy(italic = !italic)
+    StyleKind.UNDERLINE -> copy(underline = !underline)
+    StyleKind.STRIKE -> copy(strikethrough = !strikethrough)
 }

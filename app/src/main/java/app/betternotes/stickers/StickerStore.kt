@@ -26,6 +26,7 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.VideoItem
 import java.io.File
 import java.io.IOException
+import java.io.OutputStream
 import kotlin.math.max
 
 /** Whether a selection can become a sticker: video and recordings live in their document's files and do not travel. */
@@ -162,9 +163,29 @@ class StickerStore(context: Context) {
     /** A small picture of sticker [id], drawn once and kept. Call off the main thread. */
     fun thumbnail(id: Long): Bitmap? {
         thumbnails.get(id)?.let { return it }
-        val items = read(id) ?: return null
+        val bitmap = render(id, THUMBNAIL_PX, 4) ?: return null
+        thumbnails.put(id, bitmap)
+        return bitmap
+    }
+
+    /** Writes sticker [id] to [out] as a PNG with a see-through background, its longer side [EXPORT_PX] pixels. Blocks. */
+    fun exportPng(id: Long, out: OutputStream): Boolean {
+        val bitmap = render(id, EXPORT_PX, 1) ?: return false
+        return try {
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+        } catch (e: IOException) {
+            Log.e(TAG, "Could not export sticker $id", e)
+            false
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    /** Draws sticker [id] on a see-through bitmap whose longer side is [longSide] pixels; [sample] shrinks the pictures it decodes. */
+    private fun render(id: Long, longSide: Float, sample: Int): Bitmap? {
+        val items = read(id)?.takeIf { it.isNotEmpty() } ?: return null
         val box = items.map { it.bounds }.reduce(Bounds::union)
-        val scale = THUMBNAIL_PX / max(max(box.width, box.height), 1f)
+        val scale = longSide / max(max(box.width, box.height), 1f)
         val bitmap = createBitmap(
             (box.width * scale).toInt().coerceAtLeast(1),
             (box.height * scale).toInt().coerceAtLeast(1),
@@ -175,13 +196,12 @@ class StickerStore(context: Context) {
         val painter = ItemPainter(
             image = { assetId ->
                 images.getOrPut(assetId) {
-                    BitmapFactory.decodeFile(assetFile(id, assetId).path, BitmapFactory.Options().apply { inSampleSize = 4 })
+                    BitmapFactory.decodeFile(assetFile(id, assetId).path, BitmapFactory.Options().apply { inSampleSize = sample })
                 }
             },
             paintStroke = { c, stroke -> ink.draw(c, strokes.get(stroke), matrix) },
         )
         canvas.withMatrix(matrix) { for (item in items) painter.paint(this, item) }
-        thumbnails.put(id, bitmap)
         return bitmap
     }
 
@@ -191,6 +211,7 @@ class StickerStore(context: Context) {
         const val PACK = "pack.txt"
         const val PACK_STICKER_PT = 160f
         const val THUMBNAIL_PX = 160f
+        const val EXPORT_PX = 1536f
         const val THUMBNAILS_KEPT = 60
     }
 }
