@@ -179,9 +179,9 @@ class LibraryRepository private constructor(context: Context) {
 
     /**
      * Adds the notebook in a notebook file (see [NotebookArchive]) as a new notebook, with its sources. Suspends while the file is
-     * unpacked. False if the file is not one of ours, is damaged, or came from a newer app.
+     * unpacked. Returns the new notebook's id, or null if the file is not one of ours, is damaged, or came from a newer app.
      */
-    suspend fun importNotebookFile(resolver: ContentResolver, uri: Uri, folderId: Long?): Boolean {
+    suspend fun importNotebookFile(resolver: ContentResolver, uri: Uri, folderId: Long?): Long? {
         val scanned = withContext(Dispatchers.IO) {
             val temp = File(store.documentsDir, ".import-" + System.nanoTime())
             try {
@@ -196,9 +196,9 @@ class LibraryRepository private constructor(context: Context) {
                 null
             }
         }
-        if (scanned == null) return false
+        if (scanned == null) return null
         add(scanned, folderId)
-        return true
+        return scanned.id
     }
 
     fun rename(entry: LibraryEntry, name: String) {

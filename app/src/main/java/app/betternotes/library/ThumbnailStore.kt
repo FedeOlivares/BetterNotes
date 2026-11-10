@@ -262,6 +262,7 @@ internal object ThumbnailRenderer {
         val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = item.color
             textSize = item.textSize
+            if (item.spans.isEmpty()) app.betternotes.fonts.FontLibrary.face(item.style.font, item.style.bold, item.style.italic)?.let { typeface = it }
         }
         val shown = if (item.spans.isEmpty()) item.text else spannedText(item.text, item.textSize, item.style, item.spans)
         val layout = StaticLayout.Builder.obtain(shown, 0, item.text.length, paint, frame.width.toInt().coerceAtLeast(1)).build()

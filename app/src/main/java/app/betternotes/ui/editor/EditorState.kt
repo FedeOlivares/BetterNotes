@@ -25,6 +25,7 @@ import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.withLocked
+import app.betternotes.core.model.TextSpans
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.EraserOptions
@@ -539,14 +540,27 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canRedo = canvas.canRedo
         canvas.onLassoRequested = {
             if (activeTool != ActiveTool.IMAGE && activeTool != ActiveTool.LASSO) {
-                toolBeforeLasso = activeTool
+                // From the text tool the lasso gives back the tool that was in hand before it.
+                toolBeforeLasso = if (activeTool == ActiveTool.TEXT) previousTool else activeTool
                 lendingTool = true
                 select(ActiveTool.LASSO)
                 lendingTool = false
             }
         }
         // The lasso that a circle or a placed item asked for is lent: it goes back once the selection is let go.
-        canvas.onTextToolRequested = { if (activeTool != ActiveTool.TEXT) select(ActiveTool.TEXT) }
+        canvas.onTextToolRequested = {
+            if (activeTool != ActiveTool.TEXT) {
+                // A lasso lent from another tool leaves that tool as the one to come back to.
+                val lent = activeTool == ActiveTool.LASSO && toolBeforeLasso != null
+                if (lent) {
+                    previousTool = toolBeforeLasso ?: previousTool
+                    lendingTool = true
+                }
+                select(ActiveTool.TEXT)
+                lendingTool = false
+            }
+        }
+        canvas.onTextToolLeft = { if (activeTool == ActiveTool.TEXT) returnToPreviousTool() }
         canvas.onSelectionDropped = {
             val back = toolBeforeLasso
             toolBeforeLasso = null
@@ -737,6 +751,18 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
                 StyleKind.STRIKE -> it.copy(strikethrough = on)
             }
         }
+    }
+
+    /** The font the text row shows: that of the first selected letter when some are selected, else the whole text's. */
+    fun shownFont(options: NoteOptions): String {
+        val request = selectedLetters() ?: return options.style.font
+        return TextSpans.looks(request.spans, request.text.length)[request.selectionStart].font ?: request.style.font
+    }
+
+    /** Sets the font of the selected letters, or of the whole text when none are selected. */
+    fun setFont(name: String) {
+        val request = selectedLetters()
+        if (request == null) updateNoteStyle { it.copy(font = name) } else request.styleSelection { it.copy(font = name) }
     }
 
     /** Sets the size of the selected letters, or of the whole text when none are selected. */

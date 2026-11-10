@@ -1,8 +1,10 @@
 package app.betternotes.ui.library
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -30,6 +32,20 @@ import java.time.LocalDate
 
 internal fun showImportFailed(context: Context) {
     Toast.makeText(context, R.string.library_import_failed, Toast.LENGTH_LONG).show()
+}
+
+/** The name a file manager shows for [uri], or the last part of its path when the provider gives none. Blocks on the provider. */
+internal fun displayName(resolver: ContentResolver, uri: Uri): String? {
+    if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
+        try {
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                if (it.moveToFirst()) it.getString(0)?.let { name -> return name }
+            }
+        } catch (e: RuntimeException) {
+            // A provider that refuses the query still may open the file; the type or the path name can decide.
+        }
+    }
+    return uri.lastPathSegment
 }
 
 /** The "+" panel's actions, with the system screens several of them go through first. */
@@ -92,7 +108,7 @@ internal fun rememberNewItemActions(
                 type.startsWith("image/") -> addPhotos(listOf(uri), PhotoLayout.ON_PAGE)
                 // A notebook file from another copy of the app: it comes in as a new notebook, with its sources.
                 isNotebookFile -> scope.launch {
-                    if (repository.importNotebookFile(resolver, uri, folderId)) {
+                    if (repository.importNotebookFile(resolver, uri, folderId) != null) {
                         Toast.makeText(context, R.string.library_notebook_imported, Toast.LENGTH_SHORT).show()
                     } else {
                         failed()

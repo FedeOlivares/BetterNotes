@@ -79,6 +79,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.betternotes.R
 import app.betternotes.canvas.physicalDpi
+import app.betternotes.core.format.IncomingFile
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.library.Library
 import app.betternotes.core.library.LibraryEntry
@@ -98,6 +99,8 @@ import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val LIFT_SCALE = 1.04f
 private const val LIFT_ALPHA = 0.9f
@@ -161,6 +164,8 @@ internal fun LibraryScreen(
     preferences: LibraryPreferences,
     settings: SettingsRepository,
     onOpenDocument: (id: Long, startAction: String?) -> Unit,
+    incoming: Uri? = null,
+    onIncomingHandled: () -> Unit = {},
 ) {
     val colors = LocalAppColors.current
     var showingSettings by rememberSaveable { mutableStateOf(false) }
@@ -207,6 +212,17 @@ internal fun LibraryScreen(
     BackHandler(adding) { adding = false }
     var newNotebook by remember { mutableStateOf(false) }
     BackHandler(newNotebook) { newNotebook = false }
+    // The file another app handed over ("Open with"): once imported it opens, so the PDF or notebook is on screen on arrival.
+    var openOnImport by remember { mutableStateOf<Uri?>(null) }
+    val importPdf: (Uri, String?) -> Unit = { uri, password ->
+        scope.launch {
+            when (val result = repository.importPdf(context.contentResolver, uri, folderForNewItems, password)) {
+                is PdfImportResult.Imported -> if (uri == openOnImport) onOpenDocument(result.document.id, null)
+                PdfImportResult.NeedsPassword -> dialog = PendingDialog.PdfPassword(uri)
+                is PdfImportResult.Failed -> showImportFailed(context)
+            }
+        }
+    }
     val flows = rememberNewItemActions(
         repository,
         settings,
@@ -214,16 +230,28 @@ internal fun LibraryScreen(
         onOpenDocument,
         onNewFolder = { dialog = PendingDialog.NewFolder },
         onNewNotebook = { newNotebook = true },
-        importPdf = { uri, password ->
-            scope.launch {
-                when (repository.importPdf(context.contentResolver, uri, folderForNewItems, password)) {
-                    is PdfImportResult.Imported -> Unit
-                    PdfImportResult.NeedsPassword -> dialog = PendingDialog.PdfPassword(uri)
-                    is PdfImportResult.Failed -> showImportFailed(context)
-                }
-            }
-        },
+        importPdf = importPdf,
     )
+    LaunchedEffect(incoming) {
+        val uri = incoming ?: return@LaunchedEffect
+        // Clearing it changes this effect's key, which would cancel the work, so the work runs in the screen's own scope.
+        onIncomingHandled()
+        scope.launch {
+            val resolver = context.contentResolver
+            val kind = withContext(Dispatchers.IO) { IncomingFile.of(resolver.getType(uri), displayName(resolver, uri)) }
+            when (kind) {
+                IncomingFile.PDF -> {
+                    openOnImport = uri
+                    importPdf(uri, null)
+                }
+                IncomingFile.NOTEBOOK -> {
+                    val id = repository.importNotebookFile(resolver, uri, folderForNewItems)
+                    if (id == null) showImportFailed(context) else onOpenDocument(id, null)
+                }
+                null -> showImportFailed(context)
+            }
+        }
+    }
 
     // The home is blurred while the New Notebook dialog is over it, so the dialog stands out on top.
     val behindDialog = if (newNotebook) Modifier.blur(14.dp) else Modifier

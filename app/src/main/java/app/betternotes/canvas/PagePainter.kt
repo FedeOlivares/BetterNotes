@@ -72,6 +72,13 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
     private val layerBounds = android.graphics.RectF()
     private val highlightPaint = Paint().apply { blendMode = BlendMode.MULTIPLY }
 
+    /** The item whose text is being typed over the page, which the page leaves out while the box shows it. */
+    var hiddenItemId: Long
+        get() = items.hiddenItemId
+        set(value) {
+            items.hiddenItemId = value
+        }
+
     /** What to mark on each page, by page id, such as search results. */
     var highlights: Map<Long, List<PageHighlight>> = emptyMap()
 

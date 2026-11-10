@@ -24,6 +24,7 @@ import app.betternotes.core.tools.withTape
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.stickers.canBeSticker
 import app.betternotes.core.model.TableItem
+import app.betternotes.core.model.TextItem
 import app.betternotes.core.tools.TableHandle
 import app.betternotes.core.tools.columnDividerX
 import app.betternotes.core.tools.handles
@@ -354,7 +355,8 @@ internal class LassoController(
             }
             Drag.MOVE -> transform = moveTransform(x - startX, y - startY)
             Drag.ROTATE -> transform = rotateTransform(x, y)
-            Drag.RESIZE -> transform = selection?.bounds?.let { resizeTransform(it, handle, x, y, keepAspect = handle.isCorner) } ?: transform
+            Drag.RESIZE -> transform = selection?.bounds?.let { resizeTransform(it, handle, x, y, keepAspect = handle.isCorner && !isTextBox) }
+                ?.let { if (isTextBox) Affine(a = it.a, e = it.e) else it } ?: transform
         }
         redraw()
     }
@@ -565,7 +567,8 @@ internal class LassoController(
             Drag.RECTANGLE, Drag.FREEFORM -> drawMarquee(canvas)
             Drag.MOVE, Drag.RESIZE, Drag.ROTATE -> {
                 drawDraggedItems(canvas)
-                selection?.bounds?.let { drawBox(canvas, it.mapped(transform)) }
+                val textBox = selection?.items?.singleOrNull() as? TextItem
+                if (drag == Drag.RESIZE && textBox != null) drawBox(canvas, resizedText(textBox).bounds) else selection?.bounds?.let { drawBox(canvas, it.mapped(transform)) }
                 drawGuides(canvas)
             }
             Drag.PARAM -> {
@@ -651,6 +654,14 @@ internal class LassoController(
         val now = (0 until content.size).filter { content[it].id in ids }
         selection = Selection(selected.pageId, now.toIntArray(), now.map { content[it] }.ifEmpty { items })
         redraw()
+    }
+
+    /** True when the selection is one text box and ([x], [y]) on page [pageIndex] is on it or on one of its handles. */
+    fun grabsText(pageIndex: Int, x: Float, y: Float): Boolean {
+        val current = selection ?: return false
+        val box = current.bounds ?: return false
+        if (pageIndex != this.pageIndex || current.items.singleOrNull() !is TextItem || current.items[0].locked) return false
+        return box.contains(x, y) || handleAt(box, x, y) != null
     }
 
     /** The index of the page the selection is on, or -1 when nothing is selected. */
@@ -918,7 +929,7 @@ internal class LassoController(
             page.splice(IntArray(0), selected.indices, selected.items)
             return
         }
-        val changed = selected.items.map { it.transformed(transform) }
+        val changed = if (drag == Drag.RESIZE && isTextBox) listOf(resizedText(selected.items.single() as TextItem)) else selected.items.map { it.transformed(transform) }
         page.splice(IntArray(0), selected.indices, changed)
         val edit = ItemsEdit(selected.pageId, selected.indices, selected.items, selected.indices, changed)
         val kept = selected.afterTransform(edit)
@@ -1025,8 +1036,18 @@ internal class LassoController(
         return true
     }
 
+    /** True when the selection is one text box, whose handles change the box and leave the text at its size. */
+    private val isTextBox get() = selection?.items?.singleOrNull() is TextItem
+
+    /** The box as the handles have made it: as wide as dragged, and as tall as the text wrapped to that width needs. */
+    private fun resizedText(item: TextItem): TextItem = TextFit.fitted(item.copy(frame = item.frame.transformed(transform)))
+
     private fun drawDraggedItems(canvas: Canvas) {
         val selected = selection ?: return
+        if (drag == Drag.RESIZE && isTextBox) {
+            canvas.withMatrix(pageToScreen) { itemPainter.paint(this, resizedText(selected.items.single() as TextItem)) }
+            return
+        }
         if (drag == Drag.MOVE && drawMoved(canvas, selected)) return
         val strokes = editor?.strokes ?: return
         itemMatrix.setValues(

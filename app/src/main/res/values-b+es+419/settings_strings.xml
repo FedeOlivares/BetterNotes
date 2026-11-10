@@ -280,4 +280,10 @@
         <item>Exportar</item>
         <item>Configuración</item>
     </string-array>
+    <string name="settings_fonts">Fuentes</string>
+    <string name="settings_fonts_add_detail">Elige un archivo .ttf u .otf. Luego se puede usar en los cuadros de texto.</string>
+    <string name="settings_fonts_choose">Elegir archivo</string>
+    <string name="settings_fonts_none">Aún no hay fuentes agregadas.</string>
+    <string name="settings_fonts_remove">Quitar</string>
+    <string name="settings_fonts_included">Incluidas con la app: Roboto, Open Sans, Lora, Caveat y Roboto Mono, bajo la Licencia SIL Open Font 1.1.</string>
 </resources>

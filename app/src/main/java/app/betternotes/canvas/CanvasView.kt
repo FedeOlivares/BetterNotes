@@ -23,6 +23,7 @@ import android.widget.OverScroller
 import androidx.core.graphics.createBitmap
 import androidx.core.view.isVisible
 import androidx.ink.authoring.InProgressStrokeId
+import app.betternotes.core.model.StrokePoints
 import app.betternotes.core.model.InkTool
 import androidx.ink.authoring.InProgressStrokesFinishedListener
 import androidx.ink.authoring.InProgressStrokesView
@@ -140,6 +141,7 @@ import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -220,7 +222,7 @@ class TextEditRequest(
     style: TextStyle,
     sizePt: Float,
     spans: List<TextSpan>,
-    private val commit: (String, TextStyle, Float, List<TextSpan>) -> Unit,
+    private val commit: (String, TextStyle, Float, List<TextSpan>, Float) -> Unit,
     /** How far the page is turned, in degrees clockwise, about ([pivotX], [pivotY]) on the screen. */
     turnDegrees: Float = 0f,
     pivotX: Float = 0f,
@@ -275,6 +277,7 @@ class TextEditRequest(
                 underline = next.underline.takeIf { it != style.underline },
                 strikethrough = next.strikethrough.takeIf { it != style.strikethrough },
                 size = next.size.takeIf { it != sizePt },
+                font = next.font.takeIf { it != style.font },
             )
         }
     }
@@ -295,7 +298,10 @@ class TextEditRequest(
 
     var commitNow: () -> Unit = {}
 
-    fun finish(text: String) = commit(text, style, sizePt, spans)
+    /** How tall the text is as laid out in the box, in pixels, which is more than the box when the text runs past it. */
+    var contentHeightPx by mutableFloatStateOf(0f)
+
+    fun finish(text: String) = commit(text, style, sizePt, spans, if (textSizePx > 0f) contentHeightPx * sizePt / textSizePx else 0f)
 
     fun restyle(style: TextStyle, sizePt: Float) {
         this.style = style
@@ -371,6 +377,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Asks for the text tool, so that a text box tapped twice can be typed in. */
     var onTextToolRequested: () -> Unit = {}
+
+    /** A touch away from the text being typed ends it, and the tool in hand before the text tool comes back. */
+    var onTextToolLeft: () -> Unit = {}
 
     /** Asks for a text box. Null takes it away. */
     var onTextEdit: (TextEditRequest?) -> Unit = {}
@@ -1857,12 +1866,29 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 val py = pageY(x, y, index)
                 if (lasso.pressButton(index, px, py, FINGER_BUTTON_REACH_DP) || lasso.pressTableButton(index, px, py, FINGER_BUTTON_REACH_DP)) syncChanges()
             }
+            // A touch on a text box selects it, as the pen does, so that it can be moved and its look changed.
+            is CanvasTool.Text -> {
+                endTextEdit()
+                topItemOfType<TextItem>(pageId, pageX(x, y, index), pageY(x, y, index))?.second?.let { selectText(index, pageId, it) }
+            }
             else -> Unit
         }
     }
 
+    /** Whether a single finger at ([x], [y]) is on the selected text box, which a finger then moves as the pen does, not the page. */
+    private fun fingerGrabsText(x: Float, y: Float): Boolean {
+        if (tool !is CanvasTool.Lasso || recognizer.mode != InputMode.STYLUS_DRAW) return false
+        val layout = layout ?: return false
+        val index = layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
+        return index >= 0 && lasso.grabsText(index, pageX(x, y, index), pageY(x, y, index))
+    }
+
     private fun pointerDown(event: MotionEvent, index: Int) {
-        val kind = kindOf(event.getToolType(index))
+        var kind = kindOf(event.getToolType(index))
+        // A finger that lands alone on the selected text box carries it, so it counts as the pen for this touch.
+        if (kind == PointerKind.FINGER && event.pointerCount == 1 && fingerGrabsText(event.getX(index), event.getY(index))) {
+            kind = PointerKind.STYLUS
+        }
         val draws = recognizer.mode != InputMode.VIEW_ONLY &&
             (kind != PointerKind.FINGER || recognizer.mode == InputMode.FINGER_DRAW)
         // Without this, Android holds moves back and delivers them once a frame.
@@ -2000,8 +2026,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             startHandwriting(x, y)
             return
         }
+        val typing = tool is CanvasTool.Text && textEdit != null
         endTextEdit()
         strokeStickyId = null
+        if (typing && kind != PointerKind.STYLUS_ERASER && topItemOfType<TextItem>(page.id, pageX(x, y, index), pageY(x, y, index)) == null) {
+            onTextToolLeft()
+            return
+        }
         if (kind != PointerKind.STYLUS_ERASER && pressAudio(pointerId, index, page.id, pageX(x, y, index), pageY(x, y, index), x, y)) return
         if (kind != PointerKind.STYLUS_ERASER && handlePlacement(index, pageX(x, y, index), pageY(x, y, index))) return
 
@@ -2735,19 +2766,30 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             NoteOptions.TEXT_COLOR,
             options.style,
             emptyList(),
-        ) { text, _, _, _ ->
+        ) { text, _, _, _, _ ->
             val at = indexOfItem(pageId, note.id)
             val latest = editor?.content(pageId)?.takeIf { at >= 0 }?.get(at) as? StickyNoteItem
             if (latest != null && text != latest.typedText) setSticky(pageId, at, latest.withText(text, size, options.style))
         }
     }
 
+    /** Leaves the saved text of [id] off the page while its box is open over it, so it is not drawn twice. */
+    private fun hideTextBehindBox(id: Long) {
+        val paint = painter ?: return
+        if (paint.hiddenItemId == id) return
+        paint.hiddenItemId = id
+        tiles.invalidateAll()
+    }
+
     private fun editText(index: Int, pageId: Long, item: TextItem, isNew: Boolean) {
-        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style, item.spans) { text, style, size, spans ->
+        if (!isNew) hideTextBehindBox(item.id)
+        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style, item.spans) { text, style, size, spans, contentPt ->
+            hideTextBehindBox(0L)
             val editor = editor ?: return@beginTextEdit
             val content = editor.content(pageId)
             val at = indexOfItem(pageId, item.id)
-            val edited = item.copy(text = text, style = style, textSize = size, spans = spans)
+            // The box is as tall as its text, and the page paints a text box only where its frame is.
+            val edited = TextFit.fitted(item.copy(text = text, style = style, textSize = size, spans = spans))
             when {
                 isNew && text.isNotEmpty() -> editor.perform(ItemsEdit.addOnTop(pageId, content, edited))
                 at >= 0 && text.isEmpty() -> editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(at)))
@@ -2773,7 +2815,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             table.columnWeights[column] / columnTotal * table.frame.width - 2 * CELL_INSET_PT,
             table.rowWeights[row] / rowTotal * table.frame.height - 2 * CELL_INSET_PT,
         )
-        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle(), emptyList()) { text, _, _, _ ->
+        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle(), emptyList()) { text, _, _, _, _ ->
             val editor = editor ?: return@beginTextEdit
             val at = indexOfItem(pageId, table.id)
             val latest = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? TableItem
@@ -2792,7 +2834,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         color: Int,
         style: TextStyle,
         spans: List<TextSpan>,
-        commit: (String, TextStyle, Float, List<TextSpan>) -> Unit,
+        commit: (String, TextStyle, Float, List<TextSpan>, Float) -> Unit,
     ) {
         val layout = layout ?: return
         val scale = viewport.pxPerPt
@@ -3340,7 +3382,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     // ---- Writing by hand into a text box ----
 
     /** One stroke of handwriting waiting to be read: the pen's path in view pixels, and when, from the stroke's start. */
-    private class WrittenStroke(val screen: FloatArray, val timeMs: LongArray, val widthPx: Float)
+    private class WrittenStroke(
+        val screen: FloatArray,
+        val timeMs: LongArray,
+        val widthPx: Float,
+        val page: StrokePoints,
+        val pageId: Long,
+    )
 
     private class ReadWord(
         val request: TextEditRequest,
@@ -3415,16 +3463,33 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val id = strokeId
         strokeId = null
         val touch = TAP_REACH_DP * resources.displayMetrics.density
-        val tapped = !inkPending() && writeReach < touch && SystemClock.uptimeMillis() - writeDownMs < TAP_MAX_MS
-        if (tapped) {
-            // A touch with nothing written is what it was before: it ends the typing and puts a box or an edit where it landed.
+        val stationary = writeReach < touch && SystemClock.uptimeMillis() - writeDownMs < TAP_MAX_MS
+        // A touch on the line of the circle just written is the lasso that circle was drawn for, not a dot after an "o".
+        if (stationary && lassoFromWrittenLoop(id)) return
+        // A dot belongs to words: it follows ink still waiting to be read or text just read. Alone, the touch is a tap.
+        // On the box a lone touch is neither a dot nor a way out: it leaves the box as it is.
+        if (stationary && !inkPending() && insideOpenBox(writeDownX, writeDownY)) {
             if (id != null) {
                 wet.cancelStroke(id, currentEvent)
                 pendingStrokes.remove(id)
             }
+            return
+        }
+        val tapped = stationary && !inkPending()
+        if (tapped) {
+            if (id != null) {
+                wet.cancelStroke(id, currentEvent)
+                pendingStrokes.remove(id)
+            }
+            // A touch with nothing written is what it was before: it ends the typing and puts a box or an edit where it landed.
+            val typing = textEdit != null
             endTextEdit()
             val index = drawPageIndex
-            handlePlacement(index, pageX(writeDownX, writeDownY, index), pageY(writeDownX, writeDownY, index))
+            val atX = pageX(writeDownX, writeDownY, index)
+            val atY = pageY(writeDownX, writeDownY, index)
+            // Away from any text, a touch that ends the typing also ends the text tool.
+            val pageId = editor?.document?.pages?.get(index)?.id
+            if (typing && pageId != null && topItemOfType<TextItem>(pageId, atX, atY) == null) onTextToolLeft() else handlePlacement(index, atX, atY)
             if (areaKind != AreaKind.NONE) {
                 shapePointer = -1
                 finishAreaDrag()
@@ -3435,6 +3500,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (id != null) wet.finishStroke(event, drawPointerId, id)
     }
 
+    /**
+     * A circle was written and its line is touched now: the circle is not read as an "o" and the touch is not a dot.
+     * The circle's ink goes, the typing ends, and what the circle surrounds is selected. [touchId] is the touch's own ink.
+     */
+    private fun lassoFromWrittenLoop(touchId: InProgressStrokeId?): Boolean {
+        val last = written.lastOrNull() ?: return false
+        if (!StrokeGestures.isClosedLoop(last.page)) return false
+        val index = drawPageIndex
+        val reach = LOOP_TAP_REACH_DP * resources.displayMetrics.density / viewport.pxPerPt
+        if (!StrokeGestures.isNearLine(last.page, pageX(writeDownX, writeDownY, index), pageY(writeDownX, writeDownY, index), reach)) return false
+        if (touchId != null) {
+            wet.cancelStroke(touchId, currentEvent)
+            pendingStrokes.remove(touchId)
+        }
+        val loopId = writtenIds.lastOrNull()
+        val loop = last
+        written.removeAt(written.size - 1)
+        if (writtenIds.isNotEmpty()) writtenIds.removeAt(writtenIds.size - 1)
+        if (loopId != null) dropWet(listOf(loopId))
+        if (written.isEmpty()) removeCallbacks(wordEnd)
+        endTextEdit()
+        if (!selectInsideLoop(index, loop.pageId, loop.page, null)) onTextToolLeft()
+        return true
+    }
+
     private fun collectWritten(id: InProgressStrokeId, stroke: Stroke, pending: PendingStroke) {
         val points = stroke.inputs.toStrokePoints()
         val screen = FloatArray(points.size * 2)
@@ -3443,7 +3533,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             screen[2 * i + 1] = points.y(i)
         }
         pending.toScreen?.mapPoints(screen)
-        written += WrittenStroke(screen, LongArray(points.size) { points.timeMs(it).toLong() }, pending.style.width * viewport.pxPerPt)
+        written += WrittenStroke(screen, LongArray(points.size) { points.timeMs(it).toLong() }, pending.style.width * viewport.pxPerPt, points, pending.pageId)
         writtenIds += id
         writingWet += id
         removeCallbacks(wordEnd)
@@ -3538,6 +3628,21 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         landing.clear()
         flight.clear()
     }
+
+    /** Whether the open text box lies under the screen point ([x], [y]), turned as the page is. */
+    private fun insideOpenBox(x: Float, y: Float): Boolean {
+        val request = textEdit ?: return false
+        val radians = Math.toRadians(-request.turnDegrees.toDouble())
+        val dx = x - request.pivotX
+        val dy = y - request.pivotY
+        val px = request.pivotX + dx * cos(radians).toFloat() - dy * sin(radians).toFloat()
+        val py = request.pivotY + dx * sin(radians).toFloat() + dy * cos(radians).toFloat()
+        val height = maxOf(request.height, request.contentHeightPx)
+        return px >= request.left && px <= request.left + request.width && py >= request.top && py <= request.top + height
+    }
+
+    /** Whether a pen at the screen point writes into the open text box: the app reads handwriting there as it does around it. */
+    fun penWritesAt(x: Float, y: Float): Boolean = tool is CanvasTool.Text && writingReady && insideOpenBox(x, y)
 
     /** Finishes any text being typed. */
     fun endTextEdit() {
@@ -3980,6 +4085,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 scribbleOut(editor, pending.pageId, drawn)
                 continue
             }
+            // A tap on a text box with the pen is a touch on the box, not a dot: it selects the box.
+            if (item.bounds.width < TAP_DOT_PT && item.bounds.height < TAP_DOT_PT && selectTextUnderDot(editor, pending.pageId, item)) continue
             // The ink the wet layer made is of the line as drawn, so a smoothed line is built afresh.
             if (item === drawn) editor.strokes.put(item, stroke)
             editor.perform(ItemsEdit.addOnTop(pending.pageId, editor.content(pending.pageId), item))
@@ -3997,6 +4104,15 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     private val holdWet = HashSet<InProgressStrokeId>()
+
+    /** Selects the text box under a tap that the pen made, and says whether there was one. */
+    private fun selectTextUnderDot(editor: NoteEditor, pageId: Long, dot: StrokeItem): Boolean {
+        val found = topItemOfType<TextItem>(pageId, dot.bounds.centerX, dot.bounds.centerY)?.second ?: return false
+        val index = editor.document.pages.indexOfFirst { it.id == pageId }
+        if (index < 0) return false
+        selectText(index, pageId, found)
+        return true
+    }
 
     /** Erases whole strokes and shapes along a scribble. The scribble itself is not kept. */
     private fun scribbleOut(editor: NoteEditor, pageId: Long, scribble: StrokeItem) {
@@ -4030,13 +4146,21 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             byFinger && StrokeGestures.isInside(loop.item.points, x, y)
         if (!touched) return false
         lastLoop = null
-        // The circle itself is the lasso: its line is taken off the page and what it surrounds is selected.
+        return selectInsideLoop(pageIndex, pageId, loop.item.points, loop.item.id)
+    }
+
+    /**
+     * The circle itself is the lasso: its line, [ownId] on the page when it was drawn as ink, is taken off the page,
+     * and what it surrounds is selected. A circle written in a text box was never put on the page, so it has no id.
+     */
+    private fun selectInsideLoop(pageIndex: Int, pageId: Long, points: StrokePoints, ownId: Long?): Boolean {
+        val editor = editor ?: return false
         val content = editor.content(pageId)
-        val own = (0 until content.size).firstOrNull { content[it].id == loop.item.id } ?: return false
+        val own = if (ownId == null) -1 else (0 until content.size).firstOrNull { content[it].id == ownId } ?: return false
         val inside = selectWithLasso(
             pageId,
             content,
-            StrokeGestures.polygon(loop.item.points),
+            StrokeGestures.polygon(points),
             circleLasso.kinds,
             circleLasso.fullOnly,
             circleLasso.anyPortion,
@@ -4044,14 +4168,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         )
         val picked = inside.indices.indices.filter { inside.indices[it] != own }
         if (picked.isEmpty()) return false
-        editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
-        redrawChanges(pageIndex)
+        if (own >= 0) {
+            editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
+            redrawChanges(pageIndex)
+        }
         // Everything above the removed line moves down one place.
-        val indices = picked.map { inside.indices[it].let { index -> if (index > own) index - 1 else index } }
+        val indices = picked.map { inside.indices[it].let { index -> if (own in 0 until index) index - 1 else index } }
         val items = picked.map { inside.items[it] }
         // The circle turns into marching ants before the selection takes over.
         val chosen = Selection(pageId, indices.toIntArray(), items)
-        lasso.selectAfterAnts(pageIndex, StrokeGestures.polygon(loop.item.points), chosen) {
+        lasso.selectAfterAnts(pageIndex, StrokeGestures.polygon(points), chosen) {
             onLassoRequested()
             syncChanges()
         }

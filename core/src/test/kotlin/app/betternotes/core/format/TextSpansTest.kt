@@ -5,6 +5,7 @@ import app.betternotes.core.model.SpanLook
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextSpan
 import app.betternotes.core.model.TextSpans
+import app.betternotes.core.model.TextStyle
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -51,5 +52,31 @@ class TextSpansTest {
         )
         assertEquals(listOf(item), PageCodec.decode(PageCodec.encode(listOf(item))))
         assertEquals(listOf(item.copy(spans = emptyList())), PageCodec.decode(PageCodec.encode(listOf(item), version = 6)))
+    }
+
+    @Test
+    fun `fonts of the text and of its parts survive a save, and older formats drop them`() {
+        val item = TextItem(
+            id = 2L,
+            frame = Frame(0f, 0f, 100f, 40f),
+            text = "hello world",
+            textSize = 14f,
+            style = TextStyle(bold = true, font = "Lobster-Regular"),
+            spans = listOf(TextSpan(0, 5, SpanLook(font = "")), TextSpan(6, 11, SpanLook(italic = true, font = "Mono"))),
+        )
+        assertEquals(listOf(item), PageCodec.decode(PageCodec.encode(listOf(item))))
+        val v7 = PageCodec.decode(PageCodec.encode(listOf(item), version = 7)).single() as TextItem
+        assertEquals("", v7.style.font)
+        assertEquals(listOf(TextSpan(6, 11, SpanLook(italic = true))), v7.spans)
+        val v6 = PageCodec.decode(PageCodec.encode(listOf(item), version = 6)).single() as TextItem
+        assertEquals(item.style.copy(font = ""), v6.style)
+        assertEquals(emptyList<TextSpan>(), v6.spans)
+    }
+
+    @Test
+    fun `a font alone is a look, and the same font as the text is no look`() {
+        val spans = TextSpans.change(emptyList(), 5, 0, 5) { it.copy(font = "Mono") }
+        assertEquals(listOf(TextSpan(0, 5, SpanLook(font = "Mono"))), spans)
+        assertEquals(emptyList<TextSpan>(), TextSpans.change(spans, 5, 0, 5) { it.copy(font = null) })
     }
 }

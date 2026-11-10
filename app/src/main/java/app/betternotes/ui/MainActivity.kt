@@ -207,6 +207,7 @@ class MainActivity : ComponentActivity() {
             }
         }
         firstPane = PaneFrame(this) { activate(null) }.apply {
+            penCanvas = canvas
             addView(canvas, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             // It covers the canvas, but only its controls take touches. The rest fall through.
             addView(chrome, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))

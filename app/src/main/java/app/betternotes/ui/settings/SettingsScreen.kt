@@ -163,6 +163,7 @@ private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
             detail = stringResource(R.string.settings_auto_name_detail),
         ) { value -> onChange { it.copy(autoName = value) } }
     }
+    FontsCard()
     SettingsCard {
         CardTitle(stringResource(R.string.settings_canvas))
         ToggleRow(stringResource(R.string.settings_continue), canvas.continueFromLastPage) { value ->

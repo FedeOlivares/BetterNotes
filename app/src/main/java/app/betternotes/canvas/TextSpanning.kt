@@ -6,9 +6,11 @@ import android.text.SpannableString
 import android.text.style.RelativeSizeSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
 import android.text.style.UnderlineSpan
 import app.betternotes.core.model.TextSpan
 import app.betternotes.core.model.TextStyle
+import app.betternotes.fonts.FontLibrary
 
 /**
  * The text of a text box with the look of each part marked on it, for Android's layouts. The whole text is marked
@@ -37,7 +39,13 @@ internal fun spannedText(value: String, size: Float, style: TextStyle, spans: Li
             italic -> Typeface.ITALIC
             else -> Typeface.NORMAL
         }
-        if (face != Typeface.NORMAL) out.setSpan(StyleSpan(face), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // An added font is given its bold and italic face whole; a font that is missing leaves the app's own.
+        val added = FontLibrary.face(look?.font ?: style.font, bold, italic)
+        if (added != null) {
+            out.setSpan(TypefaceSpan(added), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        } else if (face != Typeface.NORMAL) {
+            out.setSpan(StyleSpan(face), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
         if (underline) out.setSpan(UnderlineSpan(), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (strike) out.setSpan(StrikethroughSpan(), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (runSize != size && size > 0f) out.setSpan(RelativeSizeSpan(runSize / size), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)

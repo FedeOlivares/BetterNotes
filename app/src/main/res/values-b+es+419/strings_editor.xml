@@ -223,4 +223,11 @@
     <string name="brush_cross">Cruz</string>
     <string name="brush_glow">Brillo</string>
     <string name="panel_brush_type">Tipo de pincel</string>
+    <string name="panel_font">Fuente</string>
+    <string name="font_add">Agregar fuente</string>
+    <string name="font_default">Predeterminada</string>
+    <string name="font_added">Fuente agregada: %1$s</string>
+    <string name="font_not_a_font">Ese archivo no es una fuente utilizable. Elige un archivo .ttf u .otf.</string>
+    <string name="font_too_big">Ese archivo de fuente es demasiado grande.</string>
+    <string name="font_failed">No se pudo agregar la fuente.</string>
 </resources>

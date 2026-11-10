@@ -38,6 +38,7 @@ import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextSpan
+import app.betternotes.fonts.FontLibrary
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -62,7 +63,12 @@ internal class ItemPainter(
     private val stripes = Path()
     private val mark = Paint(Paint.ANTI_ALIAS_FLAG)
 
+    /** The item whose text is being typed in a box over the page, which is not drawn under that box. Set from the main thread, read by the tile thread. */
+    @Volatile
+    var hiddenItemId = 0L
+
     fun paint(canvas: Canvas, item: PageItem) {
+        if (item.id == hiddenItemId && item.id != 0L) return
         when (item) {
             is StrokeItem -> paintStroke(canvas, item)
             is ShapeItem -> inFrame(canvas, item.frame) { paintShape(canvas, item) }
@@ -457,10 +463,12 @@ internal class ItemPainter(
         text.isStrikeThruText = !spanned && style.strikethrough
         text.typeface = when {
             spanned -> Typeface.DEFAULT
-            style.bold && style.italic -> BOLD_ITALIC
-            style.bold -> Typeface.DEFAULT_BOLD
-            style.italic -> ITALIC
-            else -> Typeface.DEFAULT
+            else -> FontLibrary.face(style.font, style.bold, style.italic) ?: when {
+                style.bold && style.italic -> BOLD_ITALIC
+                style.bold -> Typeface.DEFAULT_BOLD
+                style.italic -> ITALIC
+                else -> Typeface.DEFAULT
+            }
         }
         val shown = if (spanned) spannedText(value, size * TEXT_LAYOUT_SCALE, style, spans.map { it.scaled(TEXT_LAYOUT_SCALE) }) else value
         val layout = StaticLayout.Builder
@@ -569,7 +577,7 @@ internal class ItemPainter(
         }
     }
 
-    private companion object {
+    internal companion object {
         const val OPAQUE = 255f
         const val WARNING_STRIPE_RATIO = 0.8f
 
@@ -603,4 +611,4 @@ internal class ItemPainter(
 }
 
 
-private fun TextSpan.scaled(by: Float) = look.size?.let { copy(look = look.copy(size = it * by)) } ?: this
+internal fun TextSpan.scaled(by: Float) = look.size?.let { copy(look = look.copy(size = it * by)) } ?: this

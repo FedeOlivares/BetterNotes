@@ -50,6 +50,7 @@ private const val TAG_TAPE_PATH = 11
 private const val TAG_FILL = 12
 private const val TAG_PATH_SHAPE = 13
 private const val TAG_SPANNED_TEXT = 14
+private const val TAG_FONT_TEXT = 15
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -229,9 +230,12 @@ private fun ByteWriter.item(item: PageItem) {
             if (version >= 5) float(item.opacity)
         }
         is TextItem -> {
-            val spanned = item.spans.isNotEmpty() && version >= 7
-            val styled = spanned || item.style != TextStyle()
-            byte(if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
+            val fonted = version >= 8 && (item.style.font.isNotEmpty() || item.spans.any { it.look.font != null })
+            // Without a font to keep, the parts are written as before, minus any that only differed by font.
+            val spans = if (fonted) item.spans else item.spans.map { it.copy(look = it.look.copy(font = null)) }.filter { !it.look.isPlain }
+            val spanned = fonted || (spans.isNotEmpty() && version >= 7)
+            val styled = spanned || item.style.copy(font = "") != TextStyle()
+            byte(if (fonted) TAG_FONT_TEXT else if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
             long(item.id)
             locked(item)
             frame(item.frame)
@@ -247,14 +251,19 @@ private fun ByteWriter.item(item: PageItem) {
                 VERTICAL_ALIGNS.write(this, item.style.verticalAlign)
             }
             if (spanned) {
-                varint(item.spans.size)
-                for (span in item.spans) {
+                varint(spans.size)
+                for (span in spans) {
                     varint(span.start)
                     varint(span.end)
                     byte(packLook(span.look))
                     bool(span.look.size != null)
                     span.look.size?.let { float(it) }
+                    if (fonted) {
+                        bool(span.look.font != null)
+                        span.look.font?.let { string(it) }
+                    }
                 }
+                if (fonted) string(item.style.font)
             }
         }
         is StickyNoteItem -> {
@@ -412,7 +421,8 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
             verticalAlign = VERTICAL_ALIGNS.read(this),
         ),
     )
-    TAG_SPANNED_TEXT -> {
+    TAG_SPANNED_TEXT, TAG_FONT_TEXT -> {
+        val fonted = tag.toInt() == TAG_FONT_TEXT
         val id = long()
         val locked = locked()
         val frame = frame()
@@ -432,9 +442,10 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
             val end = varint()
             val packed = byte().toInt()
             val sized = if (bool()) float() else null
-            TextSpan(start, end, unpackLook(packed, sized))
+            val font = if (fonted && bool()) string() else null
+            TextSpan(start, end, unpackLook(packed, sized).copy(font = font))
         }
-        TextItem(id, frame, text, size, color, style, locked, spans)
+        TextItem(id, frame, text, size, color, if (fonted) style.copy(font = string()) else style, locked, spans)
     }
     TAG_TEXT -> TextItem(
         id = long(),

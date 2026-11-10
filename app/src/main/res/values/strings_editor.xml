@@ -222,4 +222,11 @@
     <string name="brush_cross">Cross</string>
     <string name="brush_glow">Glow</string>
     <string name="panel_brush_type">Brush type</string>
+    <string name="panel_font">Font</string>
+    <string name="font_add">Add font</string>
+    <string name="font_default">Default</string>
+    <string name="font_added">Font added: %1$s</string>
+    <string name="font_not_a_font">That file is not a usable font. Choose a .ttf or .otf file.</string>
+    <string name="font_too_big">That font file is too big.</string>
+    <string name="font_failed">The font could not be added.</string>
 </resources>

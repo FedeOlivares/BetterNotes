@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,7 +23,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.ViewConfiguration
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,6 +64,8 @@ import app.betternotes.canvas.TextEditRequest
 import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
+import app.betternotes.fonts.FontLibrary
+import androidx.compose.ui.text.font.FontFamily
 import app.betternotes.core.model.TextSpans
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.text.input.VisualTransformation
@@ -173,6 +180,7 @@ internal fun NotePanel(state: EditorState, notices: Notices, options: NoteOption
                 drawPath(cut, colors.panel)
             }
         }
+        if (!sticky) FontSelector(state.shownFont(options), state::setFont)
         val shownSize = state.shownTextSize(options)
         LabeledRow(R.string.panel_font_size) { ValuePill { ValueText(shownSize.toString()) } }
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
@@ -399,6 +407,9 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
             }
         }
     }
+    // The app reads handwriting itself. Android's own stylus writing in a text field would take the pen over when it writes near the box.
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    SideEffect { hostView.setAutoHandwritingEnabled(false) }
     val focus = remember(request) { FocusRequester() }
     val latest by androidx.compose.runtime.rememberUpdatedState(value.text)
     val latestDone by androidx.compose.runtime.rememberUpdatedState(onDone)
@@ -409,8 +420,11 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
     }
     val style = request.style
     val spans = request.spans
+    // Read so that the text follows a font being added or removed.
+    val fontNames = FontLibrary.names
+    val wholeFont = FontLibrary.family(style.font, style.bold, style.italic)
     val pxPerPt = request.textSizePx / request.sizePt.coerceAtLeast(1f)
-    val transformation = remember(spans, style, pxPerPt, density) {
+    val transformation = remember(spans, style, pxPerPt, density, fontNames) {
         VisualTransformation { text ->
             val styles = spans.mapNotNull { span ->
                 val end = span.end.coerceAtMost(text.length)
@@ -420,10 +434,15 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
                     TextDecoration.Underline.takeIf { look.underline ?: style.underline },
                     TextDecoration.LineThrough.takeIf { look.strikethrough ?: style.strikethrough },
                 )
+                val bold = look.bold ?: style.bold
+                val italic = look.italic ?: style.italic
+                val added = FontLibrary.family(look.font ?: style.font, bold, italic)
                 AnnotatedString.Range(
                     SpanStyle(
-                        fontWeight = look.bold?.let { if (it) FontWeight.Bold else FontWeight.Normal },
-                        fontStyle = look.italic?.let { if (it) FontStyle.Italic else FontStyle.Normal },
+                        // An added font is given its bold and italic face whole, so Compose must not style it again.
+                        fontWeight = if (added != null) FontWeight.Normal else look.bold?.let { if (it) FontWeight.Bold else FontWeight.Normal },
+                        fontStyle = if (added != null) FontStyle.Normal else look.italic?.let { if (it) FontStyle.Italic else FontStyle.Normal },
+                        fontFamily = added ?: if ((look.font ?: style.font).isEmpty()) FontFamily.Default else null,
                         textDecoration = if (look.underline != null || look.strikethrough != null) TextDecoration.combine(lines) else null,
                         fontSize = look.size?.let { with(density) { (it * pxPerPt).toSp() } } ?: TextUnit.Unspecified,
                     ),
@@ -438,6 +457,34 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
         TextDecoration.Underline.takeIf { style.underline },
         TextDecoration.LineThrough.takeIf { style.strikethrough },
     )
+    // Android's stylus writing in a text field starts when the pen moves on or just outside the field, which Compose
+    // allows for through a margin around it. The field sits in a box of its own size, so the margin lies outside and
+    // those touches reach the page, where the app's handwriting reads them. On the field the slop is never reached.
+    val viewConfiguration = LocalViewConfiguration.current
+    val noStylusWriting = remember(viewConfiguration) {
+        object : ViewConfiguration by viewConfiguration {
+            override val handwritingSlop: Float get() = Float.MAX_VALUE
+        }
+    }
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(request.left.roundToInt(), request.top.roundToInt()) }
+            // As tall as the box, and taller when the text runs past it, so no line is hidden while the saved copy is.
+            .width(with(density) { request.width.toDp() })
+            .heightIn(min = with(density) { request.height.toDp() })
+            // Turned with the page, about the middle of the screen.
+            .graphicsLayer {
+                rotationZ = request.turnDegrees
+                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
+                    (request.pivotX - request.left) / size.width,
+                    (request.pivotY - request.top) / size.height,
+                )
+            }
+            // The area the text stays in, so that it is plain where typing will go.
+            .background(LocalEditorColors.current.accent.copy(alpha = 0.08f))
+            .border(1.dp, LocalEditorColors.current.accent.copy(alpha = 0.6f)),
+    ) {
+    CompositionLocalProvider(LocalViewConfiguration provides noStylusWriting) {
     BasicTextField(
         value = value,
         onValueChange = {
@@ -453,13 +500,15 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
             request.endX = end.left
             request.endY = end.top
             request.lineHeight = end.height
+            request.contentHeightPx = layout.size.height.toFloat()
         },
         cursorBrush = SolidColor(LocalEditorColors.current.accent),
         textStyle = ComposeTextStyle(
             color = Color(request.color),
             fontSize = with(density) { request.textSizePx.toSp() },
-            fontWeight = if (style.bold) FontWeight.Bold else FontWeight.Normal,
-            fontStyle = if (style.italic) FontStyle.Italic else FontStyle.Normal,
+            fontWeight = if (wholeFont != null) FontWeight.Normal else if (style.bold) FontWeight.Bold else FontWeight.Normal,
+            fontStyle = if (wholeFont != null) FontStyle.Normal else if (style.italic) FontStyle.Italic else FontStyle.Normal,
+            fontFamily = wholeFont,
             textDecoration = TextDecoration.combine(decoration),
             textAlign = when (style.align) {
                 HorizontalAlign.START -> TextAlign.Start
@@ -467,22 +516,10 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
                 HorizontalAlign.END -> TextAlign.End
             },
         ),
-        modifier = Modifier
-            .offset { IntOffset(request.left.roundToInt(), request.top.roundToInt()) }
-            .size(with(density) { request.width.toDp() }, with(density) { request.height.toDp() })
-            // Turned with the page, about the middle of the screen.
-            .graphicsLayer {
-                rotationZ = request.turnDegrees
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(
-                    (request.pivotX - request.left) / size.width,
-                    (request.pivotY - request.top) / size.height,
-                )
-            }
-            // The area the text stays in, so that it is plain where typing will go.
-            .background(LocalEditorColors.current.accent.copy(alpha = 0.08f))
-            .border(1.dp, LocalEditorColors.current.accent.copy(alpha = 0.6f))
-            .focusRequester(focus),
+        modifier = Modifier.fillMaxWidth().focusRequester(focus),
     )
+    }
+    }
 }
 
 private val HEADER_PREVIEW = Color(0xFF55565B)

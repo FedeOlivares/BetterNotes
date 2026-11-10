@@ -30,9 +30,18 @@ import app.betternotes.ui.theme.templateLanguage
  * the touch on unchanged.
  */
 internal class PaneFrame(context: Context, private val onTouched: () -> Unit) : FrameLayout(context) {
+    /** The canvas under the controls: a pen on the text box being typed in goes to it, to write, not to the box's text field. */
+    var penCanvas: CanvasView? = null
+    private var penOnCanvas = false
+
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
-        if (event.actionMasked == MotionEvent.ACTION_DOWN) onTouched()
-        return super.dispatchTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            onTouched()
+            penOnCanvas = event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS && penCanvas?.penWritesAt(event.x, event.y) == true
+        }
+        val toCanvas = penOnCanvas
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) penOnCanvas = false
+        return if (toCanvas) penCanvas?.dispatchTouchEvent(event) ?: false else super.dispatchTouchEvent(event)
     }
 }
 
@@ -66,7 +75,7 @@ internal class SplitPane(
 ) {
     val canvas = CanvasView(activity)
     val state = EditorState(canvas, tools)
-    val view = PaneFrame(activity) { host.activated(this) }
+    val view = PaneFrame(activity) { host.activated(this) }.also { it.penCanvas = canvas }
 
     var editor: NoteEditor? = null
         private set

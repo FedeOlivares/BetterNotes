@@ -280,4 +280,10 @@
         <item>Export</item>
         <item>Settings</item>
     </string-array>
+    <string name="settings_fonts">Fonts</string>
+    <string name="settings_fonts_add_detail">Choose a .ttf or .otf file. It can then be used in text boxes.</string>
+    <string name="settings_fonts_choose">Choose file</string>
+    <string name="settings_fonts_none">No fonts added yet.</string>
+    <string name="settings_fonts_remove">Remove</string>
+    <string name="settings_fonts_included">Included with the app: Roboto, Open Sans, Lora, Caveat and Roboto Mono, under the SIL Open Font License 1.1.</string>
 </resources>

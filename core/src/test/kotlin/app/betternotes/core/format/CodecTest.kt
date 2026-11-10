@@ -245,9 +245,9 @@ class CodecTest {
 
     @Test
     fun `a newer version is refused, not skipped`() {
-        val newer = encodeWithVersion("BNPG", 8)
+        val newer = encodeWithVersion("BNPG", 9)
         val thrown = assertThrows(UnsupportedVersionException::class.java) { PageCodec.decode(newer) }
-        assertEquals(8, thrown.version)
+        assertEquals(9, thrown.version)
     }
 
     /** Builds a well-formed file with a bad body, to check values the checksum cannot catch. */

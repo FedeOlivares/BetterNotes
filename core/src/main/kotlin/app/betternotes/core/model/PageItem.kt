@@ -243,6 +243,8 @@ data class TextStyle(
     val strikethrough: Boolean = false,
     val align: HorizontalAlign = HorizontalAlign.START,
     val verticalAlign: VerticalAlign = VerticalAlign.TOP,
+    /** The added font the text is set in, by its name; empty is the app's own font. A font that is missing shows as the app's own. */
+    val font: String = "",
 )
 
 /**
@@ -255,8 +257,10 @@ data class SpanLook(
     val underline: Boolean? = null,
     val strikethrough: Boolean? = null,
     val size: Float? = null,
+    /** An added font by name, or empty for the app's own font; null keeps the text's. */
+    val font: String? = null,
 ) {
-    val isPlain get() = bold == null && italic == null && underline == null && strikethrough == null && size == null
+    val isPlain get() = bold == null && italic == null && underline == null && strikethrough == null && size == null && font == null
 }
 
 /** The letters from [start] up to [end], counted in characters of the text, that look as [look] says. */
