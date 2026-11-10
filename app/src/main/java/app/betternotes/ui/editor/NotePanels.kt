@@ -57,6 +57,7 @@ import androidx.compose.foundation.Canvas
 import app.betternotes.R
 import app.betternotes.canvas.TextEditRequest
 import app.betternotes.core.model.HorizontalAlign
+import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.tools.NoteOptions
@@ -83,27 +84,43 @@ internal fun NoteRow(state: EditorState, options: NoteOptions, modifier: Modifie
                 PillDivider()
             }
             ToolbarCellBox(onClick = { state.panelOpen = true }) { ValueText(options.textSize.toString()) }
-            val style = options.style
-            StyleToggle(EditorIcons.Bold, R.string.style_bold, style.bold) { state.updateNoteStyle { it.copy(bold = !it.bold) } }
-            StyleToggle(EditorIcons.Italic, R.string.style_italic, style.italic) { state.updateNoteStyle { it.copy(italic = !it.italic) } }
-            StyleToggle(EditorIcons.Underline, R.string.style_underline, style.underline) {
-                state.updateNoteStyle { it.copy(underline = !it.underline) }
-            }
-            StyleToggle(EditorIcons.Strike, R.string.style_strike, style.strikethrough) {
-                state.updateNoteStyle { it.copy(strikethrough = !it.strikethrough) }
-            }
-            ToolbarIcon(style.align.icon(), stringResource(R.string.panel_horizontal_alignment)) {
-                state.updateNoteStyle { it.copy(align = HorizontalAlign.entries[(it.align.ordinal + 1) % HorizontalAlign.entries.size]) }
-            }
-            ToolbarIcon(style.verticalAlign.icon(), stringResource(R.string.panel_vertical_alignment)) {
-                state.updateNoteStyle {
-                    it.copy(verticalAlign = VerticalAlign.entries[(it.verticalAlign.ordinal + 1) % VerticalAlign.entries.size])
-                }
-            }
+            StyleButtons(options.style, state::updateNoteStyle)
             PillDivider()
             ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
                 state.panelOpen = !state.panelOpen
             }
+        }
+    }
+}
+
+/** Bold, italic, underline, strike and the two alignments, applied through [update]. */
+@Composable
+private fun StyleButtons(style: TextStyle, update: (((TextStyle) -> TextStyle)) -> Unit) {
+    StyleToggle(EditorIcons.Bold, R.string.style_bold, style.bold) { update { it.copy(bold = !it.bold) } }
+    StyleToggle(EditorIcons.Italic, R.string.style_italic, style.italic) { update { it.copy(italic = !it.italic) } }
+    StyleToggle(EditorIcons.Underline, R.string.style_underline, style.underline) { update { it.copy(underline = !it.underline) } }
+    StyleToggle(EditorIcons.Strike, R.string.style_strike, style.strikethrough) { update { it.copy(strikethrough = !it.strikethrough) } }
+    ToolbarIcon(style.align.icon(), stringResource(R.string.panel_horizontal_alignment)) {
+        update { it.copy(align = HorizontalAlign.entries[(it.align.ordinal + 1) % HorizontalAlign.entries.size]) }
+    }
+    ToolbarIcon(style.verticalAlign.icon(), stringResource(R.string.panel_vertical_alignment)) {
+        update { it.copy(verticalAlign = VerticalAlign.entries[(it.verticalAlign.ordinal + 1) % VerticalAlign.entries.size]) }
+    }
+}
+
+/** The row of a text box that is selected: its size and style, which change that text. */
+@Composable
+internal fun TextSelectionRow(state: EditorState, item: TextItem, modifier: Modifier) {
+    Pill(modifier) {
+        ToolStrip {
+            ToolbarIcon(EditorIcons.Minus, stringResource(R.string.panel_thinner)) {
+                state.changeSelectedText { it.copy(textSize = (it.textSize - 1f).coerceAtLeast(NoteOptions.MIN_TEXT.toFloat())) }
+            }
+            ValueText(item.textSize.roundToInt().toString())
+            ToolbarIcon(EditorIcons.Plus, stringResource(R.string.panel_thicker)) {
+                state.changeSelectedText { it.copy(textSize = (it.textSize + 1f).coerceAtMost(NoteOptions.MAX_TEXT.toFloat())) }
+            }
+            StyleButtons(item.style) { change -> state.changeSelectedText { it.copy(style = change(it.style)) } }
         }
     }
 }

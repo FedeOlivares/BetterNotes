@@ -18,6 +18,7 @@ import app.betternotes.canvas.LaserMode
 import app.betternotes.canvas.TextEditRequest
 import app.betternotes.canvas.VideoPlayRequest
 import app.betternotes.core.gesture.InputMode
+import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.InkTool
@@ -40,6 +41,7 @@ import app.betternotes.core.clipboard.ImageClip
 import app.betternotes.core.clipboard.ItemsClip
 import app.betternotes.core.clipboard.TextClip
 import app.betternotes.core.tools.TapeOptions
+import kotlin.math.roundToInt
 
 /** The tools the strip can put in the pen's hand so far. */
 internal enum class ActiveTool(val ink: InkTool?) {
@@ -531,6 +533,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             }
         }
         // The lasso that a circle or a placed item asked for is lent: it goes back once the selection is let go.
+        canvas.onTextToolRequested = { if (activeTool != ActiveTool.TEXT) select(ActiveTool.TEXT) }
         canvas.onSelectionDropped = {
             val back = toolBeforeLasso
             toolBeforeLasso = null
@@ -572,9 +575,16 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.setGrid(grid.on && grid.cross, grid.on && grid.thirds)
         canvas.onSaveSticker = ::saveAsSticker
         canvas.onFillFailed = { say(R.string.notice_fill_open) }
+        canvas.onWritingModelsMissing = { say(R.string.notice_writing_models) }
         canvas.onReturnTool = ::returnToPreviousTool
         canvas.onFillDone = ::fillUsed
-        canvas.onTextEdit = { textEdit = it }
+        canvas.onTextEdit = { request ->
+            textEdit = request
+            // Opening a text that was written before shows its own look in the toolbar, so its buttons change that text.
+            if (request != null && activeTool == ActiveTool.TEXT) {
+                note = note.copy(style = request.style, textSize = request.sizePt.roundToInt().coerceIn(NoteOptions.MIN_TEXT, NoteOptions.MAX_TEXT))
+            }
+        }
         canvas.onPlayVideo = { playingVideo = it }
         canvas.onViewMoved = ::refreshPosition
         canvas.onZoomChanged = { refreshPosition() }
@@ -678,7 +688,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     fun updateNote(change: (NoteOptions) -> NoteOptions) {
         note = change(note)
         applyTool()
+        // A text box that is open takes the new size and style at once, and keeps them when it ends.
+        if (activeTool == ActiveTool.TEXT) canvas.restyleTextEdit(note.style, note.textSize.toFloat())
     }
+
+    /** Changes the selected text box, as one step that can be undone. */
+    fun changeSelectedText(change: (TextItem) -> TextItem) = canvas.changeSelection { if (it is TextItem) change(it) else it }
 
     fun updateNoteStyle(change: (TextStyle) -> TextStyle) = updateNote { it.copy(style = change(it.style)) }
 

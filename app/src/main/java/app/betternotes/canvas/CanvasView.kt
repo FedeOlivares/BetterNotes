@@ -213,8 +213,9 @@ class TextEditRequest(
     height: Float,
     textSizePx: Float,
     val color: Int,
-    val style: TextStyle,
-    private val commit: (String) -> Unit,
+    style: TextStyle,
+    sizePt: Float,
+    private val commit: (String, TextStyle, Float) -> Unit,
     /** How far the page is turned, in degrees clockwise, about ([pivotX], [pivotY]) on the screen. */
     turnDegrees: Float = 0f,
     pivotX: Float = 0f,
@@ -230,6 +231,12 @@ class TextEditRequest(
     var height by mutableFloatStateOf(height)
         private set
     var textSizePx by mutableFloatStateOf(textSizePx)
+        private set
+
+    /** The look of the text, which the toolbar can change while the box is open. */
+    var style by mutableStateOf(style)
+        private set
+    var sizePt = sizePt
         private set
     var turnDegrees by mutableFloatStateOf(turnDegrees)
         private set
@@ -248,7 +255,12 @@ class TextEditRequest(
 
     var commitNow: () -> Unit = {}
 
-    fun finish(text: String) = commit(text)
+    fun finish(text: String) = commit(text, style, sizePt)
+
+    fun restyle(style: TextStyle, sizePt: Float) {
+        this.style = style
+        this.sizePt = sizePt
+    }
 
     /** Adds [word] after what is there, with a space between if needed. */
     fun append(word: String) {
@@ -314,6 +326,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             lasso.snapEnabled = value
         }
 
+    /** Told when a text box opens and handwriting cannot be read into it because the models are not on the device. */
+    var onWritingModelsMissing: () -> Unit = {}
+
+    /** Asks for the text tool, so that a text box tapped twice can be typed in. */
+    var onTextToolRequested: () -> Unit = {}
+
     /** Asks for a text box. Null takes it away. */
     var onTextEdit: (TextEditRequest?) -> Unit = {}
 
@@ -321,6 +339,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var textEditIndex = 0
     private var textEditBox = Frame(0f, 0f, 0f, 0f)
     private var textEditSize = 0f
+
+    /** Gives the text box being typed a new look, as the toolbar's size and style buttons are used. */
+    fun restyleTextEdit(style: TextStyle, sizePt: Float) {
+        val request = textEdit ?: return
+        textEditSize = sizePt
+        request.restyle(style, sizePt)
+        followTextEdit()
+    }
 
     /** Puts the text box being typed in back over its place on the page, after the page was moved or zoomed. */
     private fun followTextEdit() {
@@ -697,6 +723,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             tiles.invalidate()
             // The selection's box and handles are drawn on the overlay in screen positions, so they follow the page as it flies.
             overlay.invalidate()
+            followTextEdit()
             onViewMoved()
             postOnAnimation(this)
         }
@@ -1696,20 +1723,41 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (index < 0) return
         val pageId = editor.document.pages[index].id
         val table = topItemOfType<TableItem>(pageId, pageX(x, y, index), pageY(x, y, index))?.second
-        if (table == null) {
+        val text = if (table == null) topItemOfType<TextItem>(pageId, pageX(x, y, index), pageY(x, y, index))?.second else null
+        if (table == null && text == null) {
             lastTableTapId = 0L
             return
         }
+        val tapped = table?.id ?: text!!.id
         val near = hypot(x - lastTableTapX, y - lastTableTapY) <= TABLE_DOUBLE_TAP_REACH_DP * resources.displayMetrics.density
-        if (lastTableTapId == table.id && timeMs - lastTableTapMs <= TABLE_DOUBLE_TAP_MS && near) {
+        if (lastTableTapId == tapped && timeMs - lastTableTapMs <= TABLE_DOUBLE_TAP_MS && near) {
             lastTableTapId = 0L
-            openTableEditor(index, pageId, table.id, cleanDots = byPen && tool is CanvasTool.Ink)
+            // Two taps on a table open its handles, and on a text box they go back to typing in it.
+            if (table != null) openTableEditor(index, pageId, table.id, cleanDots = byPen && tool is CanvasTool.Ink) else continueText(index, pageId, text!!)
         } else {
-            lastTableTapId = table.id
+            lastTableTapId = tapped
             lastTableTapMs = timeMs
             lastTableTapX = x
             lastTableTapY = y
         }
+    }
+
+    /** Selects a text box, with its handles showing, so that it can be moved and resized and its look changed. */
+    private fun selectText(index: Int, pageId: Long, item: TextItem) {
+        val open = editor ?: return
+        val at = indexOfItem(pageId, item.id)
+        if (at < 0) return
+        lasso.select(index, Selection(pageId, intArrayOf(at), listOf(open.content(pageId)[at])))
+        onLassoRequested()
+        syncChanges()
+    }
+
+    /** Opens a text box for typing again, with the text tool in hand. */
+    private fun continueText(index: Int, pageId: Long, item: TextItem) {
+        onTextToolRequested()
+        val at = indexOfItem(pageId, item.id)
+        val current = (if (at >= 0) editor?.content(pageId)?.get(at) as? TextItem else null) ?: item
+        editText(index, pageId, current, isNew = false)
     }
 
     /** Selects the table and shows its editing handles, with the lasso to work them. */
@@ -2176,7 +2224,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             is CanvasTool.Sticky -> beginAreaDrag(AreaKind.STICKY, index, x, y, current.options)
             is CanvasTool.Text -> {
                 val found = topItemOfType<TextItem>(page.id, x, y)?.second
-                if (found != null) editText(index, page.id, found, isNew = false) else beginAreaDrag(AreaKind.TEXT, index, x, y, current.options)
+                if (found != null) selectText(index, page.id, found) else beginAreaDrag(AreaKind.TEXT, index, x, y, current.options)
             }
             is CanvasTool.Table -> {
                 val found = topItemOfType<TableItem>(page.id, x, y)?.second
@@ -2646,7 +2694,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             size,
             NoteOptions.TEXT_COLOR,
             options.style,
-        ) { text ->
+        ) { text, _, _ ->
             val at = indexOfItem(pageId, note.id)
             val latest = editor?.content(pageId)?.takeIf { at >= 0 }?.get(at) as? StickyNoteItem
             if (latest != null && text != latest.typedText) setSticky(pageId, at, latest.withText(text, size, options.style))
@@ -2654,15 +2702,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     private fun editText(index: Int, pageId: Long, item: TextItem, isNew: Boolean) {
-        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style) { text ->
+        beginTextEdit(index, item.frame, item.text, item.textSize, item.color, item.style) { text, style, size ->
             val editor = editor ?: return@beginTextEdit
             val content = editor.content(pageId)
             val at = indexOfItem(pageId, item.id)
+            val edited = item.copy(text = text, style = style, textSize = size)
             when {
-                isNew && text.isNotEmpty() -> editor.perform(ItemsEdit.addOnTop(pageId, content, item.copy(text = text)))
+                isNew && text.isNotEmpty() -> editor.perform(ItemsEdit.addOnTop(pageId, content, edited))
                 at >= 0 && text.isEmpty() -> editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(at)))
-                at >= 0 && text != item.text ->
-                    editor.perform(ItemsEdit.replace(pageId, content, intArrayOf(at), listOf(item.copy(text = text))))
+                at >= 0 && edited != item ->
+                    editor.perform(ItemsEdit.replace(pageId, content, intArrayOf(at), listOf(edited)))
             }
             syncChanges()
         }
@@ -2683,7 +2732,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             table.columnWeights[column] / columnTotal * table.frame.width - 2 * CELL_INSET_PT,
             table.rowWeights[row] / rowTotal * table.frame.height - 2 * CELL_INSET_PT,
         )
-        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle()) { text ->
+        beginTextEdit(index, box, table.cells[cell], table.textSize, NoteOptions.TEXT_COLOR, TextStyle()) { text, _, _ ->
             val editor = editor ?: return@beginTextEdit
             val at = indexOfItem(pageId, table.id)
             val latest = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? TableItem
@@ -2701,7 +2750,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         size: Float,
         color: Int,
         style: TextStyle,
-        commit: (String) -> Unit,
+        commit: (String, TextStyle, Float) -> Unit,
     ) {
         val layout = layout ?: return
         val scale = viewport.pxPerPt
@@ -2714,6 +2763,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             size * scale,
             color,
             style,
+            size,
             commit,
             layout.turn(index),
             viewport.toScreenX(layout.centerX(index)),
@@ -3289,7 +3339,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             } catch (_: RuntimeException) {
                 false
             }
-            post { writingReady = ready }
+            post {
+                writingReady = ready
+                if (!ready && textEdit != null) onWritingModelsMissing()
+            }
         }
     }
 

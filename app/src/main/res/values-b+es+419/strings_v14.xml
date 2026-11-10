@@ -12,6 +12,7 @@
     <!-- Paint bucket -->
     <string name="tool_fill">Bote de pintura</string>
     <string name="fill_opacity">Opacidad</string>
+    <string name="notice_writing_models">Escribir a mano en un cuadro de texto necesita los modelos. Descárgalos en Ajustes, en Búsqueda de escritura a mano</string>
     <string name="notice_fill_open">No hay nada que rellenar ahí: la zona no está cerrada, o el lápiz está sobre una línea</string>
     <string name="sticker_add_pack">Agregar un paquete de stickers desde una carpeta</string>
     <string name="notice_pack_added">Paquete de stickers agregado</string>

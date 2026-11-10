@@ -12,6 +12,7 @@
     <!-- Paint bucket -->
     <string name="tool_fill">Paint bucket</string>
     <string name="fill_opacity">Opacity</string>
+    <string name="notice_writing_models">Handwriting in a text box needs the models. Download them in Settings, under Handwriting search</string>
     <string name="notice_fill_open">Nothing to fill there: the area is not closed, or the pen is on a line</string>
     <string name="sticker_add_pack">Add a sticker pack from a folder</string>
     <string name="notice_pack_added">Sticker pack added</string>

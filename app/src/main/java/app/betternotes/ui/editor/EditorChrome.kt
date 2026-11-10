@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.ToolbarEntries
@@ -215,6 +216,8 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
         preset != null -> ToolRow(state, preset, none)
         tool == ActiveTool.LASER -> LaserRow(state, none)
         tool == ActiveTool.ERASER -> EraserRow(state, state.eraser, none)
+        tool == ActiveTool.LASSO && state.selection?.singleOrNull() is TextItem ->
+            TextSelectionRow(state, state.selection!!.single() as TextItem, none)
         tool == ActiveTool.LASSO -> LassoRow(state, state.lasso, none)
         tool == ActiveTool.SHAPE -> ShapeRow(state, state.shape, none)
         tool == ActiveTool.STICKY || tool == ActiveTool.TEXT -> NoteRow(state, state.note, none, tool == ActiveTool.STICKY)
