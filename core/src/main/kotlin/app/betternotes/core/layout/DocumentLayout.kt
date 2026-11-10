@@ -89,6 +89,28 @@ class DocumentLayout(
         out[1] = h / 2f + dx * sin + dy * cos
     }
 
+    /** The box in the document around [box], given in the coordinates of a page, which can be turned. */
+    fun pageBoundsToWorld(index: Int, box: Bounds): Bounds {
+        if (turns[index] == 0f) {
+            val x = originX(index)
+            val y = originY(index)
+            return Bounds(box.left + x, box.top + y, box.right + x, box.bottom + y)
+        }
+        val corner = FloatArray(2)
+        var left = Float.MAX_VALUE
+        var top = Float.MAX_VALUE
+        var right = -Float.MAX_VALUE
+        var bottom = -Float.MAX_VALUE
+        for (k in 0 until 4) {
+            pageToWorld(index, if (k % 2 == 0) box.left else box.right, if (k < 2) box.top else box.bottom, corner)
+            left = minOf(left, corner[0])
+            right = maxOf(right, corner[0])
+            top = minOf(top, corner[1])
+            bottom = maxOf(bottom, corner[1])
+        }
+        return Bounds(left, top, right, bottom)
+    }
+
     /** The document point where a point of the page lies, written to [out] as x then y. */
     fun pageToWorld(index: Int, x: Float, y: Float, out: FloatArray) {
         val dx = x - pageWidth(index) / 2f

@@ -8,6 +8,7 @@ Fonts of your own.
 - Open with: a PDF or a Better Notes file (.bnote) opened from a file manager or another app can open in Better Notes. Opening a PDF this way was tried on the Pad 7; opening a .bnote from outside the app and opening a password-protected PDF this way were not tried.
 - Text boxes: a tap with the pen or a finger selects a box and leaves no dot, a finger on a selected box moves it, the pen writes inside an open box, a box is as tall as its text, and its handles change the box and not the text size. Tapping away from an open box, or lassoing from it, goes back to the previous tool.
 - A note that uses a font that has been removed shows its text in the app's own font, and shows the font again if it is added back with the same file name. Notebooks saved with this update use page format 8, which older versions of the app cannot open. Fonts are not stored inside the notebook, so a notebook shared to another device needs the same font files added there.
+- Fix: text could be cut off, or vanish, at the edge of a drawing tile when it ran past its box (long or tall text, slanted or large letters, table cells, arrow tips). Everything painted, even by one pixel, is now drawn in every tile it touches.
 
 ---
 

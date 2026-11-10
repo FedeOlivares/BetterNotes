@@ -127,4 +127,24 @@ class DocumentLayoutTest {
         assertEquals(100f, viewport.panX, 0.001f)
         assertEquals(0f, viewport.panY, 0.001f)
     }
+
+    @Test
+    fun `a region of an upright page moves by the page's origin`() {
+        val layout = DocumentLayout(listOf(big, small), ScrollDirection.VERTICAL, gapPt = 10f)
+        assertEquals(Bounds(35f, 215f, 45f, 225f), layout.pageBoundsToWorld(1, Bounds(10f, 5f, 20f, 15f)))
+    }
+
+    @Test
+    fun `a region of a turned page is turned with it`() {
+        val layout = DocumentLayout(listOf(Page(1, PageSize(100f, 200f), rotation = 90f)), ScrollDirection.VERTICAL, gapPt = 10f)
+        val world = layout.pageBoundsToWorld(0, Bounds(0f, 0f, 10f, 10f))
+        // The page's top-left corner goes to the top-right of the turned page's box, so the region is not where an upright one would be.
+        val upright = Bounds(layout.originX(0), layout.originY(0), layout.originX(0) + 10f, layout.originY(0) + 10f)
+        assertTrue(world != upright)
+        assertEquals(10f, world.width, 0.01f)
+        assertEquals(10f, world.height, 0.01f)
+        val corner = FloatArray(2)
+        layout.pageToWorld(0, 0f, 0f, corner)
+        assertTrue(world.contains(corner[0], corner[1]))
+    }
 }

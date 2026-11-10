@@ -62,15 +62,9 @@ internal class TileLayerView(
     fun invalidateRegion(region: Bounds) {
         val scale = tileScale
         if (scale == 0f) return
-        val margin = DIRTY_MARGIN_PX / scale
         for (tile in slots) {
             if (tile == null) continue
-            val left = tile.column * TILE_PX / scale - OVERLAP_PX / scale
-            val top = tile.row * TILE_PX / scale - OVERLAP_PX / scale
-            val extent = (TILE_PX + 2 * OVERLAP_PX) / scale
-            if (left <= region.right + margin && region.left - margin <= left + extent && top <= region.bottom + margin && region.top - margin <= top + extent) {
-                tile.dirty = true
-            }
+            if (TileGrid.isAffectedBy(TileGrid.tileBounds(tile.column, tile.row, TILE_PX, OVERLAP_PX, scale), region, scale)) tile.dirty = true
         }
         invalidate()
     }
@@ -194,12 +188,7 @@ internal class TileLayerView(
         val scale = tileScale
         val leftPx = column.toDouble() * TILE_PX - OVERLAP_PX
         val topPx = row.toDouble() * TILE_PX - OVERLAP_PX
-        val region = Bounds(
-            (leftPx / scale).toFloat(),
-            (topPx / scale).toFloat(),
-            ((leftPx + NODE_PX) / scale).toFloat(),
-            ((topPx + NODE_PX) / scale).toFloat(),
-        )
+        val region = TileGrid.tileBounds(column, row, TILE_PX, OVERLAP_PX, scale)
         val canvas = tile.node.beginRecording(NODE_PX, NODE_PX)
         try {
             canvas.drawColor(backdropColor)
@@ -245,9 +234,6 @@ internal class TileLayerView(
          */
         const val OVERLAP_PX = 1
         const val NODE_PX = TILE_PX + 2 * OVERLAP_PX
-
-        /** Tiles redrawn for a change reach this far past it, so a line cut by a tile edge is never left stale. */
-        const val DIRTY_MARGIN_PX = 4f
 
         /** Limits the cost of drawing ahead, so a frame stays cheap while the ring fills up. */
         const val PREFETCH_TILES_PER_FRAME = 2

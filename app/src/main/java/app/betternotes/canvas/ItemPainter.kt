@@ -589,7 +589,7 @@ internal class ItemPainter(
         const val TAPE_TEETH = 5
         const val OUTLINE_STEP = 1.5f
         const val DOT_LENGTH = 0.01f
-        const val CELL_PADDING = 3f
+        const val CELL_PADDING = TableItem.CELL_PADDING
         const val TEXT_LAYOUT_SCALE = 8f
         const val FOLD_OF_NOTE = 0.12f
         const val FOLD_TIP = 0.2f

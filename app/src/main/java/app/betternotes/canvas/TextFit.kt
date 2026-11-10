@@ -7,21 +7,27 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.TextItem
+import app.betternotes.core.model.TextReach
+import app.betternotes.core.model.TextSpan
+import app.betternotes.core.model.TextStyle
 import app.betternotes.fonts.FontLibrary
 import kotlin.math.roundToInt
 
-/** How tall a text box must be to hold its text at its width, laid out as the page paints it. Used on the main thread only. */
+/** How tall a text box must be to hold its text at its width, laid out as the page paints it. Safe to call from any thread. */
 internal object TextFit {
-    private val paint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    /** Tells the core how tall a text lays out, so that the area a text box paints is known. Call once at start. */
+    fun install() {
+        TextReach.layoutHeight = { text, size, style, spans, width -> height(text, size, style, spans, width) }
+    }
 
     /** The height in points that the text of [item] takes when wrapped at the width of its frame, at least one line. */
-    fun height(item: TextItem): Float {
+    fun height(item: TextItem): Float = height(item.text.ifEmpty { " " }, item.textSize, item.style, item.spans, item.frame.width)
+
+    fun height(text: String, size: Float, style: TextStyle, spans: List<TextSpan>, width: Float): Float {
         val scale = ItemPainter.TEXT_LAYOUT_SCALE
-        val style = item.style
-        val spanned = item.spans.isNotEmpty()
-        paint.textSize = item.textSize * scale
-        paint.isUnderlineText = false
-        paint.isStrikeThruText = false
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+        val spanned = spans.isNotEmpty()
+        paint.textSize = size * scale
         paint.typeface = when {
             spanned -> Typeface.DEFAULT
             else -> FontLibrary.face(style.font, style.bold, style.italic) ?: when {
@@ -31,10 +37,9 @@ internal object TextFit {
                 else -> Typeface.DEFAULT
             }
         }
-        val value = item.text.ifEmpty { " " }
-        val shown = if (spanned) spannedText(value, item.textSize * scale, style, item.spans.map { it.scaled(scale) }) else value
+        val shown = if (spanned) spannedText(text, size * scale, style, spans.map { it.scaled(scale) }) else text
         val layout = StaticLayout.Builder
-            .obtain(shown, 0, value.length, paint, (item.frame.width * scale).roundToInt().coerceAtLeast(1))
+            .obtain(shown, 0, text.length, paint, (width * scale).roundToInt().coerceAtLeast(1))
             .setAlignment(
                 when (style.align) {
                     HorizontalAlign.START -> Layout.Alignment.ALIGN_NORMAL

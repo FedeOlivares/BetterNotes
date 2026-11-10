@@ -22,6 +22,7 @@ Fully offline. The only network use is the one-time ML Kit Digital Ink model dow
 - Verify performance on the real Pad 7. Report measured numbers, and say plainly what was not compiled, tested, run or measured.
 - UI must match Notewise. If a screen's reference screenshot is missing, ask the owner; do not invent it.
 - Redraw icons and artwork; never extract or copy Notewise assets.
+- Tiles must never cut anything. Any new or changed display item, tool or painter must paint only inside its `paintBounds`, and a tile that is touched by even one pixel of it must be drawn and redrawn. `paintBounds` takes in everything painted: text that overflows its frame (the page does not clip it), glyph overhang, italic slant, spans, stroke width and miter joins, arrow tips, shadows, antialiasing. Page-local regions turn with the page before they reach the tiles (`DocumentLayout.pageBoundsToWorld`). Add a core test in `PaintBoundsTest` or `TileGridTest` for each new item.
 - All page and item changes go through edits (`ItemsEdit`, `UndoHistory`). Undo is strictly last-in, first-out.
 - To change the file format, bump `FORMAT_VERSION` and add a migration. Never edit the expected bytes in `CodecTest`.
 - Nothing online, except the ML Kit model download. No cloud, sync, sharing, AI or account.

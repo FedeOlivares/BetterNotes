@@ -50,4 +50,53 @@ class TileGridTest {
         assertTrue(TileGrid.needsRescale(TileGrid.MIN_RATIO - 0.01f))
         assertTrue(TileGrid.needsRescale(TileGrid.MAX_RATIO + 0.01f))
     }
+
+    private val tilePx = 512
+    private val overlap = 1
+
+    @Test
+    fun `neighbouring tiles share their edge pixels`() {
+        val scale = 2f
+        val left = TileGrid.tileBounds(0, 0, tilePx, overlap, scale)
+        val right = TileGrid.tileBounds(1, 0, tilePx, overlap, scale)
+        assertEquals(-0.5f, left.left, 0f)
+        assertEquals(256.5f, left.right, 0f)
+        assertEquals(255.5f, right.left, 0f)
+    }
+
+    @Test
+    fun `a change that paints one pixel into a tile redraws it`() {
+        val scale = 2f
+        val next = TileGrid.tileBounds(1, 0, tilePx, overlap, scale)
+        // An item ending exactly on the first pixel of the next tile, which is the edge case of the rule.
+        val item = Bounds(100f, 10f, next.left, 20f)
+        assertTrue(TileGrid.isAffectedBy(next, item, scale))
+        // And one that ends a pixel short of it still can colour it, through antialiasing.
+        val short = Bounds(100f, 10f, next.left - 1f / scale, 20f)
+        assertTrue(TileGrid.isAffectedBy(next, short, scale))
+    }
+
+    @Test
+    fun `a change far from a tile leaves it alone`() {
+        val scale = 2f
+        val next = TileGrid.tileBounds(1, 0, tilePx, overlap, scale)
+        val far = Bounds(100f, 10f, next.left - (TileGrid.MARGIN_PX + 1f) / scale, 20f)
+        assertFalse(TileGrid.isAffectedBy(next, far, scale))
+    }
+
+    @Test
+    fun `every tile an item reaches by even one pixel draws it and is redrawn for it`() {
+        for (scale in listOf(0.6f, 1f, 1.7f, 4f)) {
+            // Paint boxes that end 1 px inside, on, and 1 px outside every tile edge along a row.
+            for (column in -3..5) {
+                val tile = TileGrid.tileBounds(column, 2, tilePx, overlap, scale)
+                for (shift in listOf(-1f, 0f, 1f)) {
+                    val item = Bounds(tile.left - 40f / scale + shift / scale, tile.top + 5f, tile.left + shift / scale, tile.top + 9f)
+                    val region = TileGrid.cullRegion(tile, scale)
+                    assertTrue("cull at scale $scale, column $column, shift $shift", region.intersects(item))
+                    assertTrue("redraw at scale $scale, column $column, shift $shift", TileGrid.isAffectedBy(tile, item, scale))
+                }
+            }
+        }
+    }
 }

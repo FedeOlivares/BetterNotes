@@ -189,6 +189,20 @@ data class ShapeItem(
             return Bounds(minOf(box.left, x - pad), minOf(box.top, y - pad), maxOf(box.right, x + pad), maxOf(box.bottom, y + pad))
         }
 
+    /**
+     * A miter join of the stroke reaches up to [MITER_REACH] times the line's width past a corner, and the tip of an arrow or axis
+     * can lie past a frame that is as thin as its line.
+     */
+    override val paintBounds: Bounds
+        get() {
+            val tip = when (kind) {
+                ShapeKind.ARROW, ShapeKind.AXES, ShapeKind.BLOCK_ARROW ->
+                    maxOf(ShapeTips.width(kind, frame.width, frame.height, tipLength, tipWidth) / 2f, ShapeTips.length(kind, frame.width, frame.height, tipLength))
+                else -> 0f
+            }
+            return bounds.outset(strokeWidth * MITER_REACH + tip)
+        }
+
     val isFilled get() = fillColor ushr 24 != 0
 
     override fun transformed(t: Affine): ShapeItem {
@@ -281,6 +295,11 @@ data class TextItem(
     val spans: List<TextSpan> = emptyList(),
 ) : PageItem {
     override val bounds get() = frame.bounds
+
+    /** The page does not clip text to its box, so what the text paints is read from its layout. See [TextReach]. */
+    override val paintBounds: Bounds by lazy {
+        bounds.union(TextReach.inDocument(frame, TextReach.localBox(text, textSize, style, spans, frame.width, frame.height)))
+    }
 
     override fun transformed(t: Affine) = copy(
         frame = frame.transformed(t),
@@ -412,6 +431,37 @@ data class TableItem(
 
     override val bounds get() = frame.bounds.outset(lineWidth / 2f)
 
+    /** A cell's text is not clipped to its cell, so the box takes in what every cell's text paints. */
+    override val paintBounds: Bounds by lazy {
+        val columnTotal = columnWeights.sum()
+        val rowTotal = rowWeights.sum()
+        var box = bounds.outset(lineWidth * MITER_REACH)
+        if (columnTotal <= 0f || rowTotal <= 0f) return@lazy box
+        var y = 0f
+        for ((row, rowWeight) in rowWeights.withIndex()) {
+            val rowHeight = rowWeight / rowTotal * frame.height
+            var x = 0f
+            for ((column, columnWeight) in columnWeights.withIndex()) {
+                val columnWidth = columnWeight / columnTotal * frame.width
+                val cell = cells[row * columnWeights.size + column]
+                if (cell.isNotEmpty() && columnWidth - 2 * CELL_PADDING > 0f) {
+                    val local = TextReach.localBox(cell, textSize, TextStyle(), emptyList(), columnWidth - 2 * CELL_PADDING, rowHeight - 2 * CELL_PADDING)
+                    // The cell's text starts a padding in from the cell's corner.
+                    val inTable = floatArrayOf(local[0] + x + CELL_PADDING, local[1] + y + CELL_PADDING, local[2] + x + CELL_PADDING, local[3] + y + CELL_PADDING)
+                    box = box.union(TextReach.inDocument(frame, inTable))
+                }
+                x += columnWidth
+            }
+            y += rowHeight
+        }
+        box
+    }
+
+    companion object {
+        /** Space between a cell's lines and its text, in points. */
+        const val CELL_PADDING = 3f
+    }
+
     override fun transformed(t: Affine): TableItem {
         val factor = t.meanScale
         return copy(frame = frame.transformed(t), textSize = textSize * factor, lineWidth = lineWidth * factor)
@@ -534,6 +584,9 @@ class TapePathItem(
 
     override fun hashCode() = 31 * id.hashCode() + points.contentHashCode()
 }
+
+/** How far a miter join reaches past the geometry of a line, as a share of the line's width: the paint's default miter limit of 4, over two. */
+const val MITER_REACH = 2f
 
 /** How far the soft edge of a drop shadow reaches beyond its offset, in points. */
 const val SHADOW_SOFTNESS = 2f
@@ -666,6 +719,8 @@ class PathShapeItem(
             }
             return Bounds(left, top, right, bottom).outset(strokeWidth / 2f)
         }
+
+    override val paintBounds: Bounds get() = bounds.outset(strokeWidth * (MITER_REACH - 0.5f))
 
     /** The line as packed x,y pairs: the points themselves, or for a smooth shape a polyline close enough to the curve. */
     fun outline(): FloatArray = if (smooth && pointCount > 2) smoothOutline(points, closed) else points

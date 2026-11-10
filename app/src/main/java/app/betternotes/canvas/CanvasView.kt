@@ -4392,9 +4392,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val editor = editor ?: return
         val layout = layout ?: return
         val changed = editor.loadedPageOrNull(editor.document.pages[pageIndex].id)?.takeDirtyBounds() ?: return
-        val x = layout.originX(pageIndex)
-        val y = layout.originY(pageIndex)
-        tiles.invalidateRegion(Bounds(changed.left + x, changed.top + y, changed.right + x, changed.bottom + y))
+        tiles.invalidateRegion(layout.pageBoundsToWorld(pageIndex, changed))
         if (loupeOpen) loupe.invalidate()
     }
 
@@ -4420,9 +4418,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val layout = layout ?: return
         val index = editor.document.indexOfPage(pageId)
         if (index < 0) return
-        val x = layout.originX(index)
-        val y = layout.originY(index)
-        tiles.invalidateRegion(Bounds(region.left + x, region.top + y, region.right + x, region.bottom + y))
+        tiles.invalidateRegion(layout.pageBoundsToWorld(index, region))
     }
 
     private fun paintTile(canvas: Canvas, region: Bounds, leftPx: Double, topPx: Double, scale: Float) {

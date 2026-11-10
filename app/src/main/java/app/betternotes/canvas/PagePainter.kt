@@ -8,6 +8,7 @@ import android.graphics.Paint
 import androidx.core.graphics.withTranslation
 import androidx.ink.strokes.Stroke
 import app.betternotes.core.geometry.Bounds
+import app.betternotes.core.geometry.TileGrid
 import app.betternotes.core.layout.DocumentLayout
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageContent
@@ -193,7 +194,7 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
      */
     private fun paintItems(canvas: Canvas, content: PageContent, tileRegion: Bounds, scale: Float, postItsBottom: Boolean) {
         // Ink is picked by its box, and a pixel or two of the line can lie past it, so a tile looks a little beyond its own edge.
-        val region = tileRegion.outset(CULL_MARGIN_PX / scale)
+        val region = TileGrid.cullRegion(tileRegion, scale)
         strokeToTile.setScale(scale, scale)
         val passes: List<(PageItem) -> Boolean> = if (postItsBottom) {
             listOf(
@@ -242,8 +243,6 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
     }
 
     private companion object {
-        const val CULL_MARGIN_PX = 4f
-
         const val MIN_PATTERN_SPACING_PX = 4f
         const val NO_LAYER = -1
         const val LAYER_REACH_PX = 8f
