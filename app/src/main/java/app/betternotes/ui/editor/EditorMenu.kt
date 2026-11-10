@@ -130,6 +130,16 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
                 actions.onOpenOverlay(SettingsOverlay.TEMPLATE)
             }
             Entry(EditorIcons.Template, R.string.menu_template_language) { choosingLanguage = true }
+            Entry(EditorIcons.Split, if (actions.splitOpen()) R.string.menu_split_close else R.string.menu_split) {
+                onClose()
+                actions.onSplit()
+            }
+            if (actions.splitOpen()) {
+                Entry(EditorIcons.Split, if (actions.splitSideBySide()) R.string.menu_split_stack else R.string.menu_split_side) {
+                    onClose()
+                    actions.onSplitFlip()
+                }
+            }
             Entry(EditorIcons.ScrollLayout, R.string.menu_scroll_layout) {
                 onClose()
                 actions.onOpenOverlay(SettingsOverlay.SCREEN)

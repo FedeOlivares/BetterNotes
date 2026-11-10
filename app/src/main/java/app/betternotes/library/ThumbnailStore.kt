@@ -159,6 +159,22 @@ internal object ThumbnailRenderer {
         return bitmap
     }
 
+    /** The whole first page, [widthPx] wide, as the New Notebook dialog shows a cover that was edited: its design and everything on it. */
+    fun renderWhole(store: DocumentStore, widthPx: Int): Bitmap {
+        val document = store.readDocument()
+        val page = document.pages[0]
+        val size = page.size ?: return createBitmap(widthPx, widthPx).also { it.eraseColor(page.background.color) }
+        val items = store.readPage(page.id)
+        val scale = widthPx / size.widthPt
+        val bitmap = createBitmap(widthPx, (size.heightPt * scale).toInt().coerceAtLeast(1))
+        bitmap.eraseColor(page.background.color)
+        val canvas = Canvas(bitmap)
+        canvas.scale(scale, scale)
+        drawPattern(canvas, page, Bounds(0f, 0f, size.widthPt, size.heightPt), store.templateLanguage())
+        drawItems(canvas, store, items, scale)
+        return bitmap
+    }
+
     private class View(val scale: Float, val left: Float, val top: Float)
 
     /** Fits the page's width and shows its top. A page too short to fill the tile sits in the middle. */

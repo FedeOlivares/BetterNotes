@@ -119,6 +119,12 @@ internal class EditorActions(
     val onRemoveSource: (SourceEntry) -> Unit = {},
     /** The library's notebooks that can be linked as sources: id and name. */
     val linkableNotebooks: () -> List<Pair<Long, String>> = { emptyList() },
+    /** Splits the screen (or, when it is already split, closes this pane). */
+    val onSplit: () -> Unit = {},
+    val splitOpen: () -> Boolean = { false },
+    /** Whether the panes are side by side now, and the switch between that and one above the other. */
+    val splitSideBySide: () -> Boolean = { true },
+    val onSplitFlip: () -> Unit = {},
 )
 
 private const val LEFT = "left"
@@ -457,11 +463,11 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                     onCancel = { state.coverOpen = false },
                     onEditDesign = { choice ->
                         state.coverOpen = false
-                        state.setCover(choice.coverId, choice.landscape, editable = true)
+                        state.setCover(choice.coverId, choice.landscape, editable = true, recolor = choice.recolor)
                     },
                     onCreate = { choice ->
                         state.coverOpen = false
-                        state.setCover(choice.coverId, choice.landscape)
+                        state.setCover(choice.coverId, choice.landscape, recolor = choice.recolor)
                     },
                 )
             }

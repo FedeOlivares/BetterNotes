@@ -52,6 +52,17 @@ import app.betternotes.R
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
+import android.content.Intent
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.asImageBitmap
+import app.betternotes.core.template.palette
+import app.betternotes.library.CoverDraft
+import app.betternotes.library.ThumbnailRenderer
+import app.betternotes.ui.MainActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import app.betternotes.core.template.CoverDesign
 import app.betternotes.core.template.CoverGroup
 import app.betternotes.core.template.PAPER_COLORS
@@ -80,8 +91,10 @@ internal class NotebookChoice(
     val language: String,
     /** A planner, which overrides the cover, paper and orientation: it has its own of each. */
     val planner: Boolean = false,
-    /** The owner chose Edit: the notebook is made with the cover's design as items to edit, and opens on the cover. */
-    val edit: Boolean = false,
+    /** Colors of the cover's design the owner changed: each key is swapped for its value. */
+    val recolor: Map<Int, Int> = emptyMap(),
+    /** The cover was edited on a canvas, and is in the cover draft; it goes on the notebook's cover as it is. */
+    val draft: Boolean = false,
 )
 
 private enum class Tab { COVER, PAPER }
@@ -126,6 +139,56 @@ internal fun NewNotebookScreen(
     if (planner) landscape = false
     val page = if (landscape) PageSize(PageSize.A4.heightPt, PageSize.A4.widthPt) else PageSize.A4
     val template = remember(kind) { kind.newTemplate() }
+
+    // The cover's own colors, which the owner can change below its picture and see at once, before anything is made.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var recolor by remember(coverId) { mutableStateOf<Map<Int, Int>>(emptyMap()) }
+    var pickingColor by remember { mutableStateOf<Int?>(null) }
+    // The cover was edited on a canvas: it is in the cover draft, and its picture is the draft's. Changing the design, the
+    // orientation or the colors afterwards starts over from the design, so the draft is let go.
+    var draftEdited by remember { mutableStateOf(false) }
+    var draftVersion by remember { mutableStateOf(0) }
+    LaunchedEffect(coverId, landscape, recolor, planner) {
+        if (draftEdited) {
+            draftEdited = false
+            CoverDraft.discard(context)
+        }
+    }
+    val draftPicture by androidx.compose.runtime.produceState<android.graphics.Bitmap?>(null, draftEdited, draftVersion) {
+        value = if (draftEdited) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    ThumbnailRenderer.renderWhole(CoverDraft.store(context), COVER_PICTURE_PX)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        } else {
+            null
+        }
+    }
+    pickingColor?.let { original ->
+        ColorSwatchDialog(
+            recolor[original] ?: original,
+            onPick = { picked ->
+                recolor = recolor + (original to picked)
+                pickingColor = null
+            },
+            onReset = {
+                recolor = recolor - original
+                pickingColor = null
+            },
+            onDismiss = { pickingColor = null },
+        )
+    }
+    val editScope = androidx.compose.runtime.rememberCoroutineScope()
+    val draftEditor = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+    ) {
+        // Whatever way the editor was left, the draft holds the cover as it was left.
+        draftEdited = true
+        draftVersion++
+    }
 
     // A dialog over the library: a touch on the dimmed area outside closes it, and the panel swallows its own touches.
     Box(
@@ -179,12 +242,47 @@ internal fun NewNotebookScreen(
                     Text(stringResource(R.string.notebook_cover), color = colors.title, fontSize = 17.sp)
                     Spacer(Modifier.height(6.dp))
                     ChoiceCard(tab == Tab.COVER, if (planner) plannerName else coverName(coverId), { tab = Tab.COVER }) {
-                        CoverPreview(
-                            if (planner) CoverDesign.PLANNER else CoverDesign.byId(coverId),
-                            page,
-                            Modifier.fillMaxWidth(if (landscape) 0.9f else 0.62f).aspectRatio(page.widthPt / page.heightPt),
-                            if (planner) plannerPattern else PageTemplate.Blank,
-                        )
+                        val picture = draftPicture
+                        if (picture != null) {
+                            // The cover as it was left on the canvas.
+                            androidx.compose.foundation.Image(
+                                picture.asImageBitmap(),
+                                null,
+                                modifier = Modifier
+                                    .fillMaxWidth(if (landscape) 0.9f else 0.62f)
+                                    .aspectRatio(page.widthPt / page.heightPt)
+                                    .shadow(3.dp, RoundedCornerShape(4.dp))
+                                    .clip(RoundedCornerShape(4.dp)),
+                            )
+                        } else {
+                            CoverPreview(
+                                if (planner) CoverDesign.PLANNER else CoverDesign.byId(coverId),
+                                page,
+                                Modifier.fillMaxWidth(if (landscape) 0.9f else 0.62f).aspectRatio(page.widthPt / page.heightPt),
+                                if (planner) plannerPattern else PageTemplate.Blank,
+                                recolor,
+                            )
+                        }
+                    }
+                    // The colors the design is made of: tap one to change it, and the picture above follows.
+                    val design = if (planner || draftEdited) null else CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID }
+                    if (design != null) {
+                        val palette = remember(design) { design.palette() }
+                        Spacer(Modifier.height(10.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                            for (original in palette) {
+                                val shown = recolor[original] ?: original
+                                Box(
+                                    Modifier
+                                        .padding(horizontal = 4.dp)
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(shown))
+                                        .border(if (original in recolor) 3.dp else 1.dp, if (original in recolor) BLUE else colors.border, CircleShape)
+                                        .clickable { pickingColor = original },
+                                )
+                            }
+                        }
                     }
                     if (!coverOnly && !planner) {
                         Spacer(Modifier.height(18.dp))
@@ -237,21 +335,25 @@ internal fun NewNotebookScreen(
                 val chosenDesign = CoverDesign.byId(coverId)
                 if (onEditDesign != null && chosenDesign != null && chosenDesign.id != CoverDesign.CUSTOM_ID) {
                     Pill(stringResource(R.string.notebook_edit_design), colors.title, null, colors.border) {
-                        onEditDesign(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language))
+                        onEditDesign(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language, recolor = recolor))
                     }
                     Spacer(Modifier.width(14.dp))
                 }
                 if (!coverOnly && !planner && chosenDesign != null) {
-                    // Once a cover is chosen, Edit makes the notebook and takes the owner straight to the cover to edit it.
+                    // Edit opens the cover on a canvas of its own, before any notebook exists; coming back, the dialog shows it as edited.
                     Pill(stringResource(R.string.notebook_edit), colors.title, null, colors.border) {
-                        onCreate(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language, planner = false, edit = true))
+                        val design = chosenDesign
+                        editScope.launch {
+                            withContext(Dispatchers.IO) { CoverDraft.prepare(context, design, page, recolor) }
+                            draftEditor.launch(Intent(context, MainActivity::class.java).putExtra(MainActivity.EXTRA_COVER_DRAFT, true))
+                        }
                     }
                     Spacer(Modifier.width(14.dp))
                 }
                 Pill(stringResource(R.string.notebook_cancel), colors.title, null, colors.border, onCancel)
                 Spacer(Modifier.width(14.dp))
                 Pill(stringResource(if (coverOnly) R.string.notebook_save_cover else R.string.notebook_create), Color.White, BLUE, null) {
-                    onCreate(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language, planner))
+                    onCreate(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language, planner, recolor, draftEdited))
                 }
             }
         }
@@ -260,6 +362,9 @@ internal fun NewNotebookScreen(
 }
 
 private val DialogShape = RoundedCornerShape(28.dp)
+
+/** How wide the edited cover is drawn for the dialog, in pixels. */
+private const val COVER_PICTURE_PX = 600
 
 private const val MAX_TITLE = 120
 
@@ -299,7 +404,7 @@ private fun ChoiceCard(selected: Boolean, label: String, onClick: () -> Unit, pr
 
 /** Draws a cover with the same code the page uses. Null draws the dashed empty tile of "No cover". */
 @Composable
-private fun CoverPreview(design: CoverDesign?, page: PageSize, modifier: Modifier, pattern: PageTemplate = PageTemplate.Blank) {
+private fun CoverPreview(design: CoverDesign?, page: PageSize, modifier: Modifier, pattern: PageTemplate = PageTemplate.Blank, recolor: Map<Int, Int> = emptyMap()) {
     if (design == null) {
         val line = LocalAppColors.current.secondaryText
         Canvas(modifier) {
@@ -314,7 +419,9 @@ private fun CoverPreview(design: CoverDesign?, page: PageSize, modifier: Modifie
     }
     Canvas(modifier.shadow(3.dp, RoundedCornerShape(4.dp)).clip(RoundedCornerShape(4.dp))) {
         val factor = size.width / page.widthPt
-        scale(factor, factor, Offset.Zero) { design.draw(PreviewSink(this, 0f), page, pattern) }
+        scale(factor, factor, Offset.Zero) {
+            if (recolor.isEmpty()) design.draw(PreviewSink(this, 0f), page, pattern) else design.draw(PreviewSink(this, 0f), page.widthPt, page.heightPt, recolor)
+        }
     }
 }
 
@@ -495,4 +602,50 @@ private fun OrientationOption(landscape: Boolean, selected: Boolean, onClick: ()
             }
         }
     }
+}
+
+/** The colors on offer for a cover: neutrals, then each hue from light to dark. */
+private val SWATCHES = listOf(
+    0xFFFFFFFF, 0xFFF2F2F2, 0xFFBDBDBD, 0xFF757575, 0xFF363A43, 0xFF000000,
+    0xFFFDE0DC, 0xFFF28B82, 0xFFE53935, 0xFFB71C1C, 0xFF7F0000, 0xFFF8BBD0,
+    0xFFFFE0B2, 0xFFFFB74D, 0xFFF57C00, 0xFFE65100, 0xFFBF360C, 0xFFD7B899,
+    0xFFFFF9C4, 0xFFFFF176, 0xFFFDD835, 0xFFE3C849, 0xFFB28704, 0xFFC4B497,
+    0xFFDCEDC8, 0xFFAED581, 0xFF7BA76B, 0xFF388E3C, 0xFF1B5E20, 0xFF8EC4B5,
+    0xFFB2EBF2, 0xFF4DD0E1, 0xFF00ACC1, 0xFF00838F, 0xFF5A9EA6, 0xFFA3C9F0,
+    0xFFBBDEFB, 0xFF64B5F6, 0xFF1E88E5, 0xFF104A87, 0xFF0D2C54, 0xFF27324F,
+    0xFFE1BEE7, 0xFFBA68C8, 0xFF8E24AA, 0xFF4A148C, 0xFFD1C4E9, 0xFF7E57C2,
+).map { it.toInt() }
+
+/** A grid of colors to pick from, with the one now in use marked, and a way back to the design's own. */
+@Composable
+private fun ColorSwatchDialog(current: Int, onPick: (Int) -> Unit, onReset: () -> Unit, onDismiss: () -> Unit) {
+    val colors = LocalAppColors.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = colors.surface,
+        title = { Text(stringResource(R.string.notebook_pick_color), color = colors.title) },
+        text = {
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                for (swatch in SWATCHES) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color(swatch))
+                            .border(if (swatch == current) 3.dp else 1.dp, if (swatch == current) BLUE else colors.border, CircleShape)
+                            .clickable { onPick(swatch) },
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onReset) { Text(stringResource(R.string.notebook_color_reset), color = BLUE) }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text(stringResource(R.string.notebook_cancel), color = colors.title) }
+        },
+    )
 }

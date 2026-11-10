@@ -167,6 +167,13 @@
     <string name="menu_template_language_detail">The words printed on this notebook\'s templates. It starts as the app\'s language when the notebook is made, and changing the app later does not change it.</string>
     <string name="menu_go_to_page">Go to page</string>
     <string name="menu_change_template">Change template</string>
+    <string name="selection_copy_other_pane">Copy to the other pane</string>
+    <string name="menu_split_stack">Panes above each other</string>
+    <string name="menu_split_side">Panes side by side</string>
+    <string name="menu_split">Split screen</string>
+    <string name="menu_split_close">Close this pane</string>
+    <string name="split_already_open">That notebook is already open in the other pane.</string>
+    <string name="split_no_other">There is no other notebook to open.</string>
     <string name="menu_scroll_layout">Scroll and layout</string>
     <string name="menu_stylus_finger">Stylus &amp; finger</string>
     <string name="menu_settings">Settings</string>

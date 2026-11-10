@@ -13,9 +13,9 @@ import app.betternotes.core.model.TextItem
  * waves paths. A cover page made this way holds them as its own content, so the drawn design is turned off with it (see
  * [CoverDesign.CUSTOM_ID]). Items come back in the order they were drawn, bottom first.
  */
-fun CoverDesign.toItems(width: Float, height: Float, ids: IdSource = IdSource.Random): List<PageItem> {
+fun CoverDesign.toItems(width: Float, height: Float, ids: IdSource = IdSource.Random, recolor: Map<Int, Int> = emptyMap()): List<PageItem> {
     val sink = ItemSink(ids)
-    draw(sink, width, height)
+    draw(sink, width, height, recolor)
     return sink.items
 }
 

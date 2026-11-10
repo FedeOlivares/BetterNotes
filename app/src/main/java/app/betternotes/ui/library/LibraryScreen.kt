@@ -396,9 +396,11 @@ internal fun LibraryScreen(
                 }
                 val a4 = PageSize.A4
                 val size = if (choice.landscape) PageSize(a4.heightPt, a4.widthPt) else a4
-                // Edit opens the notebook on its cover, where the design is items to edit; Create opens it on its first page.
-                val open: (Long) -> Unit = if (choice.edit) { id -> onOpenDocument(id, app.betternotes.ui.MainActivity.START_COVER) } else flows.open
-                repository.createNotebook(choice.title, folderForNewItems, choice.coverId, choice.paper, size, choice.language, choice.edit, open)
+                // A cover edited on its own canvas comes from the draft; changed colors make the design items with those colors.
+                val draft = if (choice.draft) app.betternotes.library.CoverDraft.store(context) else null
+                repository.createNotebook(
+                    choice.title, folderForNewItems, choice.coverId, choice.paper, size, choice.language, choice.recolor, draft, flows.open,
+                )
             },
             onCancel = { newNotebook = false },
         )

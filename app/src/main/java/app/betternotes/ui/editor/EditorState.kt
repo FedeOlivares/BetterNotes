@@ -469,7 +469,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     /** Whether the cover is, or a new cover would be, wider than tall: the first page's orientation. */
     val coverLandscape get() = canvas.pages.firstOrNull()?.size?.let { it.widthPt > it.heightPt } == true
 
-    fun setCover(id: String?, landscape: Boolean? = null, editable: Boolean = false) = canvas.setCover(id, landscape, editable)
+    fun setCover(id: String?, landscape: Boolean? = null, editable: Boolean = false, recolor: Map<Int, Int> = emptyMap()) =
+        canvas.setCover(id, landscape, editable, recolor)
 
     var zoom by mutableFloatStateOf(1f)
         private set
@@ -716,6 +717,16 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     fun arrangeSelected(place: app.betternotes.core.edit.ZPlace) = canvas.arrangeSelection(place)
 
     /** Whether the selection is on the cover page, where post-its can be raised too. */
+    /** The canvas of the other pane of a split screen, if there is one: what is selected can be copied into it. */
+    var otherPane: CanvasView? by mutableStateOf(null)
+
+    /** Copies the selection onto the page in view in the other pane, leaving the original where it is. */
+    fun copySelectionToOtherPane() {
+        val target = otherPane ?: return
+        val items = selection?.takeIf { it.isNotEmpty() } ?: return
+        target.pasteFrom(items, canvas::assetFile)
+    }
+
     val selectionOnCover get() = canvas.selectionOnCover()
 
     /** Recolors the selected sticky notes, keeping their text and place. */

@@ -2781,7 +2781,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     } == true
 
     /** Adds, changes (keeping what was drawn on it) or takes out the cover, as one undoable step. Null takes it out. */
-    fun setCover(coverId: String?, landscape: Boolean? = null, editable: Boolean = false) {
+    fun setCover(coverId: String?, landscape: Boolean? = null, editable: Boolean = false, recolor: Map<Int, Int> = emptyMap()) {
         val open = editor ?: return
         val pages = open.document.pages
         val before = pages.first().takeIf { it.isCover }
@@ -2790,7 +2790,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val size = if (landscape != null && (base.widthPt > base.heightPt) != landscape) PageSize(base.heightPt, base.widthPt) else base
         // An editable cover holds its design as items of its own: the drawn design is turned off (the custom cover) and the
         // design's fills, lines and dots are put on the page beneath whatever is already drawn there.
-        val design = if (editable) CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID } else null
+        val design = if (editable || recolor.isNotEmpty()) CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID } else null
         val storedId = if (design != null) CoverDesign.CUSTOM_ID else coverId
         val after = when {
             coverId == null -> null
@@ -2800,7 +2800,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (before == after || (before == null && !open.document.canAddPages)) return
         lasso.clear()
         val edit: Edit = if (design != null && after != null) {
-            val items = design.toItems(size.widthPt, size.heightPt)
+            val items = design.toItems(size.widthPt, size.heightPt, recolor = recolor)
             BatchEdit(listOf(SetCover(before, after), ItemsEdit(after.id, IntArray(0), emptyList(), IntArray(items.size) { it }, items)))
         } else {
             SetCover(before, after)
@@ -3204,6 +3204,26 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val at = IntArray(placed.size) { content.size + it }
             open.perform(ItemsEdit(pageId, IntArray(0), emptyList(), at, placed))
         }
+    }
+
+    /**
+     * Puts copies of items from another open notebook in the middle of what is on screen, bringing their pictures, recordings
+     * and videos along. [sourceAsset] finds an asset's file in the notebook they come from.
+     */
+    fun pasteFrom(items: List<PageItem>, sourceAsset: (String) -> File?) {
+        val open = editor ?: return
+        for (item in items) {
+            val assetId = when (item) {
+                is ImageItem -> item.assetId
+                is VideoItem -> item.assetId
+                is AudioItem -> item.assetId
+                else -> continue
+            }
+            val target = open.assetFile(assetId)
+            val source = sourceAsset(assetId)
+            if (!target.exists() && source != null && source.exists()) source.copyTo(target)
+        }
+        pasteItems(items)
     }
 
     private inline fun placeInView(place: (pageId: Long, x: Float, y: Float, maxWidth: Float, maxHeight: Float) -> Unit) {

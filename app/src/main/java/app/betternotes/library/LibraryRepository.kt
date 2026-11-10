@@ -90,20 +90,31 @@ class LibraryRepository private constructor(context: Context) {
         paper: PageBackground,
         size: PageSize,
         language: String,
-        /** The cover's design becomes items of its own on the cover page, which the owner then edits (see [Document.withCover]). */
-        editCover: Boolean = false,
+        /**
+         * The cover's colors the owner changed: each key is swapped for its value. With any, or with a [draft], the cover page
+         * holds its design as items of its own and is the custom cover, since a drawn design cannot keep changed colors.
+         */
+        recolor: Map<Int, Int> = emptyMap(),
+        /** A cover edited on a canvas of its own (see [CoverDraft]): what it holds goes on the new notebook's cover. */
+        draft: DocumentStore? = null,
         onCreated: (Long) -> Unit,
     ): Unit {
-        val design = if (editCover) CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID } else null
+        val design = CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID }
+        val asItems = coverId != null && (draft != null || (design != null && recolor.isNotEmpty()))
         create(folderId, onCreated, language, afterWrite = { documents, document ->
             val cover = document.pages.first()
             val area = cover.size
-            if (design != null && cover.isCover && area != null) {
-                documents.writePage(cover.id, design.toItems(area.widthPt, area.heightPt))
+            if (asItems && cover.isCover && area != null) {
+                val items = when {
+                    draft != null -> CoverDraft.items(draft)
+                    design != null -> design.toItems(area.widthPt, area.heightPt, recolor = recolor)
+                    else -> emptyList()
+                }
+                documents.writePage(cover.id, items)
             }
         }) { now ->
             val made = Document.withCover(Document.newNote(title, size, paper, now), coverId)
-            if (design == null || !made.pages.first().isCover) {
+            if (!asItems || !made.pages.first().isCover) {
                 made
             } else {
                 // The drawn design is turned off: the cover page holds it as items, so it is the custom cover.
@@ -112,7 +123,6 @@ class LibraryRepository private constructor(context: Context) {
             }
         }
     }
-
     /** Creates a planner for [setup], and passes its id on once it is on the disk. The language is kept with it. */
     fun createPlanner(
         title: String,

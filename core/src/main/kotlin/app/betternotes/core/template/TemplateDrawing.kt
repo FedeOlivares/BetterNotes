@@ -16,6 +16,12 @@ interface TemplateSink {
     fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int)
     fun dot(x: Float, y: Float, radius: Float, color: Int)
 
+    /** A vertical blend from [top] to [bottom] over the box. A sink with no blend of its own draws it in bands too thin to see. */
+    fun gradient(x: Float, y: Float, width: Float, height: Float, top: Int, bottom: Int) {
+        val bands = 48
+        for (i in 0 until bands) fill(x, y + height * i / bands, width, height / bands + 0.5f, mix(top, bottom, i / (bands - 1f)))
+    }
+
     /** Joined segments through [points] (x, y pairs), as one line. A sink that has no path of its own draws them one by one. */
     fun polyline(points: FloatArray, width: Float, color: Int) {
         for (i in 0 until points.size / 2 - 1) line(points[2 * i], points[2 * i + 1], points[2 * i + 2], points[2 * i + 3], width, color)

@@ -140,6 +140,7 @@ internal object EditorIcons {
     val Template by lazy { line("template", rrect(4f, 4f, 16f, 6f, 1.5f) + "M4 14h6 M4 18h6 M14 14h6 M14 18h6") }
     val Cover by lazy { line("cover", rrect(5f, 3f, 14f, 18f, 2f) + "M9 3v18 M12 8h4") }
     val ScrollLayout by lazy { line("scroll-layout", "M8 5v14 M4.5 15.5L8 19l3.5-3.5 M16 19V5 M12.5 8.5L16 5l3.5 3.5") }
+    val Split by lazy { line("split", rrect(3f, 5f, 18f, 14f, 2f) + "M12 5v14") }
     val StylusFinger by lazy { line("stylus-finger", "M3.5 17c3-9 5-9 5-4s2 3 4 0 3-1 4 2 M17 15l3.5-4") }
     val Trash by lazy { line("trash", "M4 7h16 M9 7V4h6v3 M6 7l1 13h10l1-13 M10 11v6 M14 11v6") }
     val Sun by lazy {

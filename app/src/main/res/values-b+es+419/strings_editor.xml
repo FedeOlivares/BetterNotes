@@ -168,6 +168,13 @@
     <string name="menu_template_language_detail">Las palabras impresas en las plantillas de este cuaderno. Empieza siendo el idioma de la app cuando se crea el cuaderno, y cambiar la app después no lo cambia.</string>
     <string name="menu_go_to_page">Ir a la página</string>
     <string name="menu_change_template">Cambiar plantilla</string>
+    <string name="selection_copy_other_pane">Copiar al otro panel</string>
+    <string name="menu_split_stack">Paneles uno sobre otro</string>
+    <string name="menu_split_side">Paneles lado a lado</string>
+    <string name="menu_split">Pantalla dividida</string>
+    <string name="menu_split_close">Cerrar este panel</string>
+    <string name="split_already_open">Ese cuaderno ya está abierto en el otro panel.</string>
+    <string name="split_no_other">No hay otro cuaderno para abrir.</string>
     <string name="menu_scroll_layout">Desplazamiento y diseño</string>
     <string name="menu_stylus_finger">Lápiz y dedo</string>
     <string name="menu_settings">Ajustes</string>

@@ -59,6 +59,8 @@
     <string name="notebook_save_cover">Guardar portada</string>
     <string name="notebook_edit_design">Editar diseño</string>
     <string name="notebook_edit">Editar</string>
+    <string name="notebook_pick_color">Elegí un color</string>
+    <string name="notebook_color_reset">Original</string>
     <string name="notebook_create">Crear cuaderno</string>
     <string name="notebook_paper_color">Color del papel</string>
     <string name="notebook_paper_template">Plantilla</string>

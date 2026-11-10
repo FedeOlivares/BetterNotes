@@ -57,6 +57,8 @@
     <string name="notebook_save_cover">Save cover</string>
     <string name="notebook_edit_design">Edit design</string>
     <string name="notebook_edit">Edit</string>
+    <string name="notebook_pick_color">Pick a color</string>
+    <string name="notebook_color_reset">Original</string>
     <string name="notebook_create">Create Notebook</string>
     <string name="notebook_paper_color">Paper color</string>
     <string name="notebook_paper_template">Template</string>

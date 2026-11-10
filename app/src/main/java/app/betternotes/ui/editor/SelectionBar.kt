@@ -80,6 +80,10 @@ private fun SelectionBarContent(state: EditorState, items: List<PageItem>, notes
             ToolbarIcon(EditorIcons.MoveToMiddle, stringResource(R.string.selection_move_middle), onClick = { state.arrangeSelected(ZPlace.MIDDLE) })
             ToolbarIcon(EditorIcons.SendToBack, stringResource(R.string.selection_send_back), onClick = { state.arrangeSelected(ZPlace.BACK) })
         }
+        if (state.otherPane != null) {
+            PillDivider()
+            ToolbarIcon(EditorIcons.Split, stringResource(R.string.selection_copy_other_pane), onClick = { state.copySelectionToOtherPane() })
+        }
         if (notes.isNotEmpty()) {
             PillDivider()
             for (color in NoteOptions.STICKY_PALETTE) {

@@ -14,6 +14,10 @@ enum class CoverGroup { SIMPLE, SOLID, ENCLOSED, BLACK_AND_WHITE, BROWN, PLAIN, 
 class CoverDesign(val id: String, val group: CoverGroup, val name: String, internal val paint: CoverPainter.() -> Unit) {
     fun draw(sink: TemplateSink, width: Float, height: Float) = CoverPainter(sink, width, height).paint()
 
+    /** Draws it with some of its colors swapped: each key of [recolor] is replaced by its value. */
+    fun draw(sink: TemplateSink, width: Float, height: Float, recolor: Map<Int, Int>) =
+        draw(if (recolor.isEmpty()) sink else RecolorSink(sink, recolor), width, height)
+
     /** Draws the cover of a page whose paper pattern is [pattern]: a planner's cover has its title and years printed over the design. */
     fun draw(sink: TemplateSink, size: app.betternotes.core.geometry.PageSize, pattern: PageTemplate) {
         draw(sink, size.widthPt, size.heightPt)
@@ -57,13 +61,7 @@ class CoverPainter internal constructor(val sink: TemplateSink, val width: Float
     fun dot(x: Float, y: Float, r: Float, color: Int) = sink.dot(x, y, r, color)
 
     /** A vertical blend from [top] to [bottom] over the box, in bands too thin to see. */
-    fun gradient(x: Float, y: Float, w: Float, h: Float, top: Int, bottom: Int) {
-        val bands = 48
-        for (i in 0 until bands) {
-            val t = i / (bands - 1f)
-            rect(x, y + h * i / bands, w, h / bands + 0.5f, mix(top, bottom, t))
-        }
-    }
+    fun gradient(x: Float, y: Float, w: Float, h: Float, top: Int, bottom: Int) = sink.gradient(x, y, w, h, top, bottom)
 
     /** The small ruled mark and pen at the bottom right of the plain covers. */
     fun penMark(color: Int, x: Float = width * 0.62f, y: Float = height * 0.91f) {

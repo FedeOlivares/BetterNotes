@@ -34,6 +34,25 @@ class CoverDesignTest {
     }
 
     @Test
+    fun `the palette lists the main colors and recoloring swaps them`() {
+        val design = CoverDesign.byId("solid-blue")!!
+        val colors = design.palette()
+        assertTrue(colors.isNotEmpty() && colors.size <= 6)
+        val first = colors.first()
+        val seen = HashSet<Int>()
+        val sink = object : TemplateSink {
+            override fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int) { seen += color }
+            override fun dot(x: Float, y: Float, radius: Float, color: Int) { seen += color }
+            override fun fill(x: Float, y: Float, width: Float, height: Float, color: Int) { seen += color }
+        }
+        design.draw(sink, 595f, 842f, mapOf(first to 0xFF123456.toInt()))
+        assertTrue(0xFF123456.toInt() in seen)
+        assertTrue(first !in seen)
+        // A blend is listed by its two ends, not by its many bands.
+        assertEquals(2, CoverDesign.byId("enclosed-1")!!.palette().count { it != 0xFFFAFAFA.toInt() && it != 0xFF6F6F6F.toInt() })
+    }
+
+    @Test
     fun `the default and the common covers exist`() {
         assertNotNull(CoverDesign.byId(CoverDesign.DEFAULT_ID))
         assertEquals(4, CoverDesign.COMMON.size)

@@ -34,6 +34,7 @@ import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
 import app.betternotes.core.format.Binder
 import app.betternotes.core.format.DocumentSession
+import app.betternotes.library.CoverDraft
 import app.betternotes.library.MediaImport
 import app.betternotes.library.PhotoLayout
 import app.betternotes.pdf.PdfImportResult
@@ -65,6 +66,10 @@ import app.betternotes.ui.editor.EditorActions
 import app.betternotes.ui.editor.EditorChrome
 import app.betternotes.ui.editor.EditorState
 import app.betternotes.ui.editor.ToolStore
+import app.betternotes.ui.split.PaneFrame
+import app.betternotes.ui.split.SplitHost
+import app.betternotes.ui.split.SplitLayout
+import app.betternotes.ui.split.SplitPane
 import app.betternotes.ui.theme.BetterNotesTheme
 import app.betternotes.ui.theme.DarkEditorColors
 import app.betternotes.ui.theme.LightEditorColors
@@ -85,6 +90,16 @@ import java.io.File
  */
 class MainActivity : ComponentActivity() {
     private lateinit var canvas: CanvasView
+    private lateinit var tools: ToolStore
+    private lateinit var firstState: EditorState
+
+    /** Holds the first pane, and the second while the screen is split. */
+    private lateinit var split: SplitLayout
+    private lateinit var firstPane: PaneFrame
+    private var second: SplitPane? = null
+
+    /** The pane the owner touched last: the second one, or null for the first. The settings, search and export screens work on it. */
+    private var active by mutableStateOf<SplitPane?>(null)
     private var editor: NoteEditor? = null
     private var probe: PerfProbe? = null
     private var search: DocumentSearch? = null
@@ -111,8 +126,9 @@ class MainActivity : ComponentActivity() {
             probe = perf
         }
 
-        val tools = ToolStore(this)
+        tools = ToolStore(this)
         val state = EditorState(canvas, tools)
+        firstState = state
         state.onAddSource = { request -> addSource(request, state) }
         val chrome = ComposeView(this).apply {
             setContent {
@@ -123,7 +139,7 @@ class MainActivity : ComponentActivity() {
                 canvas.backdropColor = backdropOf(theme)
                 val actions = remember {
                     EditorActions(
-                        onBack = ::finish,
+                        onBack = { if (second != null) closeFirstPane() else finish() },
                         onZoomToRealSize = { canvas.zoomTo(1f) },
                         onToggleTheme = library::toggleTheme,
                         onToggleScratchKind = {
@@ -147,6 +163,10 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onOpenDocument = { id ->
+                            if (second?.libraryId == id) {
+                                Toast.makeText(this@MainActivity, R.string.split_already_open, Toast.LENGTH_SHORT).show()
+                                return@EditorActions
+                            }
                             canvas.rememberPage()
                             editor?.saveNow()
                             openDocument(id)
@@ -163,6 +183,10 @@ class MainActivity : ComponentActivity() {
                                 .map { it.id to it.name }
                         },
                         onTogglePerfReadout = if (BuildConfig.PERF_TOOLS) ({ showReadout = !showReadout }) else null,
+                        onSplit = { if (second != null) closeFirstPane() else openSplit() },
+                        splitOpen = { second != null },
+                        splitSideBySide = ::splitSideBySide,
+                        onSplitFlip = ::flipSplit,
                     )
                 }
                 BetterNotesTheme(theme) {
@@ -176,17 +200,24 @@ class MainActivity : ComponentActivity() {
                 SettingsOverlayHost(
                     shownOverlay.value,
                     settings,
-                    canvas,
+                    activeCanvas,
                     onDismiss = { shownOverlay.value = null },
                     search = searchState.value,
                 )
             }
         }
+        firstPane = PaneFrame(this) { activate(null) }.apply {
+            addView(canvas, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            // It covers the canvas, but only its controls take touches. The rest fall through.
+            addView(chrome, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+        }
+        split = SplitLayout(this).apply {
+            addView(firstPane)
+            onCollapse = { first -> if (first) closeFirstPane() else second?.let(splitHost::close) }
+        }
         setContentView(
             FrameLayout(this).apply {
-                addView(canvas, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
-                // It covers the canvas, but only its controls take touches. The rest fall through.
-                addView(chrome, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                addView(split, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
                 addView(overlays, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             },
         )
@@ -196,6 +227,7 @@ class MainActivity : ComponentActivity() {
         when {
             BuildConfig.PERF_TOOLS && intent.getBooleanExtra(EXTRA_BENCHMARK_HEAVY, false) -> runHeavyBenchmark()
             benchmarkStrokes > 0 -> runBenchmark(benchmarkStrokes)
+            intent.getBooleanExtra(EXTRA_COVER_DRAFT, false) -> openCoverDraft()
             intent.hasExtra(EXTRA_DOCUMENT_ID) -> openDocument(intent.getLongExtra(EXTRA_DOCUMENT_ID, 0L))
             else -> openScratch(canvasKind = false)
         }
@@ -205,7 +237,7 @@ class MainActivity : ComponentActivity() {
     /** Keys get here only if no view took them, so typing in a text field never fires a shortcut. */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         val action = settings.settings.value.keyBindings.actionFor(event)
-        return (action != null && (canvas.perform(action) || openOverlayFor(action))) || super.onKeyDown(keyCode, event)
+        return (action != null && (activeCanvas.perform(action) || openOverlayFor(action))) || super.onKeyDown(keyCode, event)
     }
 
     /** The shortcuts that open a screen. They toggle, so the same keys close it again. */
@@ -224,6 +256,7 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         canvas.rememberPage()
         editor?.saveNow()
+        second?.save()
         LibraryRepository.get(this).refresh()
     }
 
@@ -234,6 +267,7 @@ class MainActivity : ComponentActivity() {
         editor?.close()
         search?.close()
         probe?.close()
+        second?.close()
     }
 
     private fun openDocument(id: Long) {
@@ -351,6 +385,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Opens the cover being edited for the New Notebook dialog, which is waiting for this screen to close. Whatever way the owner
+     * leaves, the draft is kept and the dialog is told it was edited.
+     */
+    private fun openCoverDraft() {
+        val store = CoverDraft.store(this)
+        binderOwner = null
+        setResult(RESULT_OK)
+        canvas.startOnCover = true
+        show(NoteEditor(store, DocumentSession.open(store)))
+    }
+
     private fun openScratch(canvasKind: Boolean) {
         val name = if (canvasKind) "scratch-canvas" else "scratch-note"
         val store = DocumentStore(File(filesDir, "documents/$name"))
@@ -385,6 +431,88 @@ class MainActivity : ComponentActivity() {
         nextSearch.refresh(next.document.pages)
     }
 
+    // ---- Split screen ----
+
+    /** The canvas the settings, search and export screens work on. */
+    private val activeCanvas: CanvasView get() = active?.canvas ?: canvas
+
+    private fun activate(pane: SplitPane?) {
+        if (active === pane) return
+        active = pane
+        val target = pane?.editor ?: editor
+        app.betternotes.ui.theme.TemplateText.documentLanguage = target?.store?.templateLanguage()
+        searchState.value = pane?.search ?: search
+    }
+
+    private val splitHost = object : SplitHost {
+        override fun activated(pane: SplitPane) = activate(pane)
+
+        override fun openOverlay(overlay: SettingsOverlay) {
+            shownOverlay.value = overlay
+        }
+
+        override fun sideBySide() = splitSideBySide()
+
+        override fun flip() = flipSplit()
+
+        override fun openInOtherPane(pane: SplitPane, libraryId: Long): Boolean {
+            val open = editor?.document?.id == libraryId
+            if (open) Toast.makeText(this@MainActivity, R.string.split_already_open, Toast.LENGTH_SHORT).show()
+            return open
+        }
+
+        /** The second pane's "close": it goes, and the first takes the whole screen. */
+        override fun close(pane: SplitPane) {
+            pane.close()
+            split.removeView(pane.view)
+            second = null
+            firstState.otherPane = null
+            activate(null)
+        }
+    }
+
+    /** The owner's choice of layout, kept while the app is open; null follows the screen's shape. */
+    private var sideBySideChoice: Boolean? = null
+
+    private fun splitSideBySide() = sideBySideChoice ?: (split.width >= split.height)
+
+    private fun flipSplit() {
+        sideBySideChoice = !splitSideBySide()
+        split.sideBySideChoice = sideBySideChoice
+    }
+
+    /** Splits the screen: the most recent other notebook opens in a second pane, with the list of notebooks over it to choose another. */
+    private fun openSplit() {
+        val own = editor?.document?.id
+        val library = LibraryRepository.get(this).library.value
+        val next = library?.entries.orEmpty()
+            .filter { it.document != null && it.trashedAtMs == null && it.id != own }
+            .maxByOrNull { it.modifiedAtMs }
+        if (next == null) {
+            Toast.makeText(this, R.string.split_no_other, Toast.LENGTH_SHORT).show()
+            return
+        }
+        split.sideBySideChoice = sideBySideChoice
+        val pane = SplitPane(this, splitHost, tools, settings.settings.value)
+        pane.open(next.id)
+        second = pane
+        split.addView(pane.view)
+        firstState.otherPane = pane.canvas
+        pane.state.otherPane = canvas
+        activate(pane)
+        pane.state.quickSwitchOpen = true
+    }
+
+    /** The first pane's "close": the second pane's notebook moves into it, and the second pane goes. */
+    private fun closeFirstPane() {
+        val pane = second ?: return
+        val id = pane.libraryId
+        splitHost.close(pane)
+        canvas.rememberPage()
+        editor?.saveNow()
+        openDocument(id)
+    }
+
     private fun runBenchmark(strokes: Int) {
         val perf = probe ?: return
         val store = DocumentStore(File(cacheDir, "benchmark"))
@@ -408,6 +536,7 @@ class MainActivity : ComponentActivity() {
 
     private fun apply(next: AppSettings) {
         canvas.applySettings(next)
+        second?.apply(next)
         if (next.canvas.keepScreenOn) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
@@ -469,9 +598,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun backdropOf(theme: ThemeMode) =
-        (if (theme == ThemeMode.DARK) DarkEditorColors else LightEditorColors).canvasBackdrop.toArgb()
-
     companion object {
         /** The library's id of the document to open. */
         const val EXTRA_DOCUMENT_ID = "document_id"
@@ -482,6 +608,9 @@ class MainActivity : ComponentActivity() {
 
         /** Open on the cover, page 0, instead of the first page. */
         const val START_COVER = "cover"
+
+        /** Open the cover draft of the New Notebook dialog (see `CoverDraft`), and come back to the dialog when it closes. */
+        const val EXTRA_COVER_DRAFT = "cover_draft"
 
         /** Debug and profile builds only: run the scripted benchmark on a page of this many strokes. */
         private const val EXTRA_BENCHMARK_STROKES = "benchmark_strokes"
@@ -494,6 +623,10 @@ class MainActivity : ComponentActivity() {
         private const val EXTRA_BENCHMARK_INK = "benchmark_ink"
     }
 }
+
+/** The color behind the pages in the theme. */
+internal fun backdropOf(theme: ThemeMode) =
+    (if (theme == ThemeMode.DARK) DarkEditorColors else LightEditorColors).canvasBackdrop.toArgb()
 
 @androidx.compose.runtime.Composable
 private fun PerfReadout(text: String) {
