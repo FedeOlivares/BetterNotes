@@ -47,6 +47,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.betternotes.ui.theme.isCompactScreen
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.geometry.PageSize
@@ -79,6 +80,10 @@ import app.betternotes.ui.settings.kindName
 import app.betternotes.ui.theme.LocalAppColors
 
 private val BLUE = Color(0xFF0A84FF)
+/** On a phone: the left column is this share of its width, the cover and paper choices this share of theirs (40% smaller), and the orientation and language buttons this share. */
+private const val COMPACT_LEFT = 0.4f
+private const val COMPACT_CHOICE = 0.6f
+private const val COMPACT_SELECTOR = 0.7f
 private val TileShape = RoundedCornerShape(12.dp)
 
 /** What the chooser sets: a cover (null for none) and the paper of the pages. */
@@ -116,6 +121,7 @@ internal fun NewNotebookScreen(
     onEditDesign: ((NotebookChoice) -> Unit)? = null,
 ) {
     val colors = LocalAppColors.current
+    val compact = isCompactScreen()
     // The language of this notebook's templates: the app's choice to start with, then whatever is picked here. The previews
     // follow it while the dialog is open; it is kept with the notebook, and the app-wide choice is not changed.
     var language by remember { mutableStateOf(TemplateText.newNotebookCode()) }
@@ -190,6 +196,29 @@ internal fun NewNotebookScreen(
         draftVersion++
     }
 
+    // The title: above the choices on a phone, whose column for them is too narrow, and at the top of that column otherwise.
+    val titleBlock: @Composable () -> Unit = {
+        Text(stringResource(R.string.notebook_title), color = colors.title, fontSize = 17.sp)
+        Spacer(Modifier.height(8.dp))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(colors.raisedSurface)
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+        ) {
+            if (title.isEmpty()) Text(initialTitle, color = colors.secondaryText, fontSize = 20.sp, maxLines = 1)
+            BasicTextField(
+                title,
+                { title = it.take(MAX_TITLE) },
+                singleLine = true,
+                textStyle = TextStyle(color = colors.title, fontSize = 20.sp),
+                cursorBrush = SolidColor(colors.accent),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+
     // A dialog over the library: a touch on the dimmed area outside closes it, and the panel swallows its own touches.
     Box(
         contentAlignment = Alignment.Center,
@@ -211,35 +240,20 @@ internal fun NewNotebookScreen(
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
         ) {
         Column(Modifier.fillMaxSize()) {
+            if (!coverOnly && compact) Column(Modifier.fillMaxWidth().background(colors.surface).padding(start = 14.dp, end = 14.dp, top = 14.dp)) { titleBlock() }
             Row(Modifier.weight(1f).fillMaxWidth()) {
                 Column(
                     Modifier
-                        .width(300.dp)
+                        .width(if (compact) 300.dp * COMPACT_LEFT else 300.dp)
                         .fillMaxHeight()
                         .background(colors.surface)
-                        .padding(horizontal = 14.dp, vertical = 18.dp),
+                        .padding(horizontal = if (compact) 8.dp else 14.dp, vertical = 18.dp),
                 ) {
-                    if (!coverOnly) Text(stringResource(R.string.notebook_title), color = colors.title, fontSize = 17.sp)
-                    if (!coverOnly) Spacer(Modifier.height(8.dp))
-                    if (!coverOnly) Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.raisedSurface)
-                            .padding(horizontal = 16.dp, vertical = 16.dp),
-                    ) {
-                        if (title.isEmpty()) Text(initialTitle, color = colors.secondaryText, fontSize = 20.sp, maxLines = 1)
-                        BasicTextField(
-                            title,
-                            { title = it.take(MAX_TITLE) },
-                            singleLine = true,
-                            textStyle = TextStyle(color = colors.title, fontSize = 20.sp),
-                            cursorBrush = SolidColor(colors.accent),
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                    if (!coverOnly && !compact) {
+                        titleBlock()
+                        Spacer(Modifier.height(22.dp))
                     }
-                    if (!coverOnly) Spacer(Modifier.height(22.dp))
-                    Text(stringResource(R.string.notebook_cover), color = colors.title, fontSize = 17.sp)
+                    Text(stringResource(R.string.notebook_cover), color = colors.title, fontSize = if (compact) 13.sp else 17.sp)
                     Spacer(Modifier.height(6.dp))
                     ChoiceCard(tab == Tab.COVER, if (planner) plannerName else coverName(coverId), { tab = Tab.COVER }) {
                         val picture = draftPicture
@@ -274,8 +288,8 @@ internal fun NewNotebookScreen(
                                 val shown = recolor[original] ?: original
                                 Box(
                                     Modifier
-                                        .padding(horizontal = 4.dp)
-                                        .size(30.dp)
+                                        .padding(horizontal = if (compact) 2.dp else 4.dp)
+                                        .size(if (compact) 20.dp else 30.dp)
                                         .clip(CircleShape)
                                         .background(Color(shown))
                                         .border(if (original in recolor) 3.dp else 1.dp, if (original in recolor) BLUE else colors.border, CircleShape)
@@ -286,7 +300,7 @@ internal fun NewNotebookScreen(
                     }
                     if (!coverOnly && !planner) {
                         Spacer(Modifier.height(18.dp))
-                        Text(stringResource(R.string.notebook_paper), color = colors.title, fontSize = 17.sp)
+                        Text(stringResource(R.string.notebook_paper), color = colors.title, fontSize = if (compact) 13.sp else 17.sp)
                         Spacer(Modifier.height(6.dp))
                         ChoiceCard(tab == Tab.PAPER, stringResource(R.string.notebook_paper_name, kindName(kind)), { tab = Tab.PAPER }) {
                             TemplatePreview(template, paperColor, page, Modifier.fillMaxWidth(if (landscape) 0.9f else 0.62f).aspectRatio(page.widthPt / page.heightPt))
@@ -296,12 +310,12 @@ internal fun NewNotebookScreen(
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // Both orientations are shown, the chosen one highlighted blue, centered above the list.
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = if (compact) 12.dp else 24.dp, vertical = if (compact) 8.dp else 14.dp),
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         if (!planner) {
                             OrientationOption(landscape = false, selected = !landscape) { landscape = false }
-                            Spacer(Modifier.width(16.dp))
+                            Spacer(Modifier.width(if (compact) 10.dp else 16.dp))
                             OrientationOption(landscape = true, selected = landscape) { landscape = true }
                         }
                         if (!coverOnly) {
@@ -394,11 +408,11 @@ private fun ChoiceCard(selected: Boolean, label: String, onClick: () -> Unit, pr
             .clip(TileShape)
             .border(if (selected) 2.dp else 0.dp, if (selected) BLUE else Color.Transparent, TileShape)
             .clickable(onClick = onClick)
-            .padding(vertical = 14.dp),
+            .padding(vertical = if (isCompactScreen()) 8.dp else 14.dp),
     ) {
         preview()
-        Spacer(Modifier.height(8.dp))
-        Text(label, color = colors.title, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(if (isCompactScreen()) 4.dp else 8.dp))
+        Text(label, color = colors.title, fontSize = if (isCompactScreen()) 12.sp else 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -445,7 +459,7 @@ private fun groupName(group: CoverGroup) = stringResource(
 
 @Composable
 private fun CoverList(selected: String?, page: PageSize, planner: PlannerChoice?, onSelect: (String?) -> Unit) {
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(24.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(if (isCompactScreen()) 14.dp else 24.dp)) {
         item {
             CoverRow(stringResource(R.string.cover_group_common), listOf<CoverDesign?>(null) + CoverDesign.COMMON, selected, page, onSelect)
         }
@@ -464,44 +478,46 @@ private class PlannerChoice(val name: String, val selected: Boolean, val pattern
 @Composable
 private fun PlannerRow(choice: PlannerChoice) {
     val colors = LocalAppColors.current
-    Text(choice.name, color = colors.title, fontSize = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 18.dp, bottom = 12.dp))
+    val k = if (isCompactScreen()) COMPACT_CHOICE else 1f
+    Text(choice.name, color = colors.title, fontSize = 22.sp * k, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 18.dp * k, bottom = 12.dp * k))
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .width(132.dp)
+            .width(132.dp * k)
             .clip(TileShape)
             .border(if (choice.selected) 2.dp else 0.dp, if (choice.selected) BLUE else Color.Transparent, TileShape)
             .clickable(onClick = choice.onSelect)
-            .padding(8.dp),
+            .padding(8.dp * k),
     ) {
         CoverPreview(CoverDesign.PLANNER, PageSize.A4, Modifier.fillMaxWidth().aspectRatio(PageSize.A4.widthPt / PageSize.A4.heightPt), choice.pattern)
-        Spacer(Modifier.height(8.dp))
-        Text(choice.name, color = if (choice.selected) BLUE else colors.secondaryText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(8.dp * k))
+        Text(choice.name, color = if (choice.selected) BLUE else colors.secondaryText, fontSize = 14.sp * k, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
 private fun CoverRow(label: String, covers: List<CoverDesign?>, selected: String?, page: PageSize, onSelect: (String?) -> Unit) {
     val colors = LocalAppColors.current
-    Text(label, color = colors.title, fontSize = 22.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 18.dp, bottom = 12.dp))
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+    val k = if (isCompactScreen()) COMPACT_CHOICE else 1f
+    Text(label, color = colors.title, fontSize = 22.sp * k, fontWeight = FontWeight.Medium, modifier = Modifier.padding(top = 18.dp * k, bottom = 12.dp * k))
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(18.dp * k)) {
         for (design in covers) {
             val chosen = design?.id == selected
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .width(if (page.widthPt > page.heightPt) 190.dp else 132.dp)
+                    .width((if (page.widthPt > page.heightPt) 190.dp else 132.dp) * k)
                     .clip(TileShape)
                     .border(if (chosen) 2.dp else 0.dp, if (chosen) BLUE else Color.Transparent, TileShape)
                     .clickable { onSelect(design?.id) }
-                    .padding(8.dp),
+                    .padding(8.dp * k),
             ) {
                 CoverPreview(design, page, Modifier.fillMaxWidth().aspectRatio(page.widthPt / page.heightPt))
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(8.dp * k))
                 Text(
                     coverName(design?.id),
                     color = if (chosen) BLUE else colors.secondaryText,
-                    fontSize = 14.sp,
+                    fontSize = 14.sp * k,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -514,15 +530,16 @@ private fun CoverRow(label: String, covers: List<CoverDesign?>, selected: String
 @Composable
 private fun PaperList(kind: TemplateKind, paperColor: Int, page: PageSize, onKind: (TemplateKind) -> Unit, onColor: (Int) -> Unit) {
     val colors = LocalAppColors.current
+    val k = if (isCompactScreen()) COMPACT_CHOICE else 1f
     // Scrolls as one page when the templates are taller than the screen.
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp)) {
-        Text(stringResource(R.string.notebook_paper_color), color = colors.title, fontSize = 22.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(if (isCompactScreen()) 14.dp else 24.dp)) {
+        Text(stringResource(R.string.notebook_paper_color), color = colors.title, fontSize = 22.sp * k, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(12.dp * k))
+        Row(horizontalArrangement = Arrangement.spacedBy(14.dp * k)) {
             for (color in PAPER_COLORS) {
                 Box(
                     Modifier
-                        .size(44.dp)
+                        .size(44.dp * k)
                         .clip(CircleShape)
                         .background(Color(color))
                         .border(if (color == paperColor) 3.dp else 1.dp, if (color == paperColor) BLUE else colors.border, CircleShape)
@@ -530,20 +547,20 @@ private fun PaperList(kind: TemplateKind, paperColor: Int, page: PageSize, onKin
                 )
             }
         }
-        Spacer(Modifier.height(24.dp))
-        Text(stringResource(R.string.notebook_paper_template), color = colors.title, fontSize = 22.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(12.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Spacer(Modifier.height(24.dp * k))
+        Text(stringResource(R.string.notebook_paper_template), color = colors.title, fontSize = 22.sp * k, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(12.dp * k))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(18.dp * k), verticalArrangement = Arrangement.spacedBy(14.dp * k)) {
             for (option in TemplateKind.entries) {
                 val chosen = option == kind
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
-                        .width(132.dp)
+                        .width(132.dp * k)
                         .clip(TileShape)
                         .border(if (chosen) 2.dp else 0.dp, if (chosen) BLUE else Color.Transparent, TileShape)
                         .clickable { onKind(option) }
-                        .padding(8.dp),
+                        .padding(8.dp * k),
                 ) {
                     TemplatePreview(
                         option.newTemplate(),
@@ -551,8 +568,8 @@ private fun PaperList(kind: TemplateKind, paperColor: Int, page: PageSize, onKin
                         page,
                         Modifier.fillMaxWidth().aspectRatio(page.widthPt / page.heightPt).clip(RoundedCornerShape(4.dp)),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Text(kindName(option), color = if (chosen) BLUE else colors.secondaryText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Spacer(Modifier.height(8.dp * k))
+                    Text(kindName(option), color = if (chosen) BLUE else colors.secondaryText, fontSize = 14.sp * k, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -563,16 +580,17 @@ private fun PaperList(kind: TemplateKind, paperColor: Int, page: PageSize, onKin
 @Composable
 private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = LocalAppColors.current
+    val k = if (isCompactScreen()) COMPACT_SELECTOR else 1f
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(width = 104.dp, height = 56.dp)
+            .size(width = 104.dp * k, height = 56.dp * k)
             .clip(RoundedCornerShape(14.dp))
             .then(if (selected) Modifier.background(BLUE.copy(alpha = 0.16f)) else Modifier)
             .border(if (selected) 2.dp else 1.5.dp, if (selected) BLUE else colors.border, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
     ) {
-        Text(label, color = if (selected) BLUE else colors.title, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = if (selected) BLUE else colors.title, fontSize = 17.sp * k, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -580,18 +598,19 @@ private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit
 @Composable
 private fun OrientationOption(landscape: Boolean, selected: Boolean, onClick: () -> Unit) {
     val colors = LocalAppColors.current
+    val k = if (isCompactScreen()) COMPACT_SELECTOR else 1f
     val ink = if (selected) BLUE else colors.title
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(width = 72.dp, height = 56.dp)
+            .size(width = 72.dp * k, height = 56.dp * k)
             .clip(RoundedCornerShape(14.dp))
             .then(if (selected) Modifier.background(BLUE.copy(alpha = 0.16f)) else Modifier)
             .border(if (selected) 2.dp else 1.5.dp, if (selected) BLUE else colors.border, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick),
     ) {
-        val w = if (landscape) 34.dp else 25.dp
-        val h = if (landscape) 25.dp else 34.dp
+        val w = (if (landscape) 34.dp else 25.dp) * k
+        val h = (if (landscape) 25.dp else 34.dp) * k
         Canvas(Modifier.size(w, h)) {
             drawRoundRect(ink, cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f, 4f), style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f))
             val left = size.width * 0.22f

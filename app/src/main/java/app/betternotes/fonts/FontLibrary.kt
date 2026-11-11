@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontFamily
+import app.betternotes.core.handfont.HandFont
+import app.betternotes.core.handfont.TrueTypeWriter
 import app.betternotes.core.text.FontFiles
 import java.io.File
 import java.io.IOException
@@ -113,6 +115,68 @@ object FontLibrary {
         }
     }
 
+    /**
+     * Saves a drawn font as [font].name, in the fonts folder (made if it is missing), and from then on it is listed with the
+     * others. [replacing] is the name the font had when it was opened to edit, whose file goes when the name was changed.
+     * A font of that name that was added from a file is replaced too, as adding one does.
+     */
+    fun saveHand(font: HandFont, replacing: String? = null): AddResult {
+        val dir = folder ?: return AddResult.Failed
+        val id = FontFiles.idOf("${font.name}.ttf") ?: return AddResult.NotAFont
+        return try {
+            dir.mkdirs()
+            val temp = File(dir, "$id.part")
+            temp.writeBytes(TrueTypeWriter.write(HandFont(id, font.glyphs)))
+            val valid = try {
+                Typeface.Builder(temp).build() != null
+            } catch (_: RuntimeException) {
+                false
+            }
+            if (!valid) {
+                temp.delete()
+                return AddResult.Failed
+            }
+            fileOf(id)?.delete()
+            if (!temp.renameTo(File(dir, "$id.ttf"))) {
+                temp.delete()
+                return AddResult.Failed
+            }
+            forget(id)
+            if (replacing != null && replacing != id) remove(replacing)
+            names = list(dir)
+            AddResult.Added(id)
+        } catch (_: IOException) {
+            AddResult.Failed
+        }
+    }
+
+    /** The drawings of the font [name], if it was made here and still can be edited. */
+    fun readHand(name: String): HandFont? {
+        val file = fileOf(name) ?: return null
+        return try {
+            TrueTypeWriter.read(name, file.readBytes())
+        } catch (_: IOException) {
+            null
+        }
+    }
+
+    /** Whether [name] was drawn here. Only the file's table list is read, so a big font added from a file costs nothing. */
+    fun isHandmade(name: String): Boolean {
+        val file = fileOf(name) ?: return false
+        return try {
+            java.io.RandomAccessFile(file, "r").use { raw ->
+                raw.seek(4)
+                val count = raw.readUnsignedShort().coerceAtMost(MAX_TABLES)
+                val directory = ByteArray(16 * count)
+                raw.seek(12)
+                raw.readFully(directory)
+                (0 until count).any { String(directory, 16 * it, 4, Charsets.ISO_8859_1) == TrueTypeWriter.DATA_TABLE }
+            }
+        } catch (_: IOException) {
+            false
+        }
+    }
+
     fun remove(name: String) {
         fileOf(name)?.delete()
         forget(name)
@@ -142,6 +206,7 @@ object FontLibrary {
 
     /** A font file bigger than this is not a font anyone would want to load for every page. */
     private const val MAX_BYTES = 30L * 1024 * 1024
+    private const val MAX_TABLES = 64
     private const val FOLDER = "fonts"
     private const val ASSET_FOLDER = "fonts"
 

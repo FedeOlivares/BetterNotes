@@ -2,7 +2,7 @@
 Stylus-first note-taking and PDF annotation app for Android tablets, modelled on Notewise for Android.
 Primary device: Xiaomi Pad 7 (Android 16, API 36) with stylus. iPhone is a possible future target.
 Native Kotlin: Compose for the UI, a custom View for the canvas. Pure-Kotlin `:core` (JVM tests) plus Android `:app`.
-Fully offline. The only network use is the one-time ML Kit Digital Ink model download (English, Spanish).
+Fully offline. The ML Kit Digital Ink models (English, Spanish) ship inside the APK, so nothing is downloaded (`docs/handwriting-models.md`).
 
 ## Priorities
 1. Clean, efficient code.
@@ -25,7 +25,7 @@ Fully offline. The only network use is the one-time ML Kit Digital Ink model dow
 - Tiles must never cut anything. Any new or changed display item, tool or painter must paint only inside its `paintBounds`, and a tile that is touched by even one pixel of it must be drawn and redrawn. `paintBounds` takes in everything painted: text that overflows its frame (the page does not clip it), glyph overhang, italic slant, spans, stroke width and miter joins, arrow tips, shadows, antialiasing. Page-local regions turn with the page before they reach the tiles (`DocumentLayout.pageBoundsToWorld`). Add a core test in `PaintBoundsTest` or `TileGridTest` for each new item.
 - All page and item changes go through edits (`ItemsEdit`, `UndoHistory`). Undo is strictly last-in, first-out.
 - To change the file format, bump `FORMAT_VERSION` and add a migration. Never edit the expected bytes in `CodecTest`.
-- Nothing online, except the ML Kit model download. No cloud, sync, sharing, AI or account.
+- Nothing online. No cloud, sync, sharing, AI or account.
 
 ## Where to look (read only when relevant)
 - Product requirements and owner decisions: `docs/requirements.md`

@@ -114,6 +114,9 @@ Nothing may assume a rate. Time things by the clock and by event timestamps, nev
 - **Language:** the UI is English or Latin American Spanish, selectable.
 - **`minSdk`:** stays at 35. The owner's tablet runs Android 16 (API 36), which meets it.
 
+### 2026-11-10
+- **Handwriting models ship with the app:** the one-time download is replaced by bundling the English and Spanish models in the APK (about 24 MB). Nothing online is left. How it works: `docs/handwriting-models.md`.
+
 ## Still to verify
 - ML Kit's docs imply recognition runs from the downloaded model, but don't explicitly say it works offline. Test recognition with no connection once the models are downloaded.
 

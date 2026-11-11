@@ -61,7 +61,7 @@
     <string name="notebook_edit">Editar</string>
     <string name="notebook_pick_color">Elegí un color</string>
     <string name="notebook_color_reset">Original</string>
-    <string name="notebook_create">Crear cuaderno</string>
+    <string name="notebook_create">Crear</string>
     <string name="notebook_paper_color">Color del papel</string>
     <string name="notebook_paper_template">Plantilla</string>
     <string name="cover_group_common">Comunes</string>

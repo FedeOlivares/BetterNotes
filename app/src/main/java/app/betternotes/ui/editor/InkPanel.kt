@@ -63,6 +63,7 @@ import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.isCompactScreen
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.PI
 import kotlin.math.roundToInt
@@ -89,7 +90,8 @@ internal fun PanelSheet(
     Column(
         modifier
             .opensFrom(OpenFrom.TopEnd)
-            .width(width)
+            // A phone's panel takes the width there is, as the menus do.
+            .then(if (isCompactScreen()) Modifier.fillMaxWidth() else Modifier.width(width))
             .shadow(12.dp, PanelShape, clip = false)
             .clip(PanelShape)
             .background(colors.panel)

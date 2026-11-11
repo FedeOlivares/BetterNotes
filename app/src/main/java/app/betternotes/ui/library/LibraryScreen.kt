@@ -97,6 +97,7 @@ import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.ThemeMode
 import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.ui.theme.opensFrom
+import app.betternotes.ui.theme.isCompactScreen
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +108,9 @@ private const val LIFT_ALPHA = 0.9f
 private val MinCardWidth = 300.dp
 private val SideMargin = 22.dp
 private val CardGap = 34.dp
+
+/** A phone has two tiles to a row, each about 40% of the screen's width, closer together. */
+private val CompactCardGap = 20.dp
 
 /** Where the first row of tiles starts, in the reference. */
 private val HeaderHeight = 324.dp
@@ -262,6 +266,8 @@ internal fun LibraryScreen(
             current?.list(view, preferences.sort).orEmpty()
         }
         val listed = preferences.layout == LibraryLayout.LIST
+        val compact = isCompactScreen()
+        val cardGap = if (compact) CompactCardGap else CardGap
         val gridState = rememberLazyGridState()
         val drag = remember { DragState() }
         val density = LocalDensity.current
@@ -271,8 +277,8 @@ internal fun LibraryScreen(
         var gridHeight by remember { mutableFloatStateOf(0f) }
         LazyVerticalGrid(
             state = gridState,
-            columns = if (listed) GridCells.Fixed(1) else GridCells.Adaptive(MinCardWidth),
-            horizontalArrangement = Arrangement.spacedBy(CardGap),
+            columns = if (listed) GridCells.Fixed(1) else if (compact) GridCells.Fixed(2) else GridCells.Adaptive(MinCardWidth),
+            horizontalArrangement = Arrangement.spacedBy(cardGap),
             contentPadding = PaddingValues(
                 start = SideMargin,
                 end = SideMargin,
@@ -342,7 +348,7 @@ internal fun LibraryScreen(
                 val lifted = drag.id == entry.id
                 Box(
                     Modifier
-                        .padding(bottom = if (listed) RowGap else CardGap)
+                        .padding(bottom = if (listed) RowGap else cardGap)
                         .zIndex(if (lifted) 1f else 0f)
                         .graphicsLayer {
                             if (lifted) {
@@ -398,10 +404,12 @@ internal fun LibraryScreen(
             NewItemPanel(
                 flows.panel,
                 onDismiss = { adding = false },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = 96.dp),
+                // On a phone the panel is a sheet across the bottom.
+                modifier = if (compact) Modifier.align(Alignment.BottomCenter) else Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = 96.dp),
             )
         }
-        AddButton(
+        // The sheet on a phone covers it, as in the reference.
+        if (!(adding && compact)) AddButton(
             onClick = { adding = !adding },
             modifier = Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = 17.dp),
         )
@@ -815,15 +823,17 @@ private fun OptionsMenu(
         }
         // A popup starts a new composition, with the device's density, so the reference's scale is handed in.
         val scale = LocalDensity.current
+        val compact = isCompactScreen()
         if (open) Popup(
             alignment = Alignment.TopEnd,
-            offset = with(scale) { IntOffset(MenuOffsetX.roundToPx(), MenuOffsetY.roundToPx()) },
+            offset = with(scale) { IntOffset(if (compact) 0 else MenuOffsetX.roundToPx(), MenuOffsetY.roundToPx()) },
             onDismissRequest = { open = false },
             properties = PopupProperties(focusable = true),
         ) { CompositionLocalProvider(LocalDensity provides scale) { Column(
             Modifier
                 .opensFrom(OpenFrom.TopEnd)
-                .width(274.dp)
+                // Across the screen on a phone.
+                .then(if (compact) Modifier.padding(horizontal = SideMargin).fillMaxWidth() else Modifier.width(274.dp))
                 .padding(bottom = 12.dp)
                 .shadow(12.dp, MenuShape)
                 .background(colors.surface, MenuShape)

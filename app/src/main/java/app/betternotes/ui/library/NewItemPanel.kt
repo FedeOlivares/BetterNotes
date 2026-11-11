@@ -34,6 +34,7 @@ import app.betternotes.R
 import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.ui.theme.opensFrom
+import app.betternotes.ui.theme.isCompactScreen
 
 /** What the "+" panel can start. */
 internal class NewItemActions(
@@ -49,6 +50,7 @@ internal class NewItemActions(
 )
 
 private val PanelShape = RoundedCornerShape(28.dp)
+private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 private val TileShape = RoundedCornerShape(22.dp)
 private val PanelWidth = 550.dp
 private val PanelSide = 22.dp
@@ -68,13 +70,16 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
             .fillMaxSize()
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
     )
+    // A phone's panel is a sheet across the bottom of the screen.
+    val compact = isCompactScreen()
+    val shape = if (compact) SheetShape else PanelShape
     Column(
         modifier
-            .opensFrom(OpenFrom.BottomEnd)
-            .width(PanelWidth)
-            .shadow(16.dp, PanelShape)
-            .background(colors.surface, PanelShape)
-            .clip(PanelShape)
+            .opensFrom(if (compact) OpenFrom.Bottom else OpenFrom.BottomEnd)
+            .then(if (compact) Modifier.fillMaxWidth() else Modifier.width(PanelWidth))
+            .shadow(16.dp, shape)
+            .background(colors.surface, shape)
+            .clip(shape)
             // Swallows touches between the rows, which would otherwise reach the area behind.
             .clickable(remember { MutableInteractionSource() }, indication = null) {},
     ) {

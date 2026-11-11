@@ -17,16 +17,20 @@ import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOption
 import com.google.mlkit.vision.digitalink.recognition.Ink
 import com.google.mlkit.vision.digitalink.recognition.RecognitionContext
 import com.google.mlkit.vision.digitalink.recognition.WritingArea
+import android.content.Context
 import java.io.IOException
 import java.util.concurrent.ExecutionException
+import java.util.concurrent.Future
+import java.util.concurrent.FutureTask
+import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 /**
- * The handwriting models, about 20 MB per language. The owner accepted one download of these, and
- * nothing online after it, so nothing here downloads on its own: only [download] does, and it is
- * meant to run when a person asks. If the models go missing, search says so through [missing] rather
- * than quietly fetching them again.
+ * The handwriting models, about 20 MB per language. They ship inside the app and [install] puts them where ML Kit
+ * expects them, so nothing is downloaded. [download] is only a way out if that fails, for example if ML Kit
+ * deletes the files while the app runs, and it runs only when a person asks. Search says the models are gone through
+ * [missing] rather than quietly fetching them again.
  *
  * Calls block, so run them on a background thread.
  */
@@ -41,16 +45,35 @@ object InkModels {
         }
     }
 
+    private val seeding = AtomicReference<Future<*>>()
+
+    /** Starts restoring the models that ship with the app. Call once, as early as the app starts. */
+    fun install(context: Context) {
+        val app = context.applicationContext
+        val task = FutureTask { InkModelSeeder.seed(app) }
+        if (seeding.compareAndSet(null, task)) Thread(task, "ink-model-seeder").start()
+    }
+
+    private fun awaitSeeding() {
+        try {
+            seeding.get()?.get()
+        } catch (e: ExecutionException) {
+            throw IOException("Restoring the handwriting models failed", e.cause ?: e)
+        }
+    }
+
     /** The languages whose models are not on the device. */
     @Throws(IOException::class)
     fun missing(): List<String> {
+        awaitSeeding()
         val manager = RemoteModelManager.getInstance()
         return LANGUAGE_TAGS.filterNot { await(manager.isModelDownloaded(models.getValue(it))) }
     }
 
-    /** Downloads what is missing. This is the one thing in the app that uses the network. */
+    /** Downloads what is missing, which is the one thing in the app that uses the network, and only the debug and profile builds can. */
     @Throws(IOException::class)
     fun download() {
+        awaitSeeding()
         val manager = RemoteModelManager.getInstance()
         val conditions = DownloadConditions.Builder().build()
         for (tag in missing()) {

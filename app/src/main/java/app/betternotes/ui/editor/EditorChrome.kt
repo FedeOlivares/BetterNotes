@@ -92,6 +92,7 @@ import app.betternotes.core.tools.ToolbarEntries
 import app.betternotes.core.tools.ToolbarGroups
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.isCompactScreen
 import app.betternotes.ui.theme.OpenFrom
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.roundToInt
@@ -272,9 +273,11 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         val slide = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
         val heldAt = remember { floatArrayOf(0f, 0f, 0f) }
         val settle = remember { arrayOfNulls<Offset>(1) }
-        val dragPoint = state.toolbarDragPoint
+        // A phone has the toolbars along the bottom, and they do not move.
+        val compact = isCompactScreen()
+        val dragPoint = if (compact) null else state.toolbarDragPoint
         // While the tool strip is held it takes the edge its finger is by; otherwise the one it was left on.
-        val edge = state.toolbarLiveEdge ?: state.toolbarEdge
+        val edge = if (compact) ToolbarEdge.BOTTOM else state.toolbarLiveEdge ?: state.toolbarEdge
         val vertical = edge.vertical
         // Held, the strip shrinks a little and lifts, as if picked up.
         val lift by animateFloatAsState(if (dragPoint != null) 1f else 0f, tween(LIFT_MS), label = "toolbarLift")
@@ -288,7 +291,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                     Box(
                         Modifier
                             .layoutId(CENTER)
-                            .toolbarMover(state, { screen[0] }, { screen[1] })
+                            .then(if (compact) Modifier else Modifier.toolbarMover(state, { screen[0] }, { screen[1] }))
                             .graphicsLayer {
                                 scaleX = 1f - LIFT_SHRINK * lift
                                 scaleY = 1f - LIFT_SHRINK * lift
@@ -382,7 +385,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 if (vertical) {
                     Constraints(maxWidth = (width - cw - 2 * margin - gap).coerceAtLeast(0), maxHeight = (height - 2 * margin).coerceAtLeast(0))
                 } else {
-                    val sides = if (!free && edge == ToolbarEdge.BOTTOM) SideItemReserve.roundToPx() else margin
+                    val sides = if (!free && edge == ToolbarEdge.BOTTOM && !compact) SideItemReserve.roundToPx() else margin
                     Constraints(maxWidth = (width - 2 * sides).coerceAtLeast(0), maxHeight = height)
                 },
             )
@@ -411,10 +414,10 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             SelectionBar(state)
             // Where the map of an infinite canvas goes, which a page of fixed size has none of.
             // In the bottom corner only when the toolbar is along the bottom, as the map is; otherwise in the middle, as before.
-            val badgeAt = if (state.toolbarEdge == ToolbarEdge.BOTTOM) {
-                Modifier.align(Alignment.BottomEnd).padding(end = SIDE_ITEM_MARGIN, bottom = bandBottom(state))
+            val badgeAt = if (state.toolbarEdge == ToolbarEdge.BOTTOM || compact) {
+                Modifier.align(Alignment.BottomEnd).padding(end = SIDE_ITEM_MARGIN, bottom = bandBottom(state, compact))
             } else {
-                Modifier.align(Alignment.BottomCenter).padding(bottom = bandBottom(state))
+                Modifier.align(Alignment.BottomCenter).padding(bottom = bandBottom(state, compact))
             }
             RotationBadge(state, badgeAt.masksInk(state, "rotationBadge"))
         }
@@ -478,11 +481,12 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         state.plannerMenu?.let { PlannerMenus(state, it) }
         if (state.quickSwitchOpen) QuickSwitch(state, actions, notices)
 
+        val panelStart = if (compact) PanelEndMargin else 0.dp
         val panelTop = EdgeMargin + PillHeight + PillGap + PillHeight + PanelGap
         val side = EdgeMargin + PillHeight + PanelGap
         val panelModifier = when (edge) {
             ToolbarEdge.TOP -> Modifier.align(Alignment.TopEnd).padding(top = panelTop, end = PanelEndMargin, bottom = PanelEndMargin)
-            ToolbarEdge.BOTTOM -> Modifier.align(Alignment.BottomEnd).padding(top = PanelEndMargin, end = PanelEndMargin, bottom = panelTop)
+            ToolbarEdge.BOTTOM -> Modifier.align(Alignment.BottomEnd).padding(start = panelStart, top = if (compact) EdgeMargin + PillHeight + PanelGap else PanelEndMargin, end = PanelEndMargin, bottom = panelTop)
             ToolbarEdge.LEFT -> Modifier.align(Alignment.TopStart).padding(top = side, start = side, bottom = PanelEndMargin)
             ToolbarEdge.RIGHT -> Modifier.align(Alignment.TopEnd).padding(top = side, end = side, bottom = PanelEndMargin)
         }
@@ -524,7 +528,8 @@ private fun LeftPill(state: EditorState, actions: EditorActions, notices: Notice
         ToolbarIcon(EditorIcons.PageStack, stringResource(R.string.editor_page_stack)) {
             state.quickSwitchOpen = true
         }
-        ToolbarIcon(EditorIcons.ChevronsUpDown, stringResource(R.string.editor_chevrons), onClick = notices::notBuilt)
+        // Not built yet, so a phone's narrower row goes without it.
+        if (!isCompactScreen()) ToolbarIcon(EditorIcons.ChevronsUpDown, stringResource(R.string.editor_chevrons), onClick = notices::notBuilt)
     }
 }
 
@@ -591,7 +596,7 @@ private fun CenterPill(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .weight(1f, fill = false)
-                .widthIn(max = ToolbarCell * visibleTools(state.toolbarLiveEdge ?: state.toolbarEdge))
+                .widthIn(max = ToolbarCell * if (isCompactScreen()) COMPACT_VISIBLE_TOOLS else visibleTools(state.toolbarLiveEdge ?: state.toolbarEdge))
                 .horizontalScroll(rememberScrollState()),
         ) {
             StripButtons(state, recorder, sources, notices)
@@ -847,7 +852,7 @@ private fun BoxScope.PositionControls(state: EditorState) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .align(Alignment.BottomStart)
-            .padding(start = 9.dp, bottom = bandBottom(state))
+            .padding(start = 9.dp, bottom = bandBottom(state, isCompactScreen()))
             .masksInk(state, "readout")
             .height(PillHeight)
             .shadow(4.dp, CircleShape, clip = false)
@@ -915,7 +920,7 @@ private fun BoxScope.PositionControls(state: EditorState) {
         PageButton(EditorIcons.ChevronDown, stringResource(R.string.editor_next_page), state::nextPage)
     }
     val map = remember(moves) { state.minimap() }
-    if (map != null) MinimapView(map, Modifier.align(Alignment.BottomEnd).padding(end = SIDE_ITEM_MARGIN, bottom = bandBottom(state)).masksInk(state, "minimap"))
+    if (map != null) MinimapView(map, Modifier.align(Alignment.BottomEnd).padding(end = SIDE_ITEM_MARGIN, bottom = bandBottom(state, isCompactScreen())).masksInk(state, "minimap"))
 }
 
 /** A small map of an infinite page, shown while it scrolls: where things are written, and what is in view. */
@@ -970,8 +975,12 @@ private val SIDE_ITEM_MARGIN = 12.dp
  * How far above the screen's bottom the page index, the map and the rotation badge sit. Level with the second toolbar when the toolbars are
  * at the bottom, so that they stand at the sides of it, and low down otherwise.
  */
-private fun bandBottom(state: EditorState) =
-    if (state.toolbarEdge == ToolbarEdge.BOTTOM) EdgeMargin + PillHeight + PillGap else SIDE_ITEM_MARGIN
+private fun bandBottom(state: EditorState, compact: Boolean) = when {
+    // The two bars take the width of a phone, so these stand above them.
+    compact -> EdgeMargin + PillHeight * 2f + PillGap * 2f
+    state.toolbarEdge == ToolbarEdge.BOTTOM -> EdgeMargin + PillHeight + PillGap
+    else -> SIDE_ITEM_MARGIN
+}
 
 /** What the page index and the map or rotation badge take at each side of the second toolbar when it is at the bottom. */
 private val SideItemReserve = 172.dp
@@ -982,6 +991,8 @@ private fun visibleTools(edge: ToolbarEdge) = when (edge) {
     ToolbarEdge.BOTTOM -> 9
     else -> 10
 }
+/** On a phone the strip shows this many tools before it scrolls. */
+private const val COMPACT_VISIBLE_TOOLS = 5
 private val MINIMAP_HEIGHT = 110.dp
 private const val MIN_MARK_DP = 1.5f
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,7 +42,6 @@ import app.betternotes.ui.theme.LocalEditorColors
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
-import java.util.Locale
 
 /** What a tap on a planner opened. */
 internal sealed interface PlannerMenu {
@@ -105,11 +105,12 @@ private fun Panel(onDismiss: () -> Unit, content: @Composable () -> Unit) {
 private fun WeekdayMenu(setup: PlannerSetup, menu: PlannerMenu.Weekday, onDismiss: () -> Unit, onPick: (Int) -> Unit) {
     val colors = LocalEditorColors.current
     val current = setup.weekday(setup.day(menu.dayIndex))
+    val locale = LocalLocale.current.platformLocale
     Panel(onDismiss) {
         Text(stringResource(R.string.planner_weekday_title), color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.height(12.dp))
         for (day in 0 until 7) {
-            val name = DayOfWeek.of(day + 1).getDisplayName(TextStyle.FULL, Locale.getDefault()).replaceFirstChar { it.uppercase() }
+            val name = DayOfWeek.of(day + 1).getDisplayName(TextStyle.FULL, locale).replaceFirstChar { it.uppercase() }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

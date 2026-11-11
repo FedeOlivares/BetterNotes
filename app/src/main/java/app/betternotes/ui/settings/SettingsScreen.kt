@@ -56,6 +56,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.fonts.FontLibrary
 import app.betternotes.library.LibraryPreferences
 import app.betternotes.ui.library.TextDialog
 import app.betternotes.ui.theme.AppLanguage
@@ -84,7 +85,7 @@ private const val BYTES_PER_MB = 1024.0 * 1024.0
 private const val CALIBRATION_LINE_CM = 8f
 private const val CM_PER_INCH = 2.54f
 
-private enum class SettingsPage { MAIN, SCROLL, SHORTCUTS, CALIBRATION }
+private enum class SettingsPage { MAIN, SCROLL, SHORTCUTS, CALIBRATION, FONT }
 
 /**
  * The app's settings screen. Matches the owner's screenshot, without what depends on being online or
@@ -100,22 +101,36 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     var page by remember { mutableStateOf(SettingsPage.MAIN) }
-    val back = { if (page == SettingsPage.MAIN) onBack() else page = SettingsPage.MAIN }
+    // The font being drawn, kept while the page is shown so that leaving it can ask first.
+    var draft by remember { mutableStateOf<HandFontDraft?>(null) }
+    val back = {
+        val drawing = draft
+        when {
+            page == SettingsPage.MAIN -> onBack()
+            page == SettingsPage.FONT && drawing != null && drawing.dirty -> drawing.asking = true
+            else -> page = SettingsPage.MAIN
+        }
+    }
     val title = stringResource(
         when (page) {
             SettingsPage.MAIN -> R.string.settings_title
             SettingsPage.SCROLL -> R.string.settings_scroll_layout
             SettingsPage.SHORTCUTS -> R.string.settings_shortcuts
             SettingsPage.CALIBRATION -> R.string.settings_calibration
+            SettingsPage.FONT -> if (draft?.editing == null) R.string.settings_fonts_create else R.string.font_make_edit_title
         },
     )
     androidx.activity.compose.BackHandler(onBack = back)
     SettingsPageFrame(title, back, modifier) {
         when (page) {
-            SettingsPage.MAIN -> MainPage(settings, onChange) { page = it }
+            SettingsPage.MAIN -> MainPage(settings, onChange, open = { page = it }, drawFont = { name ->
+                draft = HandFontDraft(name?.let(FontLibrary::readHand))
+                page = SettingsPage.FONT
+            })
             SettingsPage.SCROLL -> ScrollPage(settings.scrollDirection) { value -> onChange { it.copy(scrollDirection = value) } }
             SettingsPage.SHORTCUTS -> ShortcutsPage(settings, onChange)
             SettingsPage.CALIBRATION -> CalibrationPage(settings, reportedDpi, onChange)
+            SettingsPage.FONT -> draft?.let { HandFontEditor(it) { page = SettingsPage.MAIN } }
         }
     }
 }
@@ -143,7 +158,12 @@ private fun SettingsPageFrame(title: String, onBack: () -> Unit, modifier: Modif
 }
 
 @Composable
-private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSettings) -> Unit, open: (SettingsPage) -> Unit) {
+private fun MainPage(
+    settings: AppSettings,
+    onChange: ((AppSettings) -> AppSettings) -> Unit,
+    open: (SettingsPage) -> Unit,
+    drawFont: (String?) -> Unit,
+) {
     val canvas = settings.canvas
     GeneralCard()
     val context = LocalContext.current
@@ -163,7 +183,7 @@ private fun MainPage(settings: AppSettings, onChange: ((AppSettings) -> AppSetti
             detail = stringResource(R.string.settings_auto_name_detail),
         ) { value -> onChange { it.copy(autoName = value) } }
     }
-    FontsCard()
+    FontsCard(drawFont)
     SettingsCard {
         CardTitle(stringResource(R.string.settings_canvas))
         ToggleRow(stringResource(R.string.settings_continue), canvas.continueFromLastPage) { value ->

@@ -1,8 +1,42 @@
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// The ML Kit handwriting models (English and Spanish, about 24 MB) ship inside the APK, so the app never
+// downloads them. They are fetched here once, checked against src/main/assets/ink-models/files.txt, and kept in
+// the user's home folder so every build and clone reuses them. See docs/handwriting-models.md.
+val inkModelCache = File(System.getProperty("user.home"), ".better-notes/ink-models")
+val inkModelAssets = layout.buildDirectory.dir("generated/ink-model-assets")
+val inkModelList = file("src/main/assets/ink-models/files.txt")
+val fetchInkModels = tasks.register("fetchInkModels") {
+    inputs.file(inkModelList)
+    outputs.dir(inkModelAssets)
+    doLast {
+        val out = inkModelAssets.get().asFile.resolve("ink-models").apply { mkdirs() }
+        inkModelCache.mkdirs()
+        for (line in inkModelList.readLines().filter { it.isNotBlank() && !it.startsWith("#") }) {
+            val (_, zip, _, sha1) = line.split('|')
+            fun sha1Of(f: File) = MessageDigest.getInstance("SHA-1").digest(f.readBytes()).joinToString("") { "%02x".format(it) }
+            val cached = File(inkModelCache, zip)
+            if (!cached.exists() || sha1Of(cached) != sha1) {
+                val tmp = File(inkModelCache, "$zip.part")
+                uri("https://dl.google.com/handwriting/models/$zip").toURL().openStream().use { input ->
+                    tmp.outputStream().use { input.copyTo(it) }
+                }
+                check(sha1Of(tmp) == sha1) { "Handwriting model $zip does not match its recorded SHA-1" }
+                tmp.renameTo(cached)
+            }
+            cached.copyTo(File(out, zip), overwrite = true)
+        }
+    }
+}
+tasks.configureEach {
+    // Lint reads the assets too, and Gradle refuses a task that reads another's output without a dependency.
+    if ((name.startsWith("merge") && name.endsWith("Assets")) || name.contains("lint", ignoreCase = true)) dependsOn(fetchInkModels)
 }
 
 android {
@@ -14,8 +48,8 @@ android {
         // API 35 gives PdfRenderer text extraction. Unverified: the Pad 7 must run Android 15+ to install this.
         minSdk = 35
         targetSdk = 37
-        versionCode = 210
-        versionName = "2.1"
+        versionCode = 220
+        versionName = "2.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -83,6 +117,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    sourceSets.getByName("main").assets.directories.add(inkModelAssets.get().asFile.path)
 
     buildFeatures {
         buildConfig = true

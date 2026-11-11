@@ -20,6 +20,7 @@ object OpenFrom {
     val TopStart = TransformOrigin(0f, 0f)
     val TopEnd = TransformOrigin(1f, 0f)
     val Start = TransformOrigin(0f, 0.5f)
+    val Bottom = TransformOrigin(0.5f, 1f)
     val BottomEnd = TransformOrigin(1f, 1f)
     val Center = TransformOrigin.Center
 }

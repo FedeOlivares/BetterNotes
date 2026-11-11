@@ -24,6 +24,16 @@ class PlannerTest {
     private val july = PlannerSetup(2026, 7)
     private val size = PageSize.A4
 
+    @Test
+    fun `a new planner is the full year, and from December 1st the next one`() {
+        assertEquals(PlannerSetup(2026, 1), PlannerPages.defaultSetup(LocalDate.of(2026, 11, 10)))
+        assertEquals(PlannerSetup(2026, 1), PlannerPages.defaultSetup(LocalDate.of(2026, 1, 1)))
+        assertEquals(PlannerSetup(2026, 1), PlannerPages.defaultSetup(LocalDate.of(2026, 11, 30)))
+        assertEquals(PlannerSetup(2027, 1), PlannerPages.defaultSetup(LocalDate.of(2026, 12, 1)))
+        assertEquals(PlannerSetup(2028, 1), PlannerPages.defaultSetup(LocalDate.of(2027, 12, 31)))
+        assertTrue(PlannerPages.defaultSetup(LocalDate.of(2026, 12, 1)).isFullYear)
+    }
+
     private class Counting(override val language: String) : TemplateSink {
         var marks = 0
         var words = 0

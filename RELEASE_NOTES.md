@@ -1,3 +1,17 @@
+# Better Notes 2.2.0 — Release Notes
+
+Draw your own font, a layout for phones, and handwriting models that come inside the app.
+
+- In Settings, the Fonts card has a new "Create your own font". Draw each letter on a pad with guide lines (small letters, capitals, digits, punctuation and the Spanish letters), name the font and save it. It is saved in the app's fonts folder, joins the list of fonts for text boxes next to the five that come with the app and the ones you add, and can be removed there.
+- A letter you do not draw shows in the default font. A drawn font can be reopened with Edit in the Fonts card, to redraw letters or rename it. The file is an ordinary .ttf with the drawings kept inside.
+- Fonts are not stored in a notebook, so a notebook shared to another device needs the font file added there.
+- Phones: on screens under 600 dp wide the toolbars run along the bottom, the home screen has two columns of tiles, and sheets are full width.
+- Anything painted, even by one pixel, is now drawn and redrawn in every tile it touches.
+- The English and Spanish handwriting models now come inside the app (the app is about 24 MB larger). Nothing is downloaded, so a fresh install or a reinstall can search handwriting straight away.
+- A new planner starts as the full calendar year (January to December) instead of mid-year. From December 1st, a new planner is the next year.
+
+---
+
 # Better Notes 2.1 — Release Notes
 
 Fonts of your own.
@@ -8,7 +22,6 @@ Fonts of your own.
 - Open with: a PDF or a Better Notes file (.bnote) opened from a file manager or another app can open in Better Notes. Opening a PDF this way was tried on the Pad 7; opening a .bnote from outside the app and opening a password-protected PDF this way were not tried.
 - Text boxes: a tap with the pen or a finger selects a box and leaves no dot, a finger on a selected box moves it, the pen writes inside an open box, a box is as tall as its text, and its handles change the box and not the text size. Tapping away from an open box, or lassoing from it, goes back to the previous tool.
 - A note that uses a font that has been removed shows its text in the app's own font, and shows the font again if it is added back with the same file name. Notebooks saved with this update use page format 8, which older versions of the app cannot open. Fonts are not stored inside the notebook, so a notebook shared to another device needs the same font files added there.
-- Fix: text could be cut off, or vanish, at the edge of a drawing tile when it ran past its box (long or tall text, slanted or large letters, table cells, arrow tips). Everything painted, even by one pixel, is now drawn in every tile it touches.
 
 ---
 

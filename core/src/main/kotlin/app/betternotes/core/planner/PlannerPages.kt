@@ -55,9 +55,9 @@ object PlannerPages {
         }
     }
 
-    /** The dates a new planner starts with: the mid-year one that began last July (or this July, from July on), as in the reference. */
+    /** The dates a new planner starts with: the full calendar year of today, or of the next year from December 1st on. */
     fun defaultSetup(today: java.time.LocalDate): PlannerSetup =
-        PlannerSetup(if (today.monthValue >= 7) today.year else today.year - 1, 7)
+        PlannerSetup(if (today.monthValue == 12) today.year + 1 else today.year, 1)
 
     /** The setup of a planner document, or null if it is not one. */
     fun setupOf(document: Document): PlannerSetup? {

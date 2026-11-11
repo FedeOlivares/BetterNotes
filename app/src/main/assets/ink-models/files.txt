@@ -1,0 +1,7 @@
+# mlkit-version: 19.0.0
+# target under files/mlkit_digital_ink_recognition/shared/datadownload/public | zip on dl.google.com/handwriting/models | unzipped size | sha1 of the zip
+datadownloadfile_1794353875318/latin_indy_lstm_6x216_20191208.tflite|indy_lstm.latin.6x216.tflite.20191208.zip|3992904|27cfb1b5a7e5a4dee7ba6c07aaea9c3343b34ee4
+datadownloadfile_1794353876041/qrnn.en_us.reco_20200318.fst_20191208.recospec.local|qrnn.en_us.reco_20200318.fst_20191208.recospec.zip|3929|dcc0fcc19e8801e30d8c32309d762d0b5926cf12
+datadownloadfile_1794353876042/en_us.compact.fst.local|en_us.20191208.compact.fst.zip|21798892|9f1c95b8e0604cdf72bd326b3a913102626bb854
+datadownloadfile_1794353876105/qrnn.es_es.reco_20200318.fst_20191208.recospec.local|qrnn.es_es.reco_20200318.fst_20191208.recospec.zip|3959|6699f3d0a937453cb6cb879ea41a1663ece45b9d
+datadownloadfile_1794353876106/es_es.compact.fst.local|es_es.20191208.compact.fst.zip|21549900|1e7112d135e60e3591241732d821e212312492a7
