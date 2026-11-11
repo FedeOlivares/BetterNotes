@@ -1,6 +1,7 @@
 package app.betternotes.core.model
 
 import app.betternotes.core.geometry.Affine
+import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.stroke
 import org.junit.Assert.assertEquals
@@ -77,6 +78,48 @@ class PageItemTest {
         val movedStroke = resized.items.single() as StrokeItem
         assertEquals(20f, movedStroke.points.x(0), 1e-4f)
         assertEquals(40f, movedStroke.points.y(1), 1e-4f)
+    }
+
+    @Test
+    fun `an open note paints what runs past its edge`() {
+        // In the note's own coordinates, from inside it to 150 pt past its right edge.
+        val out = stroke(2, 50f, 50f, 250f, 50f, width = 0f)
+        val note = StickyNoteItem(1, Frame(10f, 20f, 100f, 100f), color = 0, isOpen = true, items = listOf(out))
+        assertEquals(110f, note.bounds.right, 0f)
+        assertTrue("${note.paintBounds}", note.paintBounds.right >= 10f + 250f)
+        assertTrue(note.paintBounds.contains(note.bounds))
+    }
+
+    @Test
+    fun `a closed note paints only itself`() {
+        val out = stroke(2, 50f, 50f, 250f, 50f)
+        val note = StickyNoteItem(1, Frame(10f, 20f, 100f, 100f), color = 0, isOpen = false, items = listOf(out))
+        assertEquals(note.bounds, note.paintBounds)
+    }
+
+    @Test
+    fun `a turned note paints past its edge where the turn takes the line`() {
+        // A quarter turn about the middle (60, 70): the local point (250, 50) lies at (10+250, 20+50) = (260, 70), 200 right of the middle,
+        // and turns to 200 below it.
+        val out = stroke(2, 50f, 50f, 250f, 50f, width = 0f)
+        val note = StickyNoteItem(1, Frame(10f, 20f, 100f, 100f, rotation = 90f), color = 0, isOpen = true, items = listOf(out))
+        assertTrue("${note.paintBounds}", note.paintBounds.bottom >= 70f + 200f - 1e-3f)
+        assertTrue("${note.paintBounds}", note.paintBounds.right < 260f)
+    }
+
+    @Test
+    fun `a tile that only the part past the note touches still gets the note`() {
+        val out = stroke(2, 50f, 50f, 250f, 50f, width = 0f)
+        val note = StickyNoteItem(1, Frame(0f, 0f, 100f, 100f), color = 0, isOpen = true, items = listOf(out))
+        val content = PageContent(listOf(note))
+        val seen = mutableListOf<Long>()
+        // One point wide, 1 pt past the note, as a tile boundary would be.
+        content.forEachPaintingIn(Bounds(200f, 0f, 201f, 100f)) { _, it -> seen += it.id }
+        assertEquals(listOf(1L), seen)
+        // Selection and hit tests still see only the note.
+        val hit = mutableListOf<Long>()
+        content.forEachIntersecting(Bounds(200f, 0f, 201f, 100f)) { _, it -> hit += it.id }
+        assertTrue(hit.isEmpty())
     }
 
     @Test(expected = IllegalArgumentException::class)

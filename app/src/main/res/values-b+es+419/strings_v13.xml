@@ -16,6 +16,8 @@
     <!-- Selección -->
     <string name="selection_lock">Fijar en su lugar</string>
     <string name="selection_unlock">Desbloquear</string>
+    <string name="selection_group">Agrupar</string>
+    <string name="selection_ungroup">Desagrupar</string>
     <string name="selection_note_color">Color de la nota</string>
     <string name="selection_keep_open">Mantener abierta</string>
     <string name="selection_translucent">Translúcida</string>

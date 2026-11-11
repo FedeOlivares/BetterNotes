@@ -37,13 +37,48 @@ class ItemsEdit(
     companion object {
         private val NONE = IntArray(0)
 
-        /** Adds [item] on top of everything else on the page. */
-        fun addOnTop(pageId: Long, content: PageContent, item: PageItem) =
-            ItemsEdit(pageId, NONE, emptyList(), intArrayOf(content.size), listOf(item))
+        /** Adds [item] on top of the active layer, which is the top of the page unless a lower layer is being worked on. */
+        fun addOnTop(pageId: Long, content: PageContent, item: PageItem): ItemsEdit {
+            val placed = item.onLayer(content.activeLayer)
+            return ItemsEdit(pageId, NONE, emptyList(), intArrayOf(content.insertionIndex(placed.layer)), listOf(placed))
+        }
 
-        /** Swaps each item at [indices] for the matching one in [replacements], keeping paint order. */
+        /** Adds [items], in order, on top of the active layer. The new items' places are in [addedAt] of the result. */
+        fun addAllOnTop(pageId: Long, content: PageContent, items: List<PageItem>): ItemsEdit {
+            val at = content.insertionIndex(content.activeLayer)
+            return ItemsEdit(pageId, NONE, emptyList(), IntArray(items.size) { at + it }, items.map { it.onLayer(content.activeLayer) })
+        }
+
+        /** Swaps each item at [indices] for the matching one in [replacements], keeping paint order and layer. */
         fun replace(pageId: Long, content: PageContent, indices: IntArray, replacements: List<PageItem>) =
-            ItemsEdit(pageId, indices, indices.map { content[it] }, indices, replacements)
+            ItemsEdit(
+                pageId, indices, indices.map { content[it] }, indices,
+                replacements.mapIndexed { k, item -> item.onLayer(content[indices[k]].layer) },
+            )
+
+        /**
+         * Swaps each item at [indices] (ascending) for the matching one in [replacements], and puts them on top of their layers, in the
+         * order they had, so that what was last changed lies over the rest. The new places are in [addedAt] of the result.
+         */
+        fun replaceOnTop(pageId: Long, content: PageContent, indices: IntArray, replacements: List<PageItem>): ItemsEdit {
+            val moved = replacements.mapIndexed { k, item -> item.onLayer(content[indices[k]].layer) }
+            val gone = indices.toHashSet()
+            // The ranks of what stays, bottom first, into which the changed items are put one at a time.
+            val ranks = ArrayList<Int>(content.size)
+            for (i in 0 until content.size) if (i !in gone) ranks.add(content.layers.rank(content[i].layer))
+            val order = moved.indices.sortedWith(compareBy({ content.layers.rank(moved[it].layer) }, { it }))
+            val at = IntArray(moved.size)
+            val items = ArrayList<PageItem>(moved.size)
+            for (k in order) {
+                val rank = content.layers.rank(moved[k].layer)
+                var place = ranks.size
+                while (place > 0 && ranks[place - 1] > rank) place--
+                ranks.add(place, rank)
+                at[items.size] = place
+                items.add(moved[k])
+            }
+            return ItemsEdit(pageId, indices, indices.map { content[it] }, at, items)
+        }
 
         fun remove(pageId: Long, content: PageContent, indices: IntArray) =
             ItemsEdit(pageId, indices, indices.map { content[it] }, NONE, emptyList())

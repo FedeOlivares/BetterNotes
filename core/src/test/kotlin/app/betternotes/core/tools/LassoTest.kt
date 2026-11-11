@@ -12,7 +12,12 @@ import app.betternotes.core.model.Document
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.ShapeItem
+import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.model.StickyNoteItem
+import app.betternotes.core.model.withLocked
+import app.betternotes.core.model.withGroup
+import app.betternotes.core.edit.Grouping
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.stroke
 import app.betternotes.core.template.PageBackground
@@ -226,5 +231,48 @@ class LassoTest {
         fill(note)
         assertEquals(0, content.topItemAt(10f, 10f))
         assertEquals(-1, content.topItemAt(100f, 100f))
+    }
+
+    @Test
+    fun `a loop wholly inside an open post-it does not take the post-it, one leaving it does`() {
+        fill(StickyNoteItem(1, Frame(0f, 0f, 200f, 200f), color = 0, closedWidth = 20f, closedHeight = 20f, isOpen = true))
+        val inside = floatArrayOf(60f, 60f, 140f, 60f, 140f, 140f, 60f, 140f)
+        assertTrue(selectWithLasso(pageId, content, inside).items.isEmpty())
+        assertTrue(selectWithLasso(pageId, content, inside, anyPortion = true).items.isEmpty())
+        val leaving = floatArrayOf(60f, 60f, 260f, 60f, 260f, 140f, 60f, 140f)
+        assertEquals(listOf(1L), selectWithLasso(pageId, content, leaving, anyPortion = true).items.map { it.id })
+        val around = floatArrayOf(-10f, -10f, 210f, -10f, 210f, 210f, -10f, 210f)
+        assertEquals(listOf(1L), selectWithLasso(pageId, content, around).items.map { it.id })
+    }
+
+    private fun background(id: Long, locked: Boolean) =
+        ShapeItem(id, Frame(0f, 0f, 100f, 100f), ShapeKind.RECTANGLE, strokeColor = 0, strokeWidth = 0f, fillColor = 0xFF123456.toInt()).withLocked(locked)
+
+    @Test
+    fun `a cover's locked background is not selected even when locked items are`() {
+        fill(background(1, locked = true), ImageItem(2, Frame(10f, 10f, 20f, 20f), "logo", locked = true))
+        val cover = PageSize(100f, 100f)
+        val all = floatArrayOf(-5f, -5f, 105f, -5f, 105f, 105f, -5f, 105f)
+        assertEquals(listOf(1L, 2L), selectWithLasso(pageId, content, all, includeLocked = true).items.map { it.id })
+        assertEquals(listOf(2L), selectWithLasso(pageId, content, all, includeLocked = true, coverSize = cover).items.map { it.id })
+    }
+
+    @Test
+    fun `a cover's background is never selected, locked or not, alone or in a group, whatever else the loop holds`() {
+        val cover = PageSize(100f, 100f)
+        val all = floatArrayOf(-5f, -5f, 105f, -5f, 105f, 105f, -5f, 105f)
+        for (locked in listOf(false, true)) {
+            for (includeLocked in listOf(false, true)) {
+                content.splice(IntArray(content.size) { it }, IntArray(0), emptyList())
+                fill(background(1, locked = locked).withGroup(7L), ImageItem(2, Frame(10f, 10f, 20f, 20f), "logo", group = 7L))
+                val picked = selectWithLasso(pageId, content, all, includeLocked = includeLocked, coverSize = cover)
+                assertTrue(1L !in picked.items.map { it.id })
+                val expanded = Grouping.expand(picked, content, includeLocked, cover)
+                assertEquals(listOf(2L), expanded.items.map { it.id })
+            }
+        }
+        content.splice(IntArray(content.size) { it }, IntArray(0), emptyList())
+        fill(background(1, locked = false))
+        assertTrue(selectWithLasso(pageId, content, square, coverSize = cover).items.isEmpty())
     }
 }

@@ -277,6 +277,7 @@ internal fun ImagePanel(state: EditorState, sources: ImageSources, notices: Noti
                 repeat(RECENTS_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
+        CreateReturnRows(state)
         Spacer(Modifier.height(8.dp))
     }
 }

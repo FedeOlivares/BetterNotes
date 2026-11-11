@@ -77,6 +77,8 @@ data class CanvasSettings(
     val hideSystemBars: Boolean = true,
     /** Items line up with each other as they are dragged. The editor does the aligning. */
     val snapToAlign: Boolean = true,
+    /** How opaque a new post-it is, unless its color has an opacity of its own. 1 is solid. */
+    val stickyOpacity: Float = 1f,
 )
 
 /** Whether a new note takes its name from the first words written in it. */

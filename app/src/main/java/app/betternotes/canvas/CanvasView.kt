@@ -1,5 +1,6 @@
 package app.betternotes.canvas
 
+import app.betternotes.core.edit.LayerOps
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
@@ -40,6 +41,7 @@ import app.betternotes.core.template.PageBackground
 import app.betternotes.core.edit.InsertPage
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.edit.Edit
+import app.betternotes.core.edit.EditTarget
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.edit.MovePage
 import app.betternotes.core.edit.RemovePage
@@ -64,9 +66,12 @@ import app.betternotes.audio.Waveforms
 import app.betternotes.core.model.AudioBar
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.FillPattern
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.withId
+import app.betternotes.core.model.withGroup
+import app.betternotes.core.edit.Grouping
 import app.betternotes.core.model.withLocked
 import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.IdSource
@@ -121,9 +126,12 @@ import app.betternotes.core.tools.NoteEraseSession
 import app.betternotes.core.tools.ALL_ITEM_KINDS
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.Selection
+import app.betternotes.core.tools.isCoverBackground
 import app.betternotes.core.tools.Stabilizer
 import app.betternotes.core.tools.StrokeGestures
 import app.betternotes.core.tools.StrokeSmoothing
+import app.betternotes.core.tools.NoteFold
+import app.betternotes.core.tools.NoteScope
 import app.betternotes.core.tools.selectWithLasso
 import app.betternotes.core.tools.clearEdit
 import app.betternotes.core.tools.Ruler
@@ -191,7 +199,7 @@ sealed interface CanvasTool {
     data class Pick(val onPick: (x: Float, y: Float) -> Unit) : CanvasTool
 
     /** Fills the closed region the pen lands in with a color, as one vector item that goes under everything else on the page. */
-    data class Fill(val color: Int, val opacity: Float) : CanvasTool
+    data class Fill(val color: Int, val opacity: Float, val pattern: FillPattern = FillPattern.SOLID) : CanvasTool
 
     /** Puts a saved sticker, its items with the top left corner at the origin, where the pen lands. [assetFile] finds the files of its pictures. */
     data class Sticker(val items: List<PageItem>, val assetFile: (String) -> File?) : CanvasTool
@@ -584,9 +592,18 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             tiles.invalidateAll()
         }
 
+    /** True while the selection was made without the lasso in hand, so that a change of tool does not drop it. */
+    private var selectionKeepsTool = false
+
+    /** The post-it tool's last settings, which typing into a selected note goes by while the lasso is in hand. */
+    private var stickyOptions = NoteOptions()
+
     var tool: CanvasTool = CanvasTool.Ink(InkStyle())
         set(value) {
-            if (value !is CanvasTool.Lasso) lasso.clear()
+            if (value is CanvasTool.Lasso) selectionKeepsTool = false
+            // A selection made while another tool was in hand stays with that tool, which the pen can still draw with elsewhere.
+            if (value !is CanvasTool.Lasso && !(selectionKeepsTool && lasso.selection != null)) lasso.clear()
+            if (value is CanvasTool.Sticky) stickyOptions = value.options
             field = value
         }
 
@@ -636,6 +653,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Called with the selected items when the button that saves them as a sticker is pressed. */
     var onSaveSticker: (List<PageItem>) -> Unit = {}
 
+    /** Called just before a shape, note, table or picture that was just made is selected, so that the tool in use can be given back once it is let go. */
+    var onItemCreated: () -> Unit = {}
+
     /** Called when a circle drawn with the pen has been touched and the lasso should take over. */
     var onLassoRequested: () -> Unit = {}
 
@@ -643,6 +663,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     var circleLasso = CanvasTool.Lasso(rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
 
     /** Called when the selection is dropped: a touch outside it, a delete, or a change of tool. */
+    /**
+     * A touch away from a selection made without the lasso has let it go. True when the editor took that as the end of the tool in hand
+     * (it gave back the tool before), so the touch does nothing more.
+     */
+    var onSelectionLeft: () -> Boolean = { false }
+
     var onSelectionDropped: () -> Unit
         get() = lasso.onSelectionDropped
         set(value) {
@@ -876,8 +902,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     val pageId = open.document.pages[index].id
                     open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), item))
                     syncChanges()
-                    // A new shape is selected, with its handles showing. Tape has none and stays on the tool.
-                    if (item !is TapePathItem && !(item is ShapeItem && item.kind == ShapeKind.TAPE)) selectLast(pageId)
+                    // A new shape is not selected: the tool in use before comes back. Tape stays on the tool.
+                    if (item !is TapePathItem && !(item is ShapeItem && item.kind == ShapeKind.TAPE)) onItemCreated()
                 }
             },
             resources.displayMetrics.density,
@@ -896,6 +922,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             controller.onCopied = { onItemsCopied(it) }
             controller.onMenu = { onSelectionMenu() }
             controller.onSaveSticker = { onSaveSticker(it) }
+            controller.onNoItems = { index, points -> pickPlannerElements(index, points) }
+            controller.onCleared = { plannerPick.clear() }
         }
     }
 
@@ -915,7 +943,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     /** The last circle-ish stroke, which a touch on its line turns into a selection. */
-    private class LoopMark(val pageId: Long, val item: StrokeItem)
+    /** [noteId] is the open post-it the circle was drawn on, which holds it; the circle's points are the page's. */
+    private class LoopMark(val pageId: Long, val item: StrokeItem, val noteId: Long? = null)
 
     /** The open note that the stroke in progress belongs to, if it started in one. */
     private var strokeStickyId: Long? = null
@@ -932,6 +961,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             drawLineGuide(canvas)
             drawPageGrid(canvas)
             lasso.draw(canvas)
+            if (plannerPick.active) {
+                pageToScreenMatrix(plannerPick.pageIndex, plannerMatrix)
+                plannerPick.draw(canvas, plannerMatrix)
+            }
             drawFillReveal(canvas)
             shapes.draw(canvas)
             drawLoupeBox(canvas)
@@ -1037,6 +1070,68 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         maskIsCurrent = false
     }
 
+    /** The items and layers of the page in the middle of the view, or null with no document. */
+    fun currentContent(): PageContent? {
+        val open = editor ?: return null
+        val page = open.document.pages.getOrNull(currentPage) ?: return null
+        return open.content(page.id)
+    }
+
+    /** Makes [id] the layer the tools work on, on the page in view. The selection and any text being typed are let go first. */
+    fun selectLayer(id: Long) {
+        val content = currentContent() ?: return
+        if (content.activeLayer == id) return
+        endTextEdit()
+        lasso.clear()
+        // Working on a layer that is hidden would put ink where it cannot be seen, so choosing it shows it.
+        if (content.layers[id]?.visible == false) editLayers { page, c -> LayerOps.setVisible(page, c, id, true) }
+        content.activeLayer = id
+        onHistoryChanged()
+        overlay.invalidate()
+    }
+
+    /**
+     * Hides or shows layer [id], any layer. Hiding the one being worked on moves the work to the nearest layer that is still shown (the one
+     * above first), so ink is never drawn where it cannot be seen. If none is shown any more, it stays where it is.
+     */
+    fun setLayerVisible(id: Long, visible: Boolean) {
+        val content = currentContent() ?: return
+        editLayers { page, c -> LayerOps.setVisible(page, c, id, visible) }
+        if (visible || content.activeLayer != id) return
+        val all = content.layers.all
+        val at = all.indexOfFirst { it.id == id }
+        val next = (at + 1 until all.size).firstOrNull { all[it].visible } ?: (at - 1 downTo 0).firstOrNull { all[it].visible } ?: return
+        content.activeLayer = all[next].id
+        onHistoryChanged()
+        overlay.invalidate()
+    }
+
+    /** Runs a layer change on the page in view as one edit that can be undone, and draws it. */
+    fun editLayers(make: (pageId: Long, content: PageContent) -> Edit?) {
+        val open = editor ?: return
+        val page = open.document.pages.getOrNull(currentPage) ?: return
+        val edit = make(page.id, open.content(page.id)) ?: return
+        endTextEdit()
+        lasso.clear()
+        open.perform(edit)
+        syncChanges()
+    }
+
+    /** A new empty layer just above the one being worked on, which becomes the one being worked on. */
+    fun addLayer() {
+        val content = currentContent() ?: return
+        val before = content.layers.all.mapTo(HashSet()) { it.id }
+        editLayers { page, c -> LayerOps.add(page, c) }
+        content.layers.all.firstOrNull { it.id !in before }?.let { content.activeLayer = it.id }
+        onHistoryChanged()
+    }
+
+    /** Puts what is selected on layer [id], which ends the selection, since it is then not on the layer being worked on. */
+    fun moveSelectionToLayer(id: Long) {
+        lasso.moveSelectionToLayer(id)
+        syncChanges()
+    }
+
     /** Removes what is selected, as one edit. */
     fun deleteSelection() {
         lasso.deleteSelection()
@@ -1073,7 +1168,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         syncChanges()
     }
 
-    /** Moves the selection to the front, middle or back of the page's stack. Post-its stay at the bottom, except on the cover. */
+    /** Puts the selected items in one group, which is selected, moved and copied as one, or takes them out of it when [grouped] is false. One undoable edit. */
+    fun groupSelection(grouped: Boolean) {
+        val group = if (grouped) app.betternotes.core.model.IdSource.Random.next().takeIf { it != 0L } ?: 1L else 0L
+        lasso.changeSelected { it.withGroup(group) }
+        syncChanges()
+    }
+
+    /** Moves the selection to the front, middle or back of the page's stack. */
     fun arrangeSelection(place: app.betternotes.core.edit.ZPlace) {
         lasso.arrangeSelected(place)
         syncChanges()
@@ -1129,7 +1231,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     /** Applies the settings this view follows. Safe to call whenever they change. */
+    /** How opaque a new post-it is when its color has no opacity of its own. */
+    var stickyOpacity by mutableFloatStateOf(1f)
+        private set
+
     fun applySettings(settings: AppSettings) {
+        stickyOpacity = settings.canvas.stickyOpacity
         recognizer.config = settings.gestures.applyTo(recognizer.config)
         scrollDirection = settings.scrollDirection
         stylusButtons.settings = settings.stylus
@@ -1596,6 +1703,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
         }
         if (action == MotionEvent.ACTION_MOVE) addToStroke(event)
+        trackHoldSelect(event)
         trackFingerTap(event)
         trackTableTap(event)
         trackPlannerTap(event)
@@ -1604,6 +1712,110 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         scheduleDeadline()
         return true
     }
+
+    private var holdSelectPossible = false
+    private var holdMoving = false
+    private var holdSelectPointer = -1
+    private var holdSelectX = 0f
+    private var holdSelectY = 0f
+    private val holdSelect = Runnable { selectHeld() }
+
+    /**
+     * A touch that stays still on an item for [HOLD_SELECT_MS] selects it, with its handles, and the tool in hand stays. This is for the
+     * pen and a finger alike, and it takes the touch back from what it began, such as a dot of ink.
+     */
+    private fun trackHoldSelect(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                removeCallbacks(holdSelect)
+                holdSelectPossible = event.getToolType(0) != MotionEvent.TOOL_TYPE_ERASER && holdSelectsWith(tool)
+                holdSelectPointer = event.getPointerId(0)
+                holdSelectX = event.x
+                holdSelectY = event.y
+                if (holdSelectPossible) postDelayed(holdSelect, HOLD_SELECT_MS)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (holdMoving) {
+                    val moved = layout?.pageIndexAt(viewport.toWorldX(holdSelectX), viewport.toWorldY(holdSelectY)) ?: -1
+                    if (moved >= 0) lasso.move(pageX(event.x, event.y, moved), pageY(event.x, event.y, moved))
+                }
+                if (holdSelectPossible && hypot(event.x - holdSelectX, event.y - holdSelectY) > ViewConfiguration.get(context).scaledTouchSlop) {
+                    holdSelectPossible = false
+                    removeCallbacks(holdSelect)
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                holdSelectPossible = false
+                removeCallbacks(holdSelect)
+                if (holdMoving && event.actionMasked != MotionEvent.ACTION_POINTER_DOWN) {
+                    holdMoving = false
+                    if (event.actionMasked == MotionEvent.ACTION_UP) lasso.end() else lasso.cancel()
+                    syncChanges()
+                }
+            }
+        }
+    }
+
+    /** The tools whose first touch can be taken back without a trace. The others do their work as the touch lands. */
+    private fun holdSelectsWith(tool: CanvasTool) =
+        tool is CanvasTool.Ink || tool is CanvasTool.Lasso || tool is CanvasTool.Shape || tool is CanvasTool.Text || tool is CanvasTool.Table
+
+    private fun selectHeld() {
+        if (!holdSelectPossible) return
+        holdSelectPossible = false
+        val open = editor ?: return
+        val layout = layout ?: return
+        if (lassoPointer >= 0 || audioPointer >= 0 || loupeOpen || textEdit != null) return
+        val index = layout.pageIndexAt(viewport.toWorldX(holdSelectX), viewport.toWorldY(holdSelectY))
+        if (index < 0) return
+        val pageId = open.document.pages[index].id
+        val x = pageX(holdSelectX, holdSelectY, index)
+        val y = pageY(holdSelectX, holdSelectY, index)
+        if (lasso.hasSelection && lasso.grabs(index, x, y)) {
+            // A hold on the selection itself picks it up: the rest of this touch carries it, whatever the tool.
+            recognizer.pointerCancel(holdSelectPointer, SystemClock.uptimeMillis())
+            lassoPointer = -1
+            holdMoving = true
+            lasso.start(index, x, y, rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
+            syncChanges()
+            return
+        }
+        val at = heldItemAt(pageId, x, y)
+        if (at < 0) return
+        // The touch is over: the dot or stroke it began is dropped, and the rest of it does nothing.
+        recognizer.pointerCancel(holdSelectPointer, SystemClock.uptimeMillis())
+        val content = open.content(pageId)
+        val chosen = Grouping.expand(Selection(pageId, intArrayOf(at), listOf(content[at])), content, coverSize = coverSizeOf(pageId))
+        lasso.clear()
+        lasso.select(index, chosen)
+        selectionKeepsTool = tool !is CanvasTool.Lasso
+        syncChanges()
+    }
+
+    /**
+     * The top item that a hold at ([x], [y]) is on: any shown item of the working layer, locked ones too (they come last, as they lie
+     * below the rest). A stroke counts only near its line, as its box can be as large as the page. -1 if there is none.
+     */
+    private fun heldItemAt(pageId: Long, x: Float, y: Float): Int {
+        val content = editor?.content(pageId) ?: return -1
+        val reach = HOLD_STROKE_REACH_DP * resources.displayMetrics.density / viewport.pxPerPt
+        var lockedHit = -1
+        val cover = coverSizeOf(pageId)
+        for (i in content.size - 1 downTo 0) {
+            val item = content[i]
+            if (!content.isEditable(item) || !content.isShown(item) || !item.bounds.contains(x, y)) continue
+            // The background of a cover is never picked up, by a hold either.
+            if (cover != null && item.isCoverBackground(cover)) continue
+            if (item is StrokeItem && !(item.points.size == 1 || StrokeGestures.isNearLine(item.points, x, y, max(reach, item.style.width / 2f)))) continue
+            if (!item.locked) return i
+            if (lockedHit < 0) lockedHit = i
+        }
+        return lockedHit
+    }
+
+    /** The size of the page [pageId] when it is a cover, else null. */
+    private fun coverSizeOf(pageId: Long): app.betternotes.core.geometry.PageSize? =
+        editor?.document?.pages?.firstOrNull { it.id == pageId }?.takeIf { it.isCover }?.size
 
     private var fingerTapPossible = false
     private var fingerTapDownX = 0f
@@ -1726,7 +1938,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val open = editor ?: return
         postDelayed({
             val content = open.content(pageId)
-            val last = content.size - 1
+            val last = content.insertionIndex(content.activeLayer) - 1
             val dot = (if (last >= 0) content[last] else null) as? StrokeItem ?: return@postDelayed
             if (dot.bounds.width < TAP_DOT_PT && dot.bounds.height < TAP_DOT_PT && open.canUndo) open.undo()
         }, TAP_DOT_WAIT_MS)
@@ -1799,6 +2011,85 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         syncChanges()
     }
 
+    // ---- Restyling planner elements ----
+
+    private val plannerMatrix = Matrix()
+
+    /** What the lasso picked on a planner page: its generated elements, which can only be restyled. */
+    private val plannerPick = PlannerPick { overlay.invalidate() }
+
+    /** Called with the picked planner elements (empty when none). */
+    var onPlannerPick: (List<app.betternotes.core.planner.PlannerElement>) -> Unit
+        get() = plannerPick.onChanged
+        set(value) {
+            plannerPick.onChanged = value
+        }
+
+    /** The generated elements of page [index] that the loop [polygon] surrounds, for the pick to be made when there are some. */
+    private fun plannerElementsIn(index: Int, polygon: FloatArray): List<app.betternotes.core.planner.PlannerElement> {
+        val page = editor?.document?.pages?.getOrNull(index) ?: return emptyList()
+        return plannerPick.find(page, polygon)
+    }
+
+    private fun pickPlannerElements(index: Int, points: FloatArray): Boolean {
+        val page = editor?.document?.pages?.getOrNull(index) ?: return false
+        return plannerPick.pick(index, page, points)
+    }
+
+    /** The parts of an element the picked ones have, for the restyle bar. */
+    fun plannerPickSlots() = plannerPick.slots()
+
+    /** Where the restyle bar goes, in view pixels, or null when nothing is picked. */
+    fun plannerPickAnchor(): FloatArray? {
+        val at = plannerPick.anchor() ?: return null
+        pageToScreenMatrix(plannerPick.pageIndex, plannerMatrix)
+        plannerMatrix.mapPoints(at)
+        return at
+    }
+
+    /** The color the first picked element has in [slot] now, or null when it is as drawn. */
+    fun plannerPickColor(slot: app.betternotes.core.planner.RoleSlot): Int? {
+        val template = editor?.document?.pages?.getOrNull(plannerPick.pageIndex)?.background?.template as? PageTemplate.Planner ?: return null
+        val key = plannerPick.keys().firstOrNull() ?: return null
+        return template.roles.styleOf(key.role, key.x, key.y)?.colorOf(slot)
+    }
+
+    /** The font the first picked element has now, or null. */
+    fun plannerPickFont(): String? {
+        val template = editor?.document?.pages?.getOrNull(plannerPick.pageIndex)?.background?.template as? PageTemplate.Planner ?: return null
+        val key = plannerPick.keys().firstOrNull() ?: return null
+        return template.roles.styleOf(key.role, key.x, key.y)?.font
+    }
+
+    /**
+     * Gives the picked elements the [change] as one undoable step, or every element like them on every page when [similar]. The picked
+     * elements stay picked, and the page is drawn again.
+     */
+    fun restylePlanner(change: PlannerPages.StyleChange, similar: Boolean) {
+        val open = editor ?: return
+        if (!plannerPick.active) return
+        val edit = PlannerPages.restyle(open.document, plannerPick.pageId, plannerPick.keys(), similar, change) ?: return
+        open.perform(edit)
+        syncChanges()
+        overlay.invalidate()
+    }
+
+    /** Gives every element like the picked ones the look they have now, as one undoable step ("similar", pressed after a change). */
+    fun spreadPlanner() {
+        val open = editor ?: return
+        if (!plannerPick.active) return
+        val edit = PlannerPages.spread(open.document, plannerPick.pageId, plannerPick.keys()) ?: return
+        open.perform(edit)
+        syncChanges()
+        overlay.invalidate()
+    }
+
+    /** Drops the picked planner elements, and gives back the tool the lasso was lent from, as letting go of a selection does. */
+    fun clearPlannerPick() {
+        plannerPick.clear()
+        lasso.onSelectionDropped()
+    }
+
     /** The title on the planner's cover, shown when it is edited. */
     val plannerTitle: String get() = editor?.document?.let { PlannerPages.titleOf(it) }.orEmpty()
 
@@ -1841,7 +2132,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val at = indexOfItem(pageId, item.id)
         if (at < 0) return
         lasso.select(index, Selection(pageId, intArrayOf(at), listOf(open.content(pageId)[at])))
-        onLassoRequested()
+        selectionKeepsTool = true
         syncChanges()
     }
 
@@ -1860,7 +2151,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val at = indexOfItem(pageId, tableId)
             if (at < 0) return false
             lasso.editTable(index, Selection(pageId, intArrayOf(at), listOf(open.content(pageId)[at])))
-            onLassoRequested()
+            selectionKeepsTool = true
             syncChanges()
             return true
         }
@@ -1870,7 +2161,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             postDelayed({
                 repeat(2) {
                     val content = open.content(pageId)
-                    val last = content.size - 1
+                    val last = content.insertionIndex(content.activeLayer) - 1
                     val dot = (if (last >= 0) content[last] else null) as? StrokeItem ?: return@repeat
                     if (dot.bounds.width < TAP_DOT_PT && dot.bounds.height < TAP_DOT_PT && open.canUndo) open.undo()
                 }
@@ -1892,13 +2183,20 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** What a finger tap does that only the pen could before: touch a circle drawn for circle to lasso, or a button of a lasso selection. */
     private fun fingerTapped(x: Float, y: Float) {
         val editor = editor ?: return
-        if (tool is CanvasTool.Lasso && pressSelectionButtonOffPage(x, y, FINGER_BUTTON_REACH_DP)) {
+        if ((tool is CanvasTool.Lasso || lasso.hasSelection) && pressSelectionButtonOffPage(x, y, FINGER_BUTTON_REACH_DP)) {
             syncChanges()
             return
         }
         val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
         if (index < 0) return
         val pageId = editor.document.pages[index].id
+        // A finger tap away from a selection made with a tool other than the lasso lets it go, as the pen's touch does.
+        if (tool !is CanvasTool.Lasso && lasso.hasSelection && !lasso.grabs(index, pageX(x, y, index), pageY(x, y, index))) {
+            lasso.clear()
+            syncChanges()
+            onSelectionLeft()
+            return
+        }
         when (val current = tool) {
             // Picking a color works with a finger too: a quick touch takes the color under it.
             is CanvasTool.Pick -> current.onPick(x, y)
@@ -1921,7 +2219,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     /** Whether a single finger at ([x], [y]) is on the selected text box, which a finger then moves as the pen does, not the page. */
     private fun fingerGrabsText(x: Float, y: Float): Boolean {
-        if (tool !is CanvasTool.Lasso || recognizer.mode != InputMode.STYLUS_DRAW) return false
+        if ((tool !is CanvasTool.Lasso && !lasso.hasSelection) || recognizer.mode != InputMode.STYLUS_DRAW) return false
         val layout = layout ?: return false
         val index = layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
         return index >= 0 && lasso.grabsText(index, pageX(x, y, index), pageY(x, y, index))
@@ -2057,7 +2355,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         drawingInLoupe = loupeOpen && loupe.contains(x, y)
         if (loupeOpen && !drawingInLoupe && startDraggingLoupeBox(pointerId, x, y)) return
         // The selection's buttons are always on the screen, but not always on its page: pressing one is found by the selection's page.
-        if (tool is CanvasTool.Lasso && !drawingInLoupe && pressSelectionButtonOffPage(x, y, BUTTON_REACH_OFF_PAGE_DP)) {
+        if ((tool is CanvasTool.Lasso || lasso.hasSelection) && !drawingInLoupe && kind != PointerKind.STYLUS_ERASER && !holdErasing && pressSelectionButtonOffPage(x, y, BUTTON_REACH_OFF_PAGE_DP)) {
             syncChanges()
             return
         }
@@ -2066,6 +2364,26 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val page = editor.document.pages[index]
         drawPointerId = pointerId
         drawPageIndex = index
+        if (tool !is CanvasTool.Lasso && lasso.hasSelection && kind != PointerKind.STYLUS_ERASER && !holdErasing && !drawingInLoupe) {
+            val px = pageX(x, y, index)
+            val py = pageY(x, y, index)
+            // With ink in hand a touch on the selection's body writes, as it does on a note; its handles still work. A hold moves it.
+            if (lasso.grabs(index, px, py, body = tool !is CanvasTool.Ink)) {
+                // A selection made while another tool was in hand is worked with the pen as with the lasso, and that tool stays.
+                endTextEdit()
+                lassoPointer = pointerId
+                lasso.start(index, px, py, rectangle = false, kinds = ALL_ITEM_KINDS, fullOnly = false)
+                syncChanges()
+                return
+            }
+            // On the body with ink in hand the touch goes on, and holding still turns it into a move of the selection. Elsewhere it lets go.
+            if (!lasso.grabs(index, px, py)) {
+                lasso.clear()
+                syncChanges()
+                // With a tool that makes items, a touch away from the selection only lets it go, and the tool before comes back.
+                if (onSelectionLeft()) return
+            }
+        }
         if (kind != PointerKind.STYLUS_ERASER && !holdErasing && !drawingInLoupe && tool is CanvasTool.Text && textEdit != null && writingReady) {
             startHandwriting(x, y)
             return
@@ -2206,6 +2524,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             session.finish()?.let { editor?.record(it) }
             erase = null
             eraseDateInk()
+            onEraseDone()
             return
         }
         if (shapes.hasSnap) {
@@ -2302,7 +2621,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val page = editor.document.pages[index]
         val content = editor.content(page.id)
         if (playVideoAt(index, page.id, x, y)) return true
-        val sticky = topItemOfType<StickyNoteItem>(page.id, x, y)
+        val sticky = topItemOfType<StickyNoteItem>(page.id, x, y) ?: closedNoteNear(page.id, x, y)
         // A touch outside an open note closes it. Ink goes on to draw there, and the note tool is done with the touch.
         if (sticky == null && (tool is CanvasTool.Sticky || tool is CanvasTool.Ink) && closeOpenStickies(page.id)) {
             if (tool is CanvasTool.Sticky) return true
@@ -2316,7 +2635,11 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     strokeStickyId = note.id
                     return false
                 }
-                else -> editStickyText(index, page.id, note)
+                // A touch on a post-it selects it, with its handles. Its text is typed from the button in the selection's bar.
+                else -> {
+                    onItemCreated()
+                    selectItem(index, page.id, note.id)
+                }
             }
             return true
         }
@@ -2351,8 +2674,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 } else if (found != null) {
                     editCell(index, page.id, found, found.cellAt(x, y))
                 } else {
-                    editor.perform(ItemsEdit.addOnTop(page.id, content, current.options.newTable(x, y)))
+                    val made = current.options.newTable(x, y)
+                    editor.perform(ItemsEdit.addOnTop(page.id, content, made))
                     syncChanges()
+                    onItemCreated()
                 }
             }
             else -> return false
@@ -2463,7 +2788,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         // page coordinates, as on the page, with the edge of the note as the last line. The fill belongs to the note.
         val onNote = topItemOfType<StickyNoteItem>(pageId, x, y)?.takeIf { it.second.isOpen }
         val note = onNote?.second
-        val pageItems = open.content(pageId).toList()
+        val pageContent = open.content(pageId)
+        val pageItems = pageContent.toList().filter { pageContent.isShown(it) }
         val items = if (note == null) {
             pageItems
         } else {
@@ -2480,7 +2806,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         fillRunning = true
         fillWork.execute {
             val fill = try {
-                fillBucket.fill(items, size, x, y, gapPt, bucket.color, bucket.opacity, scale, viewWidthPt, viewHeightPt, note?.frame?.bounds, open::imageNow)
+                fillBucket.fill(items, size, x, y, gapPt, bucket.color, bucket.opacity, bucket.pattern, scale, viewWidthPt, viewHeightPt, note?.frame?.bounds, open::imageNow)
             } catch (e: OutOfMemoryError) {
                 null
             }
@@ -2538,16 +2864,17 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
      * of that fill when it covers about the same area, which is the same region painted again, so the new color replaces the old. When it
      * covers less, say because lines were drawn in the old fill since, it goes just above it, still below whatever was drawn after.
      */
-    private fun fillEdit(pageId: Long, content: PageContent, x: Float, y: Float, fill: FillItem): ItemsEdit {
+    private fun fillEdit(pageId: Long, content: PageContent, x: Float, y: Float, placedFill: FillItem): ItemsEdit {
+        val fill = placedFill.onLayer(content.activeLayer)
         var under = -1
         for (i in content.size - 1 downTo 0) {
             val item = content[i]
-            if (item is FillItem && item.contains(x, y)) {
+            if (item is FillItem && content.isEditable(item) && item.contains(x, y)) {
                 under = i
                 break
             }
         }
-        if (under < 0) return ItemsEdit(pageId, IntArray(0), emptyList(), intArrayOf(0), listOf(fill))
+        if (under < 0) return ItemsEdit(pageId, IntArray(0), emptyList(), intArrayOf(content.layerStart(content.activeLayer)), listOf(fill))
         val old = content[under] as FillItem
         val same = old.area > 0f && abs(fill.area - old.area) <= SAME_FILL_AREA * old.area
         return if (same) {
@@ -2591,7 +2918,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val top = fit.top + (fit.height - box.height * scaleBy) / 2f
             Affine(a = scaleBy, b = 0f, c = 0f, d = scaleBy, e = left - scaleBy * box.left, f = top - scaleBy * box.top)
         }
-        val placed = sticker.items.map { item ->
+        val placed = Grouping.withFreshGroups(sticker.items.map { item ->
             // Its pictures are copied into this document, unless it already has them.
             if (item is ImageItem) {
                 val target = open.assetFile(item.assetId)
@@ -2599,15 +2926,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                 if (!target.exists() && source != null && source.exists()) source.copyTo(target)
             }
             item.transformed(move).withId(IdSource.Random.next()).withLocked(false)
-        }
+        })
         // A sticker put on an open note belongs to it, and folds away with it.
         if (addToOpenNote(pageId, x, y, placed)) return
-        val content = open.content(pageId)
-        val at = IntArray(placed.size) { content.size + it }
-        open.perform(ItemsEdit(pageId, IntArray(0), emptyList(), at, placed))
+        val edit = ItemsEdit.addAllOnTop(pageId, open.content(pageId), placed)
+        open.perform(edit)
         if (select) {
-            lasso.select(index, Selection(pageId, at, placed))
-            onLassoRequested()
+            lasso.select(index, Selection(pageId, edit.addedAt, edit.added))
+            selectionKeepsTool = true
         }
         syncChanges()
     }
@@ -2651,7 +2977,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         var lockedHit: Pair<Int, T>? = null
         for (i in content.size - 1 downTo 0) {
             val item = content[i]
-            if (item is T && item.bounds.contains(x, y)) {
+            if (item is T && content.isEditable(item) && item.bounds.contains(x, y)) {
                 // Locked items are a layer below the rest, so an item that is not locked wins.
                 if (!item.locked) return i to item
                 if (lockedHit == null) lockedHit = i to item
@@ -2666,9 +2992,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         return -1
     }
 
-    private fun setSticky(pageId: Long, at: Int, note: StickyNoteItem) {
+    private fun setSticky(pageId: Long, at: Int, note: StickyNoteItem, onTop: Boolean = false) {
         val editor = editor ?: return
-        editor.perform(ItemsEdit.replace(pageId, editor.content(pageId), intArrayOf(at), listOf(note)))
+        val content = editor.content(pageId)
+        editor.perform(
+            if (onTop) ItemsEdit.replaceOnTop(pageId, content, intArrayOf(at), listOf(note)) else ItemsEdit.replace(pageId, content, intArrayOf(at), listOf(note)),
+        )
         syncChanges()
     }
 
@@ -2691,8 +3020,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     private var areaMoveMs = 0L
     private var areaSticker: CanvasTool.Sticker? = null
 
-    /** Asked for when a note or sticker made by holding and dragging is done: the tool in use before it comes back. */
+    /** Asked for when a sticker made by holding and dragging is done: the sticker tool has been used. */
     var onReturnTool: () -> Unit = {}
+
+    /** A stroke of ink was put on the page, and an erase was finished: the tool in hand has been used. */
+    var onInkDrawn: () -> Unit = {}
+    var onEraseDone: () -> Unit = {}
 
     /** A touch that places a note or text: a tap puts one at the default size, and a drag sizes it. */
     private fun beginAreaDrag(kind: AreaKind, index: Int, x: Float, y: Float, options: NoteOptions, sticker: CanvasTool.Sticker? = null) {
@@ -2727,17 +3060,21 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val held = (if (areaMoveMs == 0L) SystemClock.uptimeMillis() else areaMoveMs) - areaDownMs >= HOLD_TO_SIZE_MS
         when (kind) {
             AreaKind.STICKY -> {
-                val note = areaOptions.newSticky(areaX, areaY).let { if (dragged != null) it.copy(frame = dragged) else it }
+                val note = areaOptions.newSticky(areaX, areaY, general = stickyOpacity).let { if (dragged != null) it.copy(frame = dragged) else it }
                 open.perform(ItemsEdit.addOnTop(page.id, open.content(page.id), note))
                 syncChanges()
-                if (held || dragged != null) onReturnTool()
+                // The new note is not selected: the tool in use before comes back. It never opens a text box.
+                onItemCreated()
             }
             AreaKind.STAMP -> {
                 val sticker = areaSticker ?: return
                 when {
                     dragged != null -> placeSticker(areaIndex, page.id, areaX, areaY, sticker, fit = dragged, select = false)
                     held -> placeSticker(areaIndex, page.id, areaX, areaY, sticker, select = false)
-                    else -> placeSticker(areaIndex, page.id, areaX, areaY, sticker)
+                    else -> {
+                        onItemCreated()
+                        placeSticker(areaIndex, page.id, areaX, areaY, sticker, select = false)
+                    }
                 }
                 if (held || dragged != null) onReturnTool()
             }
@@ -2774,16 +3111,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     /**
-     * Folds the open [note] at index [at]. Whatever lies on it on the page (stickers, pictures, anything above it and wholly within it,
-     * however it got there) goes into it, so it folds away with the note and comes back when the note opens. One edit.
+     * Folds the open [note] at index [at]. Whatever lies on it on the page, above it, goes into it (see [NoteFold]: more than 80 percent
+     * within its edges, tape more than 5 percent), so it folds away with the note and comes back whole when the note opens. One edit.
      */
     private fun foldNote(pageId: Long, at: Int, note: StickyNoteItem) {
         val open = editor ?: return
         val content = open.content(pageId)
-        val on = (at + 1 until content.size).filter { i ->
-            val item = content[i]
-            !item.locked && item !is StickyNoteItem && item !is VideoItem && item !is AudioItem && note.frame.holds(item.bounds)
-        }
+        val on = (at + 1 until content.size).filter { i -> content.isEditable(content[i]) && NoteFold.collapses(content[i], note) }
         if (on.isEmpty()) return setSticky(pageId, at, note.copy(isOpen = false))
         val inside = on.map { content[it].transformed(Affine.translate(-note.frame.left, -note.frame.top)) }
         val folded = note.copy(isOpen = false, items = note.items + inside)
@@ -2791,17 +3125,31 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         syncChanges()
     }
 
-    private fun Frame.holds(box: Bounds) =
-        box.left >= left - ON_NOTE_SLACK_PT && box.top >= top - ON_NOTE_SLACK_PT &&
-            box.right <= left + width + ON_NOTE_SLACK_PT && box.bottom <= top + height + ON_NOTE_SLACK_PT
-
+    /** The fold corner reaches [STICKY_CORNER_DP], half as far again each way, so closing a post-it is easy to hit. */
     private fun StickyNoteItem.isInFoldCorner(x: Float, y: Float): Boolean {
-        val reach = STICKY_CORNER_DP * resources.displayMetrics.density / viewport.pxPerPt
+        val reach = STICKY_CORNER_DP * STICKY_TAP_GROWTH * resources.displayMetrics.density / viewport.pxPerPt
         return x > frame.left + frame.width - reach && y > frame.top + frame.height - reach
     }
 
+    /**
+     * The top closed post-it whose tap target holds ([x], [y]): the folded square made half as wide and half as tall again about its
+     * middle, so it opens without hitting it exactly. Null if there is none.
+     */
+    private fun closedNoteNear(pageId: Long, x: Float, y: Float): Pair<Int, StickyNoteItem>? {
+        val content = editor?.content(pageId) ?: return null
+        for (i in content.size - 1 downTo 0) {
+            val note = content[i] as? StickyNoteItem ?: continue
+            if (note.isOpen || note.locked || !content.isEditable(note) || !content.isShown(note)) continue
+            val box = note.bounds
+            val growX = box.width * (STICKY_TAP_GROWTH - 1f) / 2f
+            val growY = box.height * (STICKY_TAP_GROWTH - 1f) / 2f
+            if (x >= box.left - growX && x <= box.right + growX && y >= box.top - growY && y <= box.bottom + growY) return i to note
+        }
+        return null
+    }
+
     private fun editStickyText(index: Int, pageId: Long, note: StickyNoteItem) {
-        val options = (tool as? CanvasTool.Sticky)?.options ?: NoteOptions()
+        val options = (tool as? CanvasTool.Sticky)?.options ?: stickyOptions
         val inset = NoteOptions.STICKY_TEXT_INSET
         val size = options.textSize.toFloat()
         beginTextEdit(
@@ -2815,7 +3163,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         ) { text, _, _, _, _ ->
             val at = indexOfItem(pageId, note.id)
             val latest = editor?.content(pageId)?.takeIf { at >= 0 }?.get(at) as? StickyNoteItem
-            if (latest != null && text != latest.typedText) setSticky(pageId, at, latest.withText(text, size, options.style))
+            if (latest != null && text != latest.typedText) setSticky(pageId, at, latest.withText(text, size, options.style), onTop = true)
         }
     }
 
@@ -2835,12 +3183,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val content = editor.content(pageId)
             val at = indexOfItem(pageId, item.id)
             // The box is as tall as its text, and the page paints a text box only where its frame is.
-            val edited = TextFit.fitted(item.copy(text = text, style = style, textSize = size, spans = spans))
+            // A box whose text, look and size are unchanged keeps its frame: refitting it would move its text for nothing.
+            val changed = item.copy(text = text, style = style, textSize = size, spans = spans)
+            val edited = if (changed == item) item else TextFit.fitted(changed)
             when {
                 isNew && text.isNotEmpty() -> editor.perform(ItemsEdit.addOnTop(pageId, content, edited))
                 at >= 0 && text.isEmpty() -> editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(at)))
                 at >= 0 && edited != item ->
-                    editor.perform(ItemsEdit.replace(pageId, content, intArrayOf(at), listOf(edited)))
+                    editor.perform(ItemsEdit.replaceOnTop(pageId, content, intArrayOf(at), listOf(edited)))
             }
             syncChanges()
         }
@@ -2866,7 +3216,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             val at = indexOfItem(pageId, table.id)
             val latest = editor.content(pageId).takeIf { at >= 0 }?.get(at) as? TableItem
             if (latest != null && text != latest.cells[cell]) {
-                editor.perform(ItemsEdit.replace(pageId, editor.content(pageId), intArrayOf(at), listOf(latest.withCell(cell, text))))
+                editor.perform(ItemsEdit.replaceOnTop(pageId, editor.content(pageId), intArrayOf(at), listOf(latest.withCell(cell, text))))
                 syncChanges()
             }
         }
@@ -3303,22 +3653,30 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     options.newImage(imported.assetId, imported.width, imported.height, x, y, maxWidth, maxHeight)
                         .also {
                             open.perform(ItemsEdit.addOnTop(pageId, open.content(pageId), it))
-                            selectLast(pageId)
+                            onItemCreated()
                         }
                 }
             }
         }
     }
 
-    /** Selects the item just put on top of a page, so that it can be moved or resized at once. */
-    private fun selectLast(pageId: Long) {
+    /** Opens the text of the one post-it that is selected for typing. */
+    fun editSelectedNoteText() {
         val open = editor ?: return
-        val index = open.document.pages.indexOfFirst { it.id == pageId }
-        val content = open.content(pageId)
-        if (index < 0 || content.size == 0) return
-        val at = content.size - 1
-        lasso.select(index, Selection(pageId, intArrayOf(at), listOf(content[at])))
-        onLassoRequested()
+        val chosen = lasso.selection?.takeIf { it.items.size == 1 }?.let { it.items[0] as? StickyNoteItem } ?: return
+        val index = open.document.pages.indexOfFirst { it.id == lasso.selection?.pageId }
+        if (index < 0) return
+        editStickyText(index, lasso.selection!!.pageId, chosen)
+    }
+
+    /** Selects the item with [id] on page [pageId], showing its handles, with the lasso lent to work them. */
+    private fun selectItem(index: Int, pageId: Long, id: Long) {
+        val open = editor ?: return
+        val at = indexOfItem(pageId, id)
+        if (at < 0) return
+        lasso.select(index, Selection(pageId, intArrayOf(at), listOf(open.content(pageId)[at])))
+        selectionKeepsTool = true
+        syncChanges()
     }
 
     /** Copies a video into the document and puts it in the middle of the view. */
@@ -3380,10 +3738,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         placeInView { pageId, x, y, _, _ ->
             val box = usable.map { it.bounds }.reduce(Bounds::union)
             val move = Affine.translate(x - box.centerX, y - box.centerY)
-            val placed = usable.map { it.transformed(move).withId(IdSource.Random.next()).withLocked(false) }
-            val content = open.content(pageId)
-            val at = IntArray(placed.size) { content.size + it }
-            open.perform(ItemsEdit(pageId, IntArray(0), emptyList(), at, placed))
+            val placed = Grouping.withFreshGroups(usable.map { it.transformed(move).withId(IdSource.Random.next()).withLocked(false) })
+            open.perform(ItemsEdit.addAllOnTop(pageId, open.content(pageId), placed))
         }
     }
 
@@ -3966,7 +4322,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val old = strokeId ?: return false
         if (strokeEdge != Ruler.NO_EDGE || traceSize < 8) return false
         val pending = pendingStrokes[old] ?: return false
-        val fit = ShapeFit.fit(trace.copyOf(traceSize)) ?: return false
+        val fit = ShapeFit.fit(trace.copyOf(traceSize), pending.style.tool == InkTool.HIGHLIGHTER) ?: return false
         holdFit = fit
         if (fit is FittedShape.Line && fit.headLength == 0f) return false
         // A simple curve, with one handle between its ends, gets that handle. One that would need more is too complex for handles: its own
@@ -4122,6 +4478,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     }
 
     override fun onStrokesFinished(strokes: Map<InProgressStrokeId, Stroke>) {
+        var inked = false
         for ((id, stroke) in strokes) {
             val pending = pendingStrokes.remove(id) ?: continue
             if (pending.handwriting) {
@@ -4133,7 +4490,19 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             // Held at its end, the line is what was drawn but with its wobble gone. The gestures below look at what was drawn.
             val item = if (pending.smoothOnFinish) drawn.copy(points = StrokeSmoothing.smoothBy(drawn.points, HOLD_SMOOTHING_SIGMA_PT)) else drawn
             val stickyId = pending.stickyId
-            if (stickyId != null && addToSticky(editor, pending.pageId, stickyId, item)) continue
+            if (stickyId != null) {
+                // A scribble on a post-it rubs out what the post-it holds under it, as one on the page does there.
+                val note = noteScope(editor, pending.pageId, stickyId)
+                if (pending.scribbleToErase && note != null && StrokeGestures.isScribble(drawn.points)) {
+                    scribbleOut(editor, pending.pageId, drawn, note)
+                    lastLoop = null
+                    continue
+                }
+                if (addToSticky(editor, pending.pageId, stickyId, item)) {
+                    lastLoop = if (pending.circleToLasso && StrokeGestures.isClosedLoop(drawn.points)) LoopMark(pending.pageId, item, stickyId) else null
+                    continue
+                }
+            }
             lastLoop = null
             if (pending.scribbleToErase && StrokeGestures.isScribble(drawn.points)) {
                 scribbleOut(editor, pending.pageId, drawn)
@@ -4150,8 +4519,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             editor.perform(ItemsEdit.addOnTop(pending.pageId, editor.content(pending.pageId), item))
             if (item.style.tool != InkTool.HIGHLIGHTER) holdWet += id
             if (pending.circleToLasso && StrokeGestures.isClosedLoop(drawn.points)) lastLoop = LoopMark(pending.pageId, item)
+            inked = true
         }
         syncChanges()
+        if (inked) onInkDrawn()
         // A finished stroke stays on the wet layer until the tiles have drawn it, or it would vanish for as long as a slow tile takes,
         // such as one with a large see-through picture. Marker strokes go at once: shown twice they would look darker for a moment.
         val now = strokes.keys.filter { it !in holdWet && it !in writingWet }.toSet()
@@ -4172,9 +4543,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         return true
     }
 
-    /** Erases whole strokes and shapes along a scribble. The scribble itself is not kept. */
-    private fun scribbleOut(editor: NoteEditor, pageId: Long, scribble: StrokeItem) {
-        val content = editor.content(pageId)
+    /**
+     * Erases whole strokes and shapes along a scribble, as one edit. The scribble itself is not kept. With [inside], the scribble was drawn
+     * on that open post-it and erases what the post-it holds, by the same rules, as one change of the post-it.
+     */
+    private fun scribbleOut(editor: NoteEditor, pageId: Long, scribble: StrokeItem, inside: NoteScope? = null) {
+        val content = inside?.content ?: editor.content(pageId)
         val points = scribble.points
         val session = EraseSession(
             pageId,
@@ -4184,8 +4558,30 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             kinds = DEFAULT_ERASABLE,
         )
         for (i in 0 until points.size) session.eraseTo(points.x(i), points.y(i))
-        session.finish()?.let { editor.record(it) }
+        session.finish()?.let { recordOn(editor, pageId, inside, it) }
         redrawChanges(editor.document.pages.indexOfFirst { it.id == pageId })
+    }
+
+    /** The items of the open post-it [noteId] on page [pageId], for a gesture made on it, or null when it is gone or closed. */
+    private fun noteScope(editor: NoteEditor, pageId: Long, noteId: Long): NoteScope? {
+        val at = indexOfItem(pageId, noteId)
+        return if (at < 0) null else NoteScope.open(pageId, editor.content(pageId), at)
+    }
+
+    /** Records [edit], already made on [inside]'s items or, without it, on the page, as one step of the history. */
+    private fun recordOn(editor: NoteEditor, pageId: Long, inside: NoteScope?, edit: Edit) {
+        if (inside == null) return editor.record(edit)
+        inside.commit(editor.content(pageId))?.let { editor.perform(it) }
+    }
+
+    /** Performs [edit] on [inside]'s items or, without it, on the page, as one step of the history. */
+    private fun performOn(editor: NoteEditor, pageId: Long, inside: NoteScope?, edit: Edit) {
+        if (inside == null) return editor.perform(edit)
+        edit.apply(object : EditTarget {
+            override val document get() = editor.document
+            override fun content(pageId: Long) = inside.content
+        })
+        recordOn(editor, pageId, inside, edit)
     }
 
     /** Touching the last circle's line selects what it surrounds, and hands the canvas over to the lasso. */
@@ -4204,43 +4600,80 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             byFinger && StrokeGestures.isInside(loop.item.points, x, y)
         if (!touched) return false
         lastLoop = null
-        return selectInsideLoop(pageIndex, pageId, loop.item.points, loop.item.id)
+        return selectInsideLoop(pageIndex, pageId, loop.item.points, loop.item.id, loop.noteId)
     }
 
     /**
-     * The circle itself is the lasso: its line, [ownId] on the page when it was drawn as ink, is taken off the page,
-     * and what it surrounds is selected. A circle written in a text box was never put on the page, so it has no id.
+     * The circle itself is the lasso: its line, [ownId] when it was drawn as ink, is taken away, and what it surrounds is selected. A
+     * circle written in a text box was never put on the page, so it has no id. A circle drawn on an open post-it ([noteId]) is in the
+     * post-it: wholly inside its edges, it works on what the post-it holds, in place, by the same steps as on the page; leaving them,
+     * it is taken out of the post-it and works on the page.
      */
-    private fun selectInsideLoop(pageIndex: Int, pageId: Long, points: StrokePoints, ownId: Long?): Boolean {
+    private fun selectInsideLoop(pageIndex: Int, pageId: Long, points: StrokePoints, ownId: Long?, noteId: Long? = null): Boolean {
         val editor = editor ?: return false
-        val content = editor.content(pageId)
+        val polygon = StrokeGestures.polygon(points)
+        var inside: NoteScope? = null
+        if (noteId != null) {
+            val note = noteScope(editor, pageId, noteId) ?: return false
+            // The loop keeps its id in the post-it, so it is found there as on the page.
+            if (ownId != null && note.content.toList().none { it.id == ownId }) return false
+            inside = NoteScope.forLoop(pageId, editor.content(pageId), polygon)?.takeIf { it.noteId == noteId }
+            if (inside == null && ownId != null) {
+                // It leaves the post-it: what it catches is on the page, and its line comes out of the post-it.
+                if (!loopCatches(pageIndex, pageId, editor.content(pageId), polygon)) return false
+                val own = note.content.toList().indexOfFirst { it.id == ownId }
+                performOn(editor, pageId, note, ItemsEdit.remove(pageId, note.content, intArrayOf(own)))
+                redrawChanges(pageIndex)
+                return selectInsideLoop(pageIndex, pageId, points, null)
+            }
+        }
+        val content = inside?.content ?: editor.content(pageId)
         val own = if (ownId == null) -1 else (0 until content.size).firstOrNull { content[it].id == ownId } ?: return false
-        val inside = selectWithLasso(
-            pageId,
-            content,
-            StrokeGestures.polygon(points),
-            circleLasso.kinds,
-            circleLasso.fullOnly,
-            circleLasso.anyPortion,
-            circleLasso.lockedToo,
-        )
-        val picked = inside.indices.indices.filter { inside.indices[it] != own }
-        if (picked.isEmpty()) return false
+        val found = loopSelection(pageIndex, pageId, content, polygon, inside)
+        val picked = found.indices.indices.filter { found.indices[it] != own }
+        if (picked.isEmpty()) {
+            // Nothing of the owner's is inside: on a planner page the circle picks the page's generated elements, as the lasso does.
+            if (inside != null || plannerElementsIn(pageIndex, polygon).isEmpty()) return false
+            if (own >= 0) {
+                editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
+                redrawChanges(pageIndex)
+            }
+            // The lasso is lent first: taking up a tool drops a pick, so the pick is made after.
+            onLassoRequested()
+            plannerPick.pick(pageIndex, editor.document.pages[pageIndex], polygon)
+            syncChanges()
+            return true
+        }
         if (own >= 0) {
-            editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
+            performOn(editor, pageId, inside, ItemsEdit.remove(pageId, content, intArrayOf(own)))
             redrawChanges(pageIndex)
         }
         // Everything above the removed line moves down one place.
-        val indices = picked.map { inside.indices[it].let { index -> if (own in 0 until index) index - 1 else index } }
-        val items = picked.map { inside.items[it] }
-        // The circle turns into marching ants before the selection takes over.
+        val indices = picked.map { found.indices[it].let { index -> if (own in 0 until index) index - 1 else index } }
+        val items = picked.map { found.items[it] }
+        // The circle turns into marching ants before the selection takes over, on the page and in a post-it alike.
         val chosen = Selection(pageId, indices.toIntArray(), items)
-        lasso.selectAfterAnts(pageIndex, StrokeGestures.polygon(points), chosen) {
+        lasso.selectAfterAnts(pageIndex, polygon, chosen, inside) {
             onLassoRequested()
             syncChanges()
         }
         return true
     }
+
+    /** What a circle's loop [polygon] selects in [content]: the page's, or [inside]'s items. On a cover page, never its background. */
+    private fun loopSelection(pageIndex: Int, pageId: Long, content: PageContent, polygon: FloatArray, inside: NoteScope?): Selection {
+        val cover = if (inside != null) null else editor?.document?.pages?.get(pageIndex)?.let { if (it.isCover) it.size else null }
+        return Grouping.expand(
+            selectWithLasso(pageId, content, polygon, circleLasso.kinds, circleLasso.fullOnly, circleLasso.anyPortion, circleLasso.lockedToo, cover),
+            content,
+            circleLasso.lockedToo,
+            cover,
+        )
+    }
+
+    /** Whether the loop catches anything on the page [content], or a planner page's elements. */
+    private fun loopCatches(pageIndex: Int, pageId: Long, content: PageContent, polygon: FloatArray): Boolean =
+        !loopSelection(pageIndex, pageId, content, polygon, null).isEmpty || plannerElementsIn(pageIndex, polygon).isNotEmpty()
 
     // ---- Navigation ----
 
@@ -4535,6 +4968,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
         /** How far a held pen can wander and still count as still. */
         const val HOLD_SLOP_DP = 3f
+        const val HOLD_SELECT_MS = 500L
+        const val HOLD_STROKE_REACH_DP = 10f
         const val AUDIO_HOLD_MS = 400L
         const val FINGER_TAP_MS = 300L
         const val FILL_GAP_OF_WIDTH = 0.01f
@@ -4591,7 +5026,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val NEW_TEXT_HEIGHT_PT = 60f
         const val CELL_INSET_PT = 3f
         const val STICKY_CORNER_DP = 40f
-        const val ON_NOTE_SLACK_PT = 2f
+
+        /** How much larger than drawn a post-it's open and close tap targets are, each way. */
+        const val STICKY_TAP_GROWTH = 1.5f
         const val MIN_AREA_PT = 30f
 
         /** How strongly a line held at its end is smoothed: very (see [StrokeSmoothing]), so that only the shape of the line is left. */

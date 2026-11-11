@@ -1,5 +1,6 @@
 package app.betternotes.canvas
 
+import app.betternotes.core.edit.LayerOps
 import android.graphics.Canvas
 import android.graphics.DashPathEffect
 import android.os.SystemClock
@@ -8,16 +9,19 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RenderNode
 import androidx.core.graphics.withMatrix
+import app.betternotes.core.edit.Edit
+import app.betternotes.core.edit.EditTarget
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.edit.ZPlace
 import app.betternotes.core.edit.rearrange
-import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.withId
 import app.betternotes.core.model.withLocked
+import app.betternotes.core.edit.Grouping
+import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.tools.withTape
@@ -41,8 +45,10 @@ import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.ResizeHandle
 import app.betternotes.core.tools.ShapeParam
 import app.betternotes.core.tools.ShapeTips
+import app.betternotes.core.tools.NoteScope
 import app.betternotes.core.tools.Selection
 import app.betternotes.core.tools.resizeTransform
+import app.betternotes.core.tools.isCoverBackground
 import app.betternotes.core.tools.selectWithLasso
 import app.betternotes.core.tools.snapToAlign
 import kotlin.math.abs
@@ -63,11 +69,14 @@ internal class LassoController(
     private val pageToScreenOf: (pageIndex: Int, into: Matrix) -> Unit,
     /** How far a page is turned, in degrees. */
     private val pageTurn: (pageIndex: Int) -> Float,
-    private val redraw: () -> Unit,
+    private val redrawView: () -> Unit,
 ) {
     private enum class Drag { NONE, FREEFORM, RECTANGLE, MOVE, RESIZE, PARAM, TABLE, ROTATE }
 
     private var editor: NoteEditor? = null
+
+    /** While the selection is inside an open post-it: its items, which the lasso works on in place of the page's. */
+    private var scope: NoteScope? = null
     private var drag = Drag.NONE
     private var pageIndex = -1
     private var kinds: Set<ItemKind> = emptySet()
@@ -75,8 +84,8 @@ internal class LassoController(
     private var anyPortion = false
     private var includeLocked = false
 
-    private var selection: Selection? = null
-        set(value) {
+    var selection: Selection? = null
+        private set(value) {
             field = value
             // Editing ends when something other than the table being edited is selected. A pause with nothing selected, which
             // an edit makes while it swaps the selection, does not end it.
@@ -191,11 +200,18 @@ internal class LassoController(
         this.editor = editor
     }
 
+    /** Called with a finished loop (page points) that caught no item; true when it took the loop for something else (planner elements). */
+    var onNoItems: (pageIndex: Int, points: FloatArray) -> Boolean = { _, _ -> false }
+
+    /** Called whenever the lasso is cleared, so a planner pick goes with it. */
+    var onCleared: () -> Unit = {}
+
     /** Called when a selection that existed is dropped, whether by a touch elsewhere or a change of tool. */
     var onSelectionDropped: () -> Unit = {}
 
     /** Drops the selection, which holds positions that the next edit of the page may invalidate. */
     fun clear() {
+        onCleared()
         if (drag == Drag.MOVE || drag == Drag.RESIZE || drag == Drag.PARAM || drag == Drag.ROTATE) cancel()
         val hadSelection = selection != null
         selection = null
@@ -204,6 +220,7 @@ internal class LassoController(
         antsDone = null
         drag = Drag.NONE
         polygon.clear()
+        leaveScope()
         redraw()
         if (hadSelection) onSelectionDropped()
     }
@@ -215,13 +232,15 @@ internal class LassoController(
 
     /**
      * Shows the circle that was drawn turning into a marching-ants outline, then selects [selected]
-     * and calls [done]. [polygon] is the circle in page points.
+     * and calls [done]. [polygon] is the circle in page points. With [inside], the selection is of that post-it's items, worked on in place.
      */
-    fun selectAfterAnts(pageIndex: Int, polygon: FloatArray, selected: Selection, done: () -> Unit) {
+    fun selectAfterAnts(pageIndex: Int, polygon: FloatArray, selected: Selection, inside: NoteScope? = null, done: () -> Unit) {
+        leaveScope()
         this.pageIndex = pageIndex
+        scope = inside
         ants = polygon
         antsStartMs = SystemClock.uptimeMillis()
-        antsSelection = selected
+        antsSelection = withoutCoverBackground(pageIndex, selected, inside)
         antsDone = done
         drag = Drag.NONE
         redraw()
@@ -245,8 +264,9 @@ internal class LassoController(
 
     /** Shows [selected], found elsewhere, with its handles. */
     fun select(pageIndex: Int, selected: Selection) {
+        leaveScope()
         this.pageIndex = pageIndex
-        selection = selected
+        selection = withoutCoverBackground(pageIndex, selected, null)
         drag = Drag.NONE
         redraw()
     }
@@ -326,6 +346,24 @@ internal class LassoController(
         polygon += x
         polygon += y
         redraw()
+    }
+
+    /**
+     * True when a touch at ([x], [y]) on page [pageIndex] lands on the selection's handles (the sizing ones, the turning knob, a table's
+     * dividers, a shape's tips and corners), and with [body] also on the selection itself. Such a touch moves, resizes or turns the
+     * selection whatever tool is in hand. A locked selection is not grabbed: it stays where it is.
+     */
+    fun grabs(pageIndex: Int, x: Float, y: Float, body: Boolean = true): Boolean {
+        val current = selection ?: return false
+        val box = current.bounds ?: return false
+        if (pageIndex != this.pageIndex || current.items.any { it.locked }) return false
+        val table = (current.items.singleOrNull() as? TableItem)?.takeIf { it.id == tableEditingId }
+        val shape = current.items.singleOrNull() as? ShapeItem
+        val path = current.items.singleOrNull() as? PathShapeItem
+        return (body && box.contains(x, y)) || handleAt(box, x, y) != null || onRotateKnob(box, x, y) ||
+            (table != null && dividerAt(table, x, y) != null) ||
+            (shape != null && paramHandleAt(shape, x, y) != null) ||
+            (path != null && vertexAt(path, x, y) >= 0)
     }
 
     fun move(x: Float, y: Float) {
@@ -522,13 +560,25 @@ internal class LassoController(
         val page = pageContent() ?: return
         val shift = Affine.translate(DUPLICATE_OFFSET_PT, DUPLICATE_OFFSET_PT)
         onCopied(selected.items)
-        val copies = selected.items.map { it.transformed(shift).withId(IdSource.Random.next()).withLocked(false) }
-        val at = IntArray(copies.size) { page.size + it }
-        val edit = ItemsEdit(selected.pageId, IntArray(0), emptyList(), at, copies)
+        val copies = Grouping.withFreshGroups(selected.items.map { it.transformed(shift).withId(IdSource.Random.next()).withLocked(false) })
+        val edit = ItemsEdit.addAllOnTop(selected.pageId, page, copies)
         // Performing it fires the history callback, which would otherwise take this for someone else's edit.
         selection = null
-        editor?.perform(edit)
-        selection = Selection(selected.pageId, at, copies)
+        perform(edit)
+        selection = Selection(selected.pageId, edit.addedAt, edit.added)
+        redraw()
+    }
+
+    /** Puts the selected items on layer [target]. The selection ends, as the items are then on a layer that cannot be changed. */
+    fun moveSelectionToLayer(target: Long) {
+        // What is inside a post-it goes with the post-it's layer.
+        if (scope != null) return
+        val selected = selection ?: return
+        val content = pageContent() ?: return
+        val edit = LayerOps.moveItems(selected.pageId, content, selected.indices, target) ?: return
+        tableEditingId = null
+        selection = null
+        perform(edit)
         redraw()
     }
 
@@ -536,7 +586,7 @@ internal class LassoController(
         val selected = selection ?: return
         tableEditingId = null
         selection = null
-        editor?.perform(selected.deleteEdit())
+        perform(selected.deleteEdit())
         redraw()
         onSelectionDropped()
     }
@@ -601,6 +651,7 @@ internal class LassoController(
     }
 
     private fun finishMarquee() {
+        leaveScope()
         val page = pageContent()
         val points = if (drag == Drag.RECTANGLE) {
             floatArrayOf(startX, startY, currentX, startY, currentX, currentY, startX, currentY)
@@ -611,10 +662,15 @@ internal class LassoController(
         val editor = editor
         if (page == null || editor == null) return
         val pageId = editor.document.pages[pageIndex].id
-        val found = selectWithLasso(pageId, page, points, kinds, fullOnly, anyPortion, includeLocked)
+        // A loop wholly inside the edges of an open post-it works on what the post-it holds, in place, and never takes the post-it.
+        // When it holds nothing there, the loop is on the page, for a sticker put on the post-it.
+        val inside = NoteScope.forLoop(pageId, page, points)
+        val inNote = inside?.let { find(pageIndex, it.content, points, it) }
+        val found = inNote?.takeIf { !it.isEmpty } ?: find(pageIndex, page, points, null)
+        if (inNote != null && found === inNote) scope = inside
         selection = if (found.isEmpty) null else found
-        // A touch outside the old selection that picks up nothing leaves no selection at all.
-        if (found.isEmpty) onSelectionDropped()
+        // A touch outside the old selection that picks up nothing leaves no selection at all, unless the loop surrounds elements of a planner page.
+        if (found.isEmpty && !onNoItems(pageIndex, points)) onSelectionDropped()
     }
 
     private var adjustFrom: List<PageItem>? = null
@@ -630,25 +686,20 @@ internal class LassoController(
         val edit = ItemsEdit(selected.pageId, selected.indices, selected.items, selected.indices, changed)
         // Performing it fires the history callback, which would otherwise take this for someone else's edit.
         selection = null
-        editor?.perform(edit)
+        perform(edit)
         selection = Selection(selected.pageId, selected.indices, changed)
         redraw()
     }
 
-    /**
-     * Moves the selected items to the front, the middle or the back of the page's stack, as one edit that can be undone, and keeps
-     * them selected. Post-its stay at the bottom, so they take no part, except on the cover (the document's first page, when it is one).
-     */
+    /** Moves the selected items to the front, the middle or the back of the page's stack, as one edit that can be undone, and keeps them selected. */
     fun arrangeSelected(place: ZPlace) {
         val selected = selection ?: return
         val content = pageContent() ?: return
-        val onCover = selectionOnCover()
-        val movable = selected.indices.filterIndexed { i, _ -> onCover || selected.items[i] !is StickyNoteItem }
-        if (movable.isEmpty()) return
+        val movable = selected.indices.toList()
         val moved = rearrange(selected.pageId, content, movable.toIntArray(), place) ?: return
         val items = movable.map { content[it] }
         selection = null
-        editor?.perform(moved.edit)
+        perform(moved.edit)
         // Whatever of the selection did not move keeps its place only if it was below the moved items; the rest are found again by id.
         val ids = selected.items.mapTo(HashSet()) { it.id }
         val now = (0 until content.size).filter { content[it].id in ids }
@@ -722,7 +773,7 @@ internal class LassoController(
         val edit = ItemsEdit(selected.pageId, selected.indices, original, selected.indices, selected.items)
         // Recording fires the history callback, which would otherwise take this for someone else's edit.
         selection = null
-        editor?.record(edit)
+        record(edit)
         selection = selected
     }
 
@@ -738,10 +789,10 @@ internal class LassoController(
             return
         }
         page.splice(IntArray(0), selected.indices, listOf(changed))
-        val edit = ItemsEdit(selected.pageId, selected.indices, selected.items, selected.indices, listOf(changed))
-        val kept = selected.afterTransform(edit)
+        val edit = onTop(selected, page, listOf(changed))
+        val kept = Selection(selected.pageId, edit.addedAt, edit.added)
         selection = null
-        editor?.record(edit)
+        record(edit)
         selection = kept
     }
 
@@ -829,10 +880,10 @@ internal class LassoController(
             return
         }
         page.splice(IntArray(0), selected.indices, listOf(changed))
-        val edit = ItemsEdit(selected.pageId, selected.indices, selected.items, selected.indices, listOf(changed))
-        val kept = selected.afterTransform(edit)
+        val edit = onTop(selected, page, listOf(changed))
+        val kept = Selection(selected.pageId, edit.addedAt, edit.added)
         selection = null
-        editor?.record(edit)
+        record(edit)
         selection = kept
     }
 
@@ -931,16 +982,93 @@ internal class LassoController(
         }
         val changed = if (drag == Drag.RESIZE && isTextBox) listOf(resizedText(selected.items.single() as TextItem)) else selected.items.map { it.transformed(transform) }
         page.splice(IntArray(0), selected.indices, changed)
-        val edit = ItemsEdit(selected.pageId, selected.indices, selected.items, selected.indices, changed)
-        val kept = selected.afterTransform(edit)
+        val edit = onTop(selected, page, changed)
+        val kept = Selection(selected.pageId, edit.addedAt, edit.added)
         // Recording fires the history callback, which would otherwise take this for someone else's edit.
         selection = null
-        editor?.record(edit)
+        record(edit)
         selection = kept
     }
 
-    private fun pageContent() = editor?.let { open ->
+    /**
+     * The edit that replaces the selection with [changed] and puts it on top of its layer, so that what was last moved lies over the rest.
+     * The page shows [changed] at the selection's places when called, and shows it on top of its layer once this returns, so the edit
+     * is ready to be recorded.
+     */
+    private fun onTop(selected: Selection, page: PageContent, changed: List<PageItem>): ItemsEdit {
+        page.splice(selected.indices, selected.indices, selected.items)
+        val edit = ItemsEdit.replaceOnTop(selected.pageId, page, selected.indices, changed)
+        edit.apply(object : EditTarget {
+            override val document get() = editor!!.document
+            override fun content(pageId: Long) = page
+        })
+        return edit
+    }
+
+    /** What the lasso works on: the page, or the post-it the selection is inside. */
+    private fun pageContent(): PageContent? = scope?.content ?: realContent()
+
+    private fun realContent() = editor?.let { open ->
         open.document.pages.getOrNull(pageIndex)?.let { open.content(it.id) }
+    }
+
+    private fun redraw() {
+        mirrorScope()
+        redrawView()
+    }
+
+    /** Shows on the page's post-it what the lasso is doing inside it, before it is recorded. */
+    private fun mirrorScope() {
+        val s = scope ?: return
+        editor?.content(s.pageId)?.let { s.mirror(it) }
+    }
+
+    /** Performs [edit]: on the page, or, inside a post-it, on its items, recorded as one change of the post-it. */
+    private fun perform(edit: Edit) {
+        val s = scope ?: return editor?.perform(edit) ?: Unit
+        edit.apply(object : EditTarget {
+            override val document get() = editor!!.document
+            override fun content(pageId: Long) = s.content
+        })
+        commitScope(s)
+    }
+
+    /** Records [edit], already made: on the page, or, inside a post-it, as one change of the post-it. */
+    private fun record(edit: Edit) {
+        val s = scope ?: return editor?.record(edit) ?: Unit
+        commitScope(s)
+    }
+
+    private fun commitScope(s: NoteScope) {
+        val open = editor ?: return
+        s.commit(open.content(s.pageId))?.let { open.perform(it) }
+    }
+
+    /** Ends working inside a post-it. A change shown but never recorded (a slider let go of halfway) is taken back. */
+    private fun leaveScope() {
+        val s = scope ?: return
+        scope = null
+        editor?.content(s.pageId)?.let { s.restore(it) }
+    }
+
+    /**
+     * What the loop [points] catches in [content], groups whole, with this lasso's settings. On the page itself ([inside] null) of a cover,
+     * the cover's background is never caught, locked or not.
+     */
+    private fun find(pageIndex: Int, content: PageContent, points: FloatArray, inside: NoteScope?): Selection {
+        val open = editor ?: return Selection(0L, IntArray(0), emptyList())
+        val page = open.document.pages[pageIndex]
+        val coverSize = if (inside == null && page.isCover) page.size else null
+        return Grouping.expand(selectWithLasso(page.id, content, points, kinds, fullOnly, anyPortion, includeLocked, coverSize), content, includeLocked, coverSize)
+    }
+
+    /** [selected] without the background of a cover page, which is never selected, whatever selected it. */
+    private fun withoutCoverBackground(pageIndex: Int, selected: Selection, inside: NoteScope?): Selection {
+        val page = editor?.document?.pages?.getOrNull(pageIndex) ?: return selected
+        val size = page.size
+        if (inside != null || !page.isCover || size == null || selected.items.none { it.isCoverBackground(size) }) return selected
+        val kept = selected.items.indices.filter { !selected.items[it].isCoverBackground(size) }
+        return Selection(selected.pageId, IntArray(kept.size) { selected.indices[kept[it]] }, kept.map { selected.items[it] })
     }
 
     private fun drawMarquee(canvas: Canvas) {

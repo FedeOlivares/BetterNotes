@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.produceState
@@ -243,6 +245,7 @@ internal fun EmojiPanel(state: EditorState, modifier: Modifier) {
             StickerTab(R.string.sticker_tab_stickers, state.stickerTab, Modifier.weight(1f)) { state.showStickerTab(true) }
             StickerTab(R.string.sticker_tab_emoji, !state.stickerTab, Modifier.weight(1f)) { state.showStickerTab(false) }
         }
+        ToolReturnRows(state, ActiveTool.EMOJI)
         if (state.stickerTab) {
             StickerGrid(state)
             return@PanelSheet
@@ -434,9 +437,13 @@ private fun StickerGrid(state: EditorState) {
     var removing by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
     var exportId by remember { mutableStateOf<Long?>(null) }
-    val exportTarget = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
+    val pictureIn = androidx.compose.ui.platform.LocalContext.current.let { context -> remember(context) { CreatePictureIn(context) } }
+    val exportTarget = rememberLauncherForActivityResult(pictureIn) { uri ->
         val id = exportId
-        if (uri != null && id != null) state.exportStickerPng(id, uri)
+        if (uri != null && id != null) {
+            pictureIn.remember(uri)
+            state.exportStickerPng(id, uri)
+        }
     }
     val pickPack = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree -> if (tree != null) state.importStickerPack(tree) }
     Box(
@@ -459,19 +466,31 @@ private fun StickerGrid(state: EditorState) {
     // Stickers saved from selections come first, then each pack under its name.
     val groups = state.stickers.groupBy { state.packs[it] }.toList().sortedBy { it.first != null }
     for ((pack, ids) in groups) {
-        if (pack != null) {
-            Text(pack, color = colors.label, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = PanelPadding, vertical = 6.dp))
+        // With sets in the list, the stickers that are in none get a heading too, so that one can be dropped on it to leave its set.
+        if (pack != null || groups.size > 1) {
+            val key: Any = pack ?: LOOSE_STICKERS
+            val over by remember { derivedStateOf { state.stickerDropKey() == key } }
+            Text(
+                pack ?: stringResource(R.string.sticker_loose),
+                color = if (over) colors.accent else colors.label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.dropTarget(state, key).padding(horizontal = PanelPadding, vertical = 6.dp),
+            )
         }
         for (row in ids.chunked(STICKERS_PER_ROW)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = PanelPadding - 4.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (id in row) {
+                    // A sticker let go over this one goes into one set with it.
+                    val over by remember(id) { derivedStateOf { state.stickerDropKey() == id } }
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .weight(1f)
                             .aspectRatio(1f)
+                            .dropTarget(state, id)
                             .clip(RoundedCornerShape(14.dp))
-                            .background(if (id == state.sticker) colors.accentContainer else colors.field)
+                            .background(if (over) colors.accent.copy(alpha = 0.35f) else if (id == state.sticker) colors.accentContainer else colors.field)
                             .clickable(role = Role.Button) {
                                 when {
                                     removing -> state.deleteSticker(id)
@@ -531,6 +550,13 @@ private fun StickerGrid(state: EditorState) {
     }
 }
 
+/** Notes where this part of the sticker list is in the window while it is shown, so that a dragged sticker can be dropped on it. */
+@Composable
+private fun Modifier.dropTarget(state: EditorState, key: Any): Modifier {
+    androidx.compose.runtime.DisposableEffect(key) { onDispose { state.stickerDropTargets.remove(key) } }
+    return onGloballyPositioned { state.stickerDropTargets[key] = it.boundsInWindow() }
+}
+
 /** A sticker's picture, drawn off the main thread the first time and kept. */
 @Composable
 internal fun StickerThumb(state: EditorState, id: Long, size: androidx.compose.ui.unit.Dp) {
@@ -565,4 +591,20 @@ private fun Modifier.stickerDragSource(state: EditorState, id: Long, enabled: Bo
                 state.stickerDragPoint = state.stickerDragPoint?.plus(drag)
             }
         }
+}
+
+/** The save picker for a PNG. It opens where the last sticker went, or on Pictures the first time, and the owner picks the folder. */
+private class CreatePictureIn(private val context: android.content.Context) : ActivityResultContracts.CreateDocument("image/png") {
+    private val prefs get() = context.getSharedPreferences("sticker_export", android.content.Context.MODE_PRIVATE)
+
+    override fun createIntent(context: android.content.Context, input: String) = super.createIntent(context, input).apply {
+        val last = prefs.getString(LAST_KEY, null)?.let(android.net.Uri::parse)
+        putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, last ?: android.provider.DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", "primary:Pictures"))
+    }
+
+    fun remember(saved: android.net.Uri) = prefs.edit().putString(LAST_KEY, saved.toString()).apply()
+
+    private companion object {
+        const val LAST_KEY = "last"
+    }
 }

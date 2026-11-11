@@ -145,8 +145,8 @@
     <string name="info_full_selection">On: only items completely inside the selection. Off: anything the selection touches, even slightly.</string>
     <string name="info_any_portion">Selects any item with a part inside the selection, even one the lasso only crosses.</string>
     <string name="info_hold_shape">Keep the pen still at the end of a stroke to turn it into a straight line.</string>
-    <string name="info_scribble">Saved, but it does nothing yet.</string>
-    <string name="info_circle">Saved, but it does nothing yet.</string>
+    <string name="info_scribble">Scribble over strokes and shapes to erase them.</string>
+    <string name="info_circle">Draw a circle round things, then touch its line to select them.</string>
     <string name="info_stabilization">Saved, but it does nothing yet.</string>
     <string name="laser_dot">Dot</string>
     <string name="laser_line">Line</string>

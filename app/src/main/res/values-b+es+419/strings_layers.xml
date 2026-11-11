@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tool_layers">Capas</string>
+    <string name="layers_title">Capas</string>
+    <string name="layer_default_name">Capa %1$d</string>
+    <string name="layers_add">Agregar una capa</string>
+    <string name="layers_rename">Cambiar el nombre de la capa</string>
+    <string name="layers_merge">Combinar con la capa de abajo</string>
+    <string name="layers_delete">Eliminar la capa y lo que tiene</string>
+    <string name="layers_move_here">Mover la selección a esta capa</string>
+    <string name="layers_work_on">Trabajar en esta capa</string>
+    <string name="layers_show">Mostrar la capa</string>
+    <string name="layers_hide">Ocultar la capa</string>
+</resources>

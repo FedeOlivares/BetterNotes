@@ -48,6 +48,8 @@ internal class Layer(
     height: Float,
     /** Told of every tappable area, in page points, as the page is drawn. */
     private val onLink: app.betternotes.core.planner.LinkOut? = null,
+    /** Told where each element of a planner page begins and ends, so it can be styled and picked. */
+    private val host: app.betternotes.core.planner.ElementHost? = null,
 ) {
     private val sx = page.widthPt / width
     private val sy = page.heightPt / height
@@ -61,6 +63,13 @@ internal class Layer(
     /** Marks a box as a tap target for [action]. It draws nothing. */
     fun link(x0: Float, y0: Float, x1: Float, y1: Float, action: app.betternotes.core.planner.PlannerAction) =
         onLink?.link(x(x0), y(y0), x(x1), y(y1), action)
+
+    /** Starts an element (a button, a block of rows) that fills the box ([x0], [y0]) to ([x1], [y1]) in the reference's units; [r] rounds its background. */
+    fun begin(role: app.betternotes.core.planner.PlannerRole, x0: Float, y0: Float, x1: Float, y1: Float, r: Float = 0f) =
+        host?.begin(role, Math.round(x0), Math.round(y0), x(x0), y(y0), x(x1), y(y1), r * sx)
+
+    /** Ends the element [begin] started. */
+    fun end() = host?.end()
 
     /** Text turned by [degrees] clockwise about its center point. */
     fun turnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int = ink.text, style: TextStyle = TextStyle.LABEL) =

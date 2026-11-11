@@ -65,6 +65,15 @@ sealed interface PageItem {
     /** A locked item can be selected but not moved, resized or deleted, and the lasso and eraser skip it unless asked not to. */
     val locked: Boolean
 
+    /** The group the item belongs to, shared by every item that was grouped together, or 0 for an item on its own. Items of a group are selected together. */
+    val group: Long
+
+    /** The id of the layer of its page that holds the item. 0 is the layer every page starts with. See [PageLayers]. */
+    val layer: Long
+
+    /** A copy on [layer]. */
+    fun onLayer(layer: Long): PageItem
+
     /** A box containing everything the item paints, in the coordinates of its page. */
     val bounds: Bounds
 
@@ -80,7 +89,11 @@ data class StrokeItem(
     val style: InkStyle,
     val points: StrokePoints,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): StrokeItem = if (layer == this.layer) this else copy(layer = layer)
+
     init {
         require(points.size > 0) { "A stroke needs a point" }
     }
@@ -176,14 +189,20 @@ data class ShapeItem(
     val pattern: TapePattern = TapePattern.PLAIN,
     val shadow: TapeShadow = TapeShadow.NONE,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
+    /** Turned over from left to right inside its frame, as in a mirror. The frame and its handles stay where they are. */
+    val mirrored: Boolean = false,
 ) : PageItem {
+    override fun onLayer(layer: Long): ShapeItem = if (layer == this.layer) this else copy(layer = layer)
+
     /** The frame, and for a speech or thought bubble also the tail, which can reach out of it in any direction. */
     override val bounds: Bounds
         get() {
             val box = frame.bounds.outset(strokeWidth / 2f + if (shadow.isVisible) shadow.distance + SHADOW_SOFTNESS else 0f)
             if (!ShapeTips.isBubble(kind) || frame.width <= 0f || frame.height <= 0f) return box
             val tip = ShapeTips.speechTip(this)
-            val x = frame.worldX(tip[0] / frame.width, tip[1] / frame.height)
+            val x = frame.worldX(if (mirrored) 1f - tip[0] / frame.width else tip[0] / frame.width, tip[1] / frame.height)
             val y = frame.worldY(tip[0] / frame.width, tip[1] / frame.height)
             val pad = strokeWidth / 2f + 0.06f * maxOf(frame.width, frame.height)
             return Bounds(minOf(box.left, x - pad), minOf(box.top, y - pad), maxOf(box.right, x + pad), maxOf(box.bottom, y + pad))
@@ -232,7 +251,11 @@ data class ImageItem(
     /** 1 is solid; less lets what is under the picture show through. */
     val opacity: Float = 1f,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): ImageItem = if (layer == this.layer) this else copy(layer = layer)
+
     override val bounds get() = frame.bounds.outset(borderWidth / 2f)
 
     override fun transformed(t: Affine): ImageItem {
@@ -259,6 +282,8 @@ data class TextStyle(
     val verticalAlign: VerticalAlign = VerticalAlign.TOP,
     /** The added font the text is set in, by its name; empty is the app's own font. A font that is missing shows as the app's own. */
     val font: String = "",
+    /** Null is a text that is not a list. */
+    val list: ListStyle? = null,
 )
 
 /**
@@ -293,7 +318,11 @@ data class TextItem(
     val style: TextStyle = TextStyle(),
     override val locked: Boolean = false,
     val spans: List<TextSpan> = emptyList(),
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): TextItem = if (layer == this.layer) this else copy(layer = layer)
+
     override val bounds get() = frame.bounds
 
     /** The page does not clip text to its box, so what the text paints is read from its layout. See [TextReach]. */
@@ -380,7 +409,11 @@ data class StickyNoteItem(
     /** An open note with this stays open when the page is tapped elsewhere. */
     val keepOpen: Boolean = false,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): StickyNoteItem = if (layer == this.layer) this else copy(layer = layer)
+
     init {
         require(items.none { it is StickyNoteItem }) { "Sticky notes do not nest" }
     }
@@ -390,6 +423,30 @@ data class StickyNoteItem(
         get() = if (isOpen) frame else frame.copy(width = closedWidth, height = closedHeight)
 
     override val bounds get() = visibleFrame.bounds
+
+    /**
+     * An open note does not clip what is in it, so a line or tape that runs past its edge is drawn whole. The box takes in everything the
+     * items paint, so every tile they touch repaints. Closed, nothing in the note is drawn.
+     */
+    override val paintBounds: Bounds by lazy {
+        val shown = bounds
+        if (!isOpen || items.isEmpty()) return@lazy shown
+        var inside = items[0].paintBounds
+        for (i in 1 until items.size) inside = inside.union(items[i].paintBounds)
+        val turn = Math.toRadians(frame.rotation.toDouble())
+        val c = kotlin.math.cos(turn).toFloat()
+        val s = kotlin.math.sin(turn).toFloat()
+        var box = shown
+        // The items are in the note's own coordinates, which the page turns about the note's middle.
+        for (corner in 0 until 4) {
+            val dx = frame.left + (if (corner and 1 == 0) inside.left else inside.right) - frame.centerX
+            val dy = frame.top + (if (corner and 2 == 0) inside.top else inside.bottom) - frame.centerY
+            val x = frame.centerX + dx * c - dy * s
+            val y = frame.centerY + dx * s + dy * c
+            box = box.union(Bounds(x, y, x, y))
+        }
+        box
+    }
 
     override fun transformed(t: Affine): StickyNoteItem {
         val moved = frame.transformed(t)
@@ -421,7 +478,13 @@ data class TableItem(
     val headerColumn: Boolean = false,
     val fillColor: Int = 0,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
+    /** The color of the header row and column. 0 is the usual translucent gray. */
+    val headerColor: Int = 0,
 ) : PageItem {
+    override fun onLayer(layer: Long): TableItem = if (layer == this.layer) this else copy(layer = layer)
+
     init {
         require(columnWeights.isNotEmpty() && rowWeights.isNotEmpty()) { "A table needs cells" }
         require(cells.size == columnWeights.size * rowWeights.size) {
@@ -476,7 +539,11 @@ data class VideoItem(
     val posterAssetId: String,
     val durationMs: Long,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): VideoItem = if (layer == this.layer) this else copy(layer = layer)
+
     override val bounds get() = frame.bounds
 
     override fun transformed(t: Affine) = copy(frame = frame.transformed(t))
@@ -489,7 +556,11 @@ data class AudioItem(
     val assetId: String,
     val durationMs: Long,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): AudioItem = if (layer == this.layer) this else copy(layer = layer)
+
     override val bounds get() = frame.bounds
 
     override fun transformed(t: Affine) = copy(frame = frame.transformed(t))
@@ -508,6 +579,21 @@ fun PageItem.withId(id: Long): PageItem = when (this) {
     is TapePathItem -> copy(id = id)
     is FillItem -> copy(id = id)
     is PathShapeItem -> copy(id = id)
+}
+
+/** A copy in group [group], or out of any group when it is 0. */
+fun PageItem.withGroup(group: Long): PageItem = when (this) {
+    is StrokeItem -> copy(group = group)
+    is ShapeItem -> copy(group = group)
+    is ImageItem -> copy(group = group)
+    is TextItem -> copy(group = group)
+    is StickyNoteItem -> copy(group = group)
+    is TableItem -> copy(group = group)
+    is VideoItem -> copy(group = group)
+    is AudioItem -> copy(group = group)
+    is TapePathItem -> copy(group = group)
+    is FillItem -> copy(group = group)
+    is PathShapeItem -> copy(group = group)
 }
 
 /** A copy locked or unlocked. */
@@ -538,7 +624,11 @@ class TapePathItem(
     val pattern: TapePattern = TapePattern.PLAIN,
     val shadow: TapeShadow = TapeShadow.NONE,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): TapePathItem = if (layer == this.layer) this else copy(layer = layer)
+
     val pointCount get() = points.size / 2
 
     override val bounds: Bounds
@@ -576,10 +666,12 @@ class TapePathItem(
         pattern: TapePattern = this.pattern,
         shadow: TapeShadow = this.shadow,
         locked: Boolean = this.locked,
-    ) = TapePathItem(id, points, width, fillColor, opacity, pattern, shadow, locked)
+        group: Long = this.group,
+        layer: Long = this.layer,
+    ) = TapePathItem(id, points, width, fillColor, opacity, pattern, shadow, locked, group, layer)
 
     override fun equals(other: Any?) = other is TapePathItem && id == other.id && width == other.width &&
-        fillColor == other.fillColor && opacity == other.opacity && pattern == other.pattern && shadow == other.shadow && locked == other.locked &&
+        fillColor == other.fillColor && opacity == other.opacity && pattern == other.pattern && shadow == other.shadow && locked == other.locked && group == other.group && layer == other.layer && layer == other.layer &&
         points.contentEquals(other.points)
 
     override fun hashCode() = 31 * id.hashCode() + points.contentHashCode()
@@ -601,7 +693,13 @@ class FillItem(
     val color: Int,
     val opacity: Float = 1f,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
+    /** What is drawn over the color, clipped to the loops. Solid, the default, is the color alone. */
+    val pattern: FillPattern = FillPattern.SOLID,
 ) : PageItem {
+    override fun onLayer(layer: Long): FillItem = if (layer == this.layer) this else copy(layer = layer)
+
     override val bounds: Bounds
         get() {
             var left = Float.MAX_VALUE
@@ -655,10 +753,13 @@ class FillItem(
         color: Int = this.color,
         opacity: Float = this.opacity,
         locked: Boolean = this.locked,
-    ) = FillItem(id, loops, color, opacity, locked)
+        group: Long = this.group,
+        layer: Long = this.layer,
+        pattern: FillPattern = this.pattern,
+    ) = FillItem(id, loops, color, opacity, locked, group, layer, pattern)
 
     override fun equals(other: Any?) = other is FillItem && id == other.id && color == other.color && opacity == other.opacity &&
-        locked == other.locked && loops.size == other.loops.size && loops.indices.all { loops[it].contentEquals(other.loops[it]) }
+        locked == other.locked && group == other.group && layer == other.layer && pattern == other.pattern && loops.size == other.loops.size && loops.indices.all { loops[it].contentEquals(other.loops[it]) }
 
     override fun hashCode() = 31 * id.hashCode() + loops.sumOf { it.contentHashCode() }
 
@@ -694,7 +795,11 @@ class PathShapeItem(
     val fillColor: Int = 0,
     val opacity: Float = 1f,
     override val locked: Boolean = false,
+    override val group: Long = 0L,
+    override val layer: Long = 0L,
 ) : PageItem {
+    override fun onLayer(layer: Long): PathShapeItem = if (layer == this.layer) this else copy(layer = layer)
+
     init {
         require(points.size >= 4 && points.size % 2 == 0) { "A path needs two points" }
     }
@@ -746,11 +851,13 @@ class PathShapeItem(
         fillColor: Int = this.fillColor,
         opacity: Float = this.opacity,
         locked: Boolean = this.locked,
-    ) = PathShapeItem(id, points, closed, smooth, strokeColor, strokeWidth, line, fillColor, opacity, locked)
+        group: Long = this.group,
+        layer: Long = this.layer,
+    ) = PathShapeItem(id, points, closed, smooth, strokeColor, strokeWidth, line, fillColor, opacity, locked, group, layer)
 
     override fun equals(other: Any?) = other is PathShapeItem && id == other.id && closed == other.closed && smooth == other.smooth &&
         strokeColor == other.strokeColor && strokeWidth == other.strokeWidth && line == other.line && fillColor == other.fillColor &&
-        opacity == other.opacity && locked == other.locked && points.contentEquals(other.points)
+        opacity == other.opacity && locked == other.locked && group == other.group && layer == other.layer && points.contentEquals(other.points)
 
     override fun hashCode() = 31 * id.hashCode() + points.contentHashCode()
 }

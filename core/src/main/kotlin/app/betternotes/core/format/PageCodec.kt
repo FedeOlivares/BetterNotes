@@ -3,6 +3,8 @@ package app.betternotes.core.format
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.FillPattern
+import app.betternotes.core.model.FillPatternKind
 import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
@@ -10,6 +12,8 @@ import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
+import app.betternotes.core.model.ListKind
+import app.betternotes.core.model.ListStyle
 import app.betternotes.core.model.LineStyle
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PenType
@@ -22,6 +26,7 @@ import app.betternotes.core.model.SpanLook
 import app.betternotes.core.model.TextSpan
 import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VideoItem
+import app.betternotes.core.model.withGroup
 import app.betternotes.core.model.HorizontalAlign
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.StickyNoteItem
@@ -30,6 +35,8 @@ import app.betternotes.core.model.StrokePoints
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TipShape
+import app.betternotes.core.model.Layer
+import app.betternotes.core.model.PageLayers
 
 private const val PAGE_MAGIC = "BNPG"
 
@@ -51,6 +58,14 @@ private const val TAG_FILL = 12
 private const val TAG_PATH_SHAPE = 13
 private const val TAG_SPANNED_TEXT = 14
 private const val TAG_FONT_TEXT = 15
+private const val TAG_COLORED_TABLE = 16
+private const val TAG_MIRRORED_SHAPE = 17
+
+/** A paint bucket fill with a pattern over its color; a fill without one keeps [TAG_FILL]. Page format 15. */
+private const val TAG_PATTERN_FILL = 18
+
+/** A text box that is a list. A tag far from the others, so that tags added elsewhere cannot collide with it. */
+private const val TAG_LIST_TEXT = 40
 
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
@@ -110,9 +125,14 @@ internal val SHAPE_KINDS =
         ShapeKind.THOUGHT,
         ShapeKind.TAPE,
     )
+internal val FILL_PATTERN_KINDS = WireEnum(FillPatternKind.SOLID, FillPatternKind.DOTS, FillPatternKind.LINES, FillPatternKind.DIAGONAL, FillPatternKind.CROSSHATCH)
 internal val TAPE_PATTERNS = WireEnum(TapePattern.PLAIN, TapePattern.DOTS, TapePattern.LINES, TapePattern.CROSSHATCH)
 internal val IMAGE_SHAPES = WireEnum(ImageShape.RECTANGLE, ImageShape.ELLIPSE)
 internal val HORIZONTAL_ALIGNS = WireEnum(HorizontalAlign.START, HorizontalAlign.CENTER, HorizontalAlign.END)
+internal val LIST_KINDS = WireEnum(
+    ListKind.DASH, ListKind.STAR, ListKind.BULLET, ListKind.NUMBER_DOT, ListKind.NUMBER_PAREN,
+    ListKind.UPPER_PAREN, ListKind.LOWER_PAREN, ListKind.ROMAN_PAREN, ListKind.ARROW, ListKind.DOT,
+)
 internal val VERTICAL_ALIGNS = WireEnum(VerticalAlign.TOP, VerticalAlign.MIDDLE, VerticalAlign.BOTTOM)
 
 /**
@@ -122,12 +142,69 @@ internal val VERTICAL_ALIGNS = WireEnum(VerticalAlign.TOP, VerticalAlign.MIDDLE,
  * saving would then destroy it.
  */
 object PageCodec {
-    /** [version] is only for tests of older formats. */
-    fun encode(items: List<PageItem>, version: Int = PAGE_FORMAT_VERSION): ByteArray =
-        encodeFile(PAGE_MAGIC, version) { items(items) }
+    /**
+     * [version] is only for tests of older formats. A page that uses layers is the only one written at [PAGE_LAYERS_FORMAT_VERSION],
+     * so every other page keeps the bytes it always had and older builds can still read it.
+     */
+    fun encode(items: List<PageItem>, version: Int = PAGE_FORMAT_VERSION, layers: PageLayers = PageLayers.Single): ByteArray {
+        // Items of a layer the table lacks, such as copied ones with no table, go to the bottom layer. The table counts items layer by layer.
+        val placed = items.map { it.onLayer(layers.idOrBottom(it.layer)) }.sortedBy { layers.rank(it.layer) }
+        // What a post-it holds is written inside it, so it counts too: a sticker with a pattern fill put on a post-it needs the newer format.
+        val all = placed + placed.flatMap { (it as? StickyNoteItem)?.items.orEmpty() }
+        val usesTools = all.any { (it is TableItem && it.headerColor != 0) || (it is ShapeItem && it.mirrored) }
+        val usesPatterns = all.any { it is FillItem && !it.pattern.isSolid }
+        val written = when {
+            usesPatterns -> maxOf(version, PAGE_PATTERN_FILL_FORMAT_VERSION)
+            usesTools -> maxOf(version, PAGE_TOOLS_FORMAT_VERSION)
+            layers.isDefault -> version
+            else -> maxOf(version, PAGE_LAYERS_FORMAT_VERSION)
+        }
+        return encodeFile(PAGE_MAGIC, written) {
+            items(placed)
+            if (written >= PAGE_LAYERS_FORMAT_VERSION) layers(placed, layers)
+        }
+    }
 
-    fun decode(bytes: ByteArray): List<PageItem> = decodeFile(bytes, PAGE_MAGIC, PAGE_FORMAT_VERSION) { items() }
+    fun decode(bytes: ByteArray): List<PageItem> = decodePage(bytes).items
+
+    fun decodePage(bytes: ByteArray): DecodedPage = decodeFile(bytes, PAGE_MAGIC, PAGE_PATTERN_FILL_FORMAT_VERSION) {
+        val items = items()
+        if (version >= PAGE_LAYERS_FORMAT_VERSION) layers(items) else DecodedPage(items, PageLayers.Single)
+    }
 }
+
+/** What a page file holds: its items, sorted by the rank of their layer, and its layers. */
+class DecodedPage(val items: List<PageItem>, val layers: PageLayers)
+
+/** The layers, bottom first, each with how many items it holds. The items are sorted by layer, so the counts say which item is on which. */
+private fun ByteWriter.layers(items: List<PageItem>, layers: PageLayers) {
+    varint(layers.size)
+    for (layer in layers.all) {
+        long(layer.id)
+        string(layer.name)
+        bool(layer.visible)
+        varint(items.count { it.layer == layer.id })
+    }
+}
+
+private fun ByteReader.layers(items: List<PageItem>): DecodedPage {
+    val count = count(MIN_LAYER_BYTES)
+    val table = ArrayList<Layer>(count)
+    val counts = ArrayList<Int>(count)
+    repeat(count) {
+        table += Layer(long(), string(), bool())
+        counts += varint()
+    }
+    if (table.isEmpty() || table.map { it.id }.toSet().size != table.size || counts.sum() != items.size) {
+        throw CorruptFileException("Layer table does not match ${items.size} items")
+    }
+    var next = 0
+    val placed = ArrayList<PageItem>(items.size)
+    for (k in table.indices) repeat(counts[k]) { placed += items[next++].onLayer(table[k].id) }
+    return DecodedPage(placed, PageLayers(table))
+}
+
+private const val MIN_LAYER_BYTES = Long.SIZE_BYTES + 3
 
 private fun ByteWriter.items(items: List<PageItem>) {
     varint(items.size)
@@ -152,7 +229,7 @@ private fun ByteWriter.item(item: PageItem) {
             floats(item.points.packed)
         }
         is ShapeItem -> {
-            byte(TAG_SHAPE)
+            byte(if (item.mirrored) TAG_MIRRORED_SHAPE else TAG_SHAPE)
             long(item.id)
             locked(item)
             frame(item.frame)
@@ -191,11 +268,19 @@ private fun ByteWriter.item(item: PageItem) {
         }
         is FillItem -> {
             require(version >= 6) { "A paint bucket fill needs page format 6" }
-            byte(TAG_FILL)
+            val patterned = !item.pattern.isSolid
+            if (patterned) require(version >= PAGE_PATTERN_FILL_FORMAT_VERSION) { "A pattern fill needs page format $PAGE_PATTERN_FILL_FORMAT_VERSION" }
+            byte(if (patterned) TAG_PATTERN_FILL else TAG_FILL)
             long(item.id)
             locked(item)
             int(item.color)
             float(item.opacity)
+            if (patterned) {
+                FILL_PATTERN_KINDS.write(this, item.pattern.kind)
+                int(item.pattern.color)
+                float(item.pattern.spacing)
+                float(item.pattern.weight)
+            }
             varint(item.loops.size)
             for (loop in item.loops) {
                 varint(loop.size / 2)
@@ -230,12 +315,13 @@ private fun ByteWriter.item(item: PageItem) {
             if (version >= 5) float(item.opacity)
         }
         is TextItem -> {
-            val fonted = version >= 8 && (item.style.font.isNotEmpty() || item.spans.any { it.look.font != null })
+            val listed = version >= 10 && item.style.list != null
+            val fonted = listed || version >= 8 && (item.style.font.isNotEmpty() || item.spans.any { it.look.font != null })
             // Without a font to keep, the parts are written as before, minus any that only differed by font.
             val spans = if (fonted) item.spans else item.spans.map { it.copy(look = it.look.copy(font = null)) }.filter { !it.look.isPlain }
             val spanned = fonted || (spans.isNotEmpty() && version >= 7)
-            val styled = spanned || item.style.copy(font = "") != TextStyle()
-            byte(if (fonted) TAG_FONT_TEXT else if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
+            val styled = spanned || item.style.copy(font = "", list = null) != TextStyle()
+            byte(if (listed) TAG_LIST_TEXT else if (fonted) TAG_FONT_TEXT else if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
             long(item.id)
             locked(item)
             frame(item.frame)
@@ -264,6 +350,12 @@ private fun ByteWriter.item(item: PageItem) {
                     }
                 }
                 if (fonted) string(item.style.font)
+                item.style.list?.takeIf { listed }?.let { list ->
+                    LIST_KINDS.write(this, list.kind)
+                    int(list.dotColor)
+                    float(list.dotSize)
+                    float(list.dotOpacity)
+                }
             }
         }
         is StickyNoteItem -> {
@@ -279,8 +371,9 @@ private fun ByteWriter.item(item: PageItem) {
             items(item.items)
         }
         is TableItem -> {
-            val styled = item.headerRow || item.headerColumn || item.fillColor != 0
-            byte(if (styled) TAG_STYLED_TABLE else TAG_TABLE)
+            val colored = item.headerColor != 0
+            val styled = colored || item.headerRow || item.headerColumn || item.fillColor != 0
+            byte(if (colored) TAG_COLORED_TABLE else if (styled) TAG_STYLED_TABLE else TAG_TABLE)
             long(item.id)
             locked(item)
             frame(item.frame)
@@ -294,6 +387,7 @@ private fun ByteWriter.item(item: PageItem) {
                 bool(item.headerRow)
                 bool(item.headerColumn)
                 int(item.fillColor)
+                if (colored) int(item.headerColor)
             }
         }
         is VideoItem -> {
@@ -338,7 +432,14 @@ private fun ByteReader.table(): TableItem {
     )
 }
 
-private fun ByteReader.item(): PageItem = when (val tag = byte()) {
+/** Reads one item and puts it in the group its flags byte named, if it had one. */
+private fun ByteReader.item(): PageItem {
+    val item = itemBody()
+    val group = groups.removeLast()
+    return if (group != 0L) item.withGroup(group) else item
+}
+
+private fun ByteReader.itemBody(): PageItem = when (val tag = byte()) {
     TAG_STROKE -> {
         val id = long()
         val locked = locked()
@@ -346,7 +447,7 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         val pointCount = count(StrokePoints.STRIDE * Float.SIZE_BYTES)
         StrokeItem(id, style, StrokePoints(floats(pointCount * StrokePoints.STRIDE)), locked)
     }
-    TAG_SHAPE -> ShapeItem(
+    TAG_SHAPE, TAG_MIRRORED_SHAPE -> ShapeItem(
         id = long(),
         locked = locked(),
         frame = frame(),
@@ -361,6 +462,7 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         tipWidth = if (version >= 2) float() else 0f,
         pattern = if (version >= 4) TAPE_PATTERNS.read(this) else TapePattern.PLAIN,
         shadow = if (version >= 4) TapeShadow(float(), float(), float()) else TapeShadow.NONE,
+        mirrored = tag == TAG_MIRRORED_SHAPE,
     )
     TAG_TAPE_PATH -> {
         val id = long()
@@ -373,13 +475,19 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
         val count = count(2 * Float.SIZE_BYTES)
         TapePathItem(id, floats(count * 2), width, color, opacity, pattern, shadow, locked)
     }
-    TAG_FILL -> {
+    TAG_FILL, TAG_PATTERN_FILL -> {
         val id = long()
         val locked = locked()
         val color = int()
         val opacity = float()
+        val pattern = if (tag == TAG_PATTERN_FILL) {
+            if (version < PAGE_PATTERN_FILL_FORMAT_VERSION) throw CorruptFileException("A pattern fill in page format $version")
+            FillPattern(FILL_PATTERN_KINDS.read(this), int(), float(), float())
+        } else {
+            FillPattern.SOLID
+        }
         val loops = List(count(1)) { floats(count(2 * Float.SIZE_BYTES) * 2) }
-        FillItem(id, loops, color, opacity, locked)
+        FillItem(id, loops, color, opacity, locked, pattern = pattern)
     }
     TAG_PATH_SHAPE -> {
         val id = long()
@@ -421,8 +529,9 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
             verticalAlign = VERTICAL_ALIGNS.read(this),
         ),
     )
-    TAG_SPANNED_TEXT, TAG_FONT_TEXT -> {
-        val fonted = tag.toInt() == TAG_FONT_TEXT
+    TAG_SPANNED_TEXT, TAG_FONT_TEXT, TAG_LIST_TEXT -> {
+        val listed = tag.toInt() == TAG_LIST_TEXT
+        val fonted = listed || tag.toInt() == TAG_FONT_TEXT
         val id = long()
         val locked = locked()
         val frame = frame()
@@ -445,7 +554,13 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
             val font = if (fonted && bool()) string() else null
             TextSpan(start, end, unpackLook(packed, sized).copy(font = font))
         }
-        TextItem(id, frame, text, size, color, if (fonted) style.copy(font = string()) else style, locked, spans)
+        val withFont = if (fonted) style.copy(font = string()) else style
+        val withList = if (listed) {
+            withFont.copy(list = ListStyle(LIST_KINDS.read(this), dotColor = int(), dotSize = float(), dotOpacity = float()).clamped())
+        } else {
+            withFont
+        }
+        TextItem(id, frame, text, size, color, withList, locked, spans)
     }
     TAG_TEXT -> TextItem(
         id = long(),
@@ -469,6 +584,9 @@ private fun ByteReader.item(): PageItem = when (val tag = byte()) {
     TAG_TABLE -> table()
     TAG_STYLED_TABLE -> table().let { plain ->
         plain.copy(headerRow = bool(), headerColumn = bool(), fillColor = int())
+    }
+    TAG_COLORED_TABLE -> table().let { plain ->
+        plain.copy(headerRow = bool(), headerColumn = bool(), fillColor = int(), headerColor = int())
     }
     TAG_VIDEO -> VideoItem(
         id = long(),
@@ -550,11 +668,34 @@ private fun ByteReader.floatList(): List<Float> {
     return List(count) { float() }
 }
 
+/**
+ * What every item says after its id: since version 5 a flags byte, whose first bit is locked. Since version 9 its second bit says a group
+ * id follows, so an item that is in no group takes the byte it always did.
+ */
 private fun ByteWriter.locked(item: PageItem) {
-    if (version >= 5) bool(item.locked)
+    if (version < 5) return
+    val grouped = version >= 9 && item.group != 0L
+    byte((if (item.locked) FLAG_LOCKED else 0) or (if (grouped) FLAG_GROUPED else 0))
+    if (grouped) long(item.group)
 }
 
-private fun ByteReader.locked() = if (version >= 5) bool() else false
+/** Reads the flags and returns locked. The group, if any, is queued for [item], which puts it on the item it finishes. */
+private fun ByteReader.locked(): Boolean {
+    var locked = false
+    var group = 0L
+    if (version >= 5) {
+        val flags = byte()
+        val known = if (version >= 9) FLAG_LOCKED or FLAG_GROUPED else FLAG_LOCKED
+        if (flags and known.inv() != 0) throw CorruptFileException("Bad item flags $flags")
+        locked = flags and FLAG_LOCKED != 0
+        if (flags and FLAG_GROUPED != 0) group = long()
+    }
+    groups.addLast(group)
+    return locked
+}
+
+private const val FLAG_LOCKED = 1
+private const val FLAG_GROUPED = 2
 
 /** Four on, off or unset choices, two bits each: 0 unset, 1 off, 2 on. */
 private fun packLook(look: SpanLook): Int {

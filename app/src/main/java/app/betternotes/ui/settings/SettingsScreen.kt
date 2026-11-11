@@ -529,4 +529,3 @@ private fun TextAction(label: String, onClick: () -> Unit) {
         modifier = Modifier.clickable(onClick = onClick).padding(16.dp),
     )
 }
-

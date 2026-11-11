@@ -71,6 +71,20 @@ class StickerStore(context: Context) {
     /** The name of the pack sticker [id] was imported with, or null for one saved from a selection. */
     fun packOf(id: Long): String? = File(File(root, id.toString()), PACK).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null }
 
+    /** Puts sticker [id] in the set named [pack], or takes it out of its set when [pack] is null. A set exists while a sticker is in it. */
+    fun setPack(id: Long, pack: String?): Boolean {
+        val file = File(File(root, id.toString()), PACK)
+        return try {
+            if (pack == null) file.delete() || !file.exists() else {
+                file.writeText(pack)
+                true
+            }
+        } catch (e: IOException) {
+            Log.e(TAG, "Could not change the set of sticker $id", e)
+            false
+        }
+    }
+
     /**
      * Imports every picture in the folder [tree] (a folder the owner picked) as a sticker of a pack named after the folder, and returns the
      * pack's name and how many were added, or null if the folder cannot be read. Pictures with a see-through background keep it. Blocks.

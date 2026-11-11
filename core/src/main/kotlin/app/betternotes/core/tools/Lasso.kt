@@ -3,9 +3,12 @@ package app.betternotes.core.tools
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Affine
 import app.betternotes.core.geometry.Bounds
+import app.betternotes.core.geometry.Frame
+import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.geometry.polygonContains
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import kotlin.math.max
 
@@ -49,6 +52,8 @@ class Selection(
  * at least half of it is inside, so a slightly sloppy lasso still works. Anything else is selected
  * if its center is inside. With [fullOnly], all of the item must be inside. With [anyPortion], an item is selected
  * if any part of it is inside, even when the lasso only crosses it. Only items of [kinds] count, and locked ones only with [includeLocked].
+ * On a cover page, pass its size as [coverSize]: its background (see [isCoverBackground]) is never selected, locked or not,
+ * so the large color shape does not get in the way while the cover is designed.
  */
 fun selectWithLasso(
     pageId: Long,
@@ -58,18 +63,58 @@ fun selectWithLasso(
     fullOnly: Boolean = false,
     anyPortion: Boolean = false,
     includeLocked: Boolean = false,
+    coverSize: PageSize? = null,
 ): Selection {
     val indices = ArrayList<Int>()
     val items = ArrayList<PageItem>()
     if (polygon.size >= MIN_POLYGON_FLOATS) {
         content.forEachIntersecting(polygonBounds(polygon)) { index, item ->
-            if ((includeLocked || !item.locked) && item.kind in kinds && item.isCaughtBy(polygon, fullOnly, anyPortion)) {
+            if ((includeLocked || !item.locked) && !(coverSize != null && item.isCoverBackground(coverSize)) && content.isEditable(item) && item.kind in kinds && item.isCaughtBy(polygon, fullOnly, anyPortion)) {
                 indices += index
                 items += item
             }
         }
     }
     return Selection(pageId, indices.toIntArray(), items)
+}
+
+/** The large shape that colors a whole cover page: it reaches every edge of the page. */
+fun PageItem.isCoverBackground(size: PageSize): Boolean {
+    val box = bounds
+    return box.left <= 0f && box.top <= 0f && box.right >= size.widthPt && box.bottom >= size.heightPt
+}
+
+/** Whether every point of the loop [polygon] lies inside [box], so that the loop never leaves it. */
+fun polygonWithin(polygon: FloatArray, box: Bounds): Boolean {
+    if (polygon.isEmpty()) return false
+    var i = 0
+    while (i + 1 < polygon.size) {
+        if (polygon[i] <= box.left || polygon[i] >= box.right || polygon[i + 1] <= box.top || polygon[i + 1] >= box.bottom) return false
+        i += 2
+    }
+    return true
+}
+
+/**
+ * Whether every point of the loop [polygon] lies inside the drawn edges of [frame], turn included, so that the loop never crosses them.
+ * For a frame that is not turned this is [polygonWithin] of its box.
+ */
+fun polygonWithin(polygon: FloatArray, frame: Frame): Boolean {
+    if (frame.rotation == 0f) return polygonWithin(polygon, frame.bounds)
+    if (polygon.isEmpty()) return false
+    val turn = Math.toRadians(-frame.rotation.toDouble())
+    val c = kotlin.math.cos(turn).toFloat()
+    val s = kotlin.math.sin(turn).toFloat()
+    var i = 0
+    while (i + 1 < polygon.size) {
+        val dx = polygon[i] - frame.centerX
+        val dy = polygon[i + 1] - frame.centerY
+        val x = dx * c - dy * s
+        val y = dx * s + dy * c
+        if (x <= -frame.width / 2f || x >= frame.width / 2f || y <= -frame.height / 2f || y >= frame.height / 2f) return false
+        i += 2
+    }
+    return true
 }
 
 private const val MIN_POLYGON_FLOATS = 6
@@ -89,6 +134,8 @@ private fun polygonBounds(polygon: FloatArray): Bounds {
 }
 
 private fun PageItem.isCaughtBy(polygon: FloatArray, fullOnly: Boolean, anyPortion: Boolean): Boolean {
+    // A loop wholly inside an open post-it is on what the post-it holds (see [NoteScope]): only a loop that leaves it takes the post-it.
+    if (this is StickyNoteItem && isOpen && polygonWithin(polygon, frame)) return false
     if (anyPortion && !fullOnly) return touches(polygon)
     if (this !is StrokeItem) {
         if (!fullOnly) return polygonContains(polygon, bounds.centerX, bounds.centerY)

@@ -76,8 +76,14 @@ object ShapeTips {
         return floatArrayOf(length(item.kind, w, h, item.tipLength), width(item.kind, w, h, item.tipLength, item.tipWidth))
     }
 
-    /** Where the handle for [param] sits, as x then y. */
+    /** Where the handle for [param] sits, as x then y. A mirrored shape has its handles on the other side. */
     fun position(item: ShapeItem, param: ShapeParam): FloatArray {
+        val at = unmirroredPosition(item, param)
+        if (item.mirrored) at[0] = item.frame.width - at[0]
+        return at
+    }
+
+    private fun unmirroredPosition(item: ShapeItem, param: ShapeParam): FloatArray {
         val w = item.frame.width
         val h = item.frame.height
         val length = length(item.kind, w, h, item.tipLength)
@@ -105,7 +111,10 @@ object ShapeTips {
     }
 
     /** The shape with the handle for [param] dragged to (x, y) in its frame. */
-    fun dragged(item: ShapeItem, param: ShapeParam, x: Float, y: Float): ShapeItem {
+    fun dragged(item: ShapeItem, param: ShapeParam, x: Float, y: Float): ShapeItem =
+        unmirroredDragged(item, param, if (item.mirrored) item.frame.width - x else x, y)
+
+    private fun unmirroredDragged(item: ShapeItem, param: ShapeParam, x: Float, y: Float): ShapeItem {
         val w = item.frame.width
         val h = item.frame.height
         val axis = if (item.kind == ShapeKind.AXES) h * AXES_ORIGIN else h / 2f

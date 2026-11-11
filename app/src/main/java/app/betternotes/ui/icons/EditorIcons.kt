@@ -77,6 +77,10 @@ internal object EditorIcons {
     val Rotate by lazy { line("rotate", "M19.500 12a7.500 7.500 0 1 1-2.200-5.300 M19.500 4.500v4h-4") }
     val Lock by lazy { line("lock", "M6.500 11h11v8.500h-11z M8.500 11V8a3.500 3.500 0 0 1 7 0v3") }
     val Unlock by lazy { line("unlock", "M6.500 11h11v8.500h-11z M8.500 11V8a3.500 3.500 0 0 1 6.600-1.600") }
+    /** Two chain links joined: what groups the selection. */
+    val Link by lazy { line("link", "M6 8.500h4.500a3.500 3.500 0 0 1 0 7H6a3.500 3.500 0 0 1 0-7z M13.500 8.500h4.500a3.500 3.500 0 0 1 0 7h-4.500a3.500 3.500 0 0 1 0-7z") }
+    /** The links apart with a line across: what splits a group. */
+    val Unlink by lazy { line("unlink", "M6 8.500h1a3.500 3.500 0 0 1 0 7H6a3.500 3.500 0 0 1 0-7z M17 8.500h1a3.500 3.500 0 0 1 0 7h-1a3.500 3.500 0 0 1 0-7z M14 4l-4 16") }
     val Translucent by lazy { line("translucent", "M12 3.500C9 7.500 6.500 10 6.500 13.500a5.500 5.500 0 0 0 11 0C17.500 10 15 7.500 12 3.500z M12 7v10") }
     val LassoLocked by lazy { line("lasso-locked", dashedCircle() + "M8.500 11h7v5.500h-7z M10 11V9.500a2 2 0 0 1 4 0V11") }
     val LassoScreenshot by lazy { line("lasso-screenshot", dashedCircle() + "M8 10h1.500l1-1.500h3l1 1.500H16v6H8z M12 11a1.700 1.700 0 1 0 .01 0") }
@@ -117,6 +121,7 @@ internal object EditorIcons {
     val StickyNote by lazy { line("sticky", "M6 3.5h12A2.5 2.5 0 0 1 20.5 6v8l-6.5 6.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5z M20.5 14H16a2 2 0 0 0-2 2v4.5") }
     val Table by lazy { line("table", rrect(3f, 5f, 18f, 14f, 2.5f) + "M3 10h18 M3 14.5h18 M12 10v9") }
     val Tray by lazy { line("tray", rrect(3f, 6.5f, 18f, 13.5f, 3f) + "M6 6.5V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1.5 M8 13c1.5-3 2.5-3 3 0s2 3 3 0 1.5-2 2-1") }
+    val Layers by lazy { line("layers", "M12 3.5l9 4.8-9 4.8-9-4.8z M3 12.4l9 4.8 9-4.8 M3 16.4l9 4.8 9-4.8") }
     val Loupe by lazy { line("loupe", rrect(3f, 4f, 17f, 15.5f, 2f) + "M11.5 7.5a3.8 3.8 0 1 0 .01 0 M11.5 9.6v3.4 M9.8 11.3h3.4 M14.3 14l6 6.5") }
     val Ruler by lazy { line("ruler", "M3.7 16L16 3.7a1.5 1.5 0 0 1 2.1 0l2.2 2.2a1.5 1.5 0 0 1 0 2.1L8 20.3a1.5 1.5 0 0 1-2.1 0l-2.2-2.2a1.5 1.5 0 0 1 0-2.1z M8 11.7l2 2 M11 8.7l2 2 M14 5.7l2 2") }
     val Mic by lazy { line("mic", rrect(9f, 3f, 6f, 11f, 3f) + "M5.5 11a6.5 6.5 0 0 0 13 0 M12 17.5V21 M9 21h6") }
@@ -151,6 +156,7 @@ internal object EditorIcons {
         )
     }
     val Sliders by lazy { line("sliders", "M3 8h10 M19 8h2 M3 16h2 M11 16h10 M16 5a3 3 0 1 0 .01 0 M8 13a3 3 0 1 0 .01 0") }
+    val Mirror by lazy { line("mirror", "M12 3v18 M8 7l-5 11h5z M16 7l5 11h-5z") }
     val Close by lazy { line("close", "M6 6l12 12 M18 6L6 18") }
     // What the tape is printed with, and how it is laid down. Each tape icon is a strip with its mark inside.
     val TapePlain by lazy { line("tape-plain", "M3 8h18v8H3z") }

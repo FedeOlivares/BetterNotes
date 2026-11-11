@@ -14,7 +14,6 @@ import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.model.PageItem
-import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.CoverDesign
@@ -141,7 +140,7 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
         if (size != null) canvas.clipRect(0f, 0f, size.widthPt, size.heightPt)
         if (page.source == PageSource.Blank) paintPaper(canvas, page, region, scale)
         highlights[page.id]?.let { paintHighlights(canvas, it) }
-        source.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale, postItsBottom = !page.isCover) }
+        source.contentOrLoad(page.id)?.let { paintItems(canvas, it, region, scale) }
     }
 
     private fun paintPaper(canvas: Canvas, page: Page, region: Bounds, scale: Float) {
@@ -188,31 +187,22 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
         }
     }
 
-    /**
-     * Post-its are always at the bottom of the page's items, whatever their place in the stack, except on the cover, where they take
-     * part in the order like anything else so that a cover can have post-its over other items.
-     */
-    private fun paintItems(canvas: Canvas, content: PageContent, tileRegion: Bounds, scale: Float, postItsBottom: Boolean) {
+    /** Items are painted in their order on the page, which a layer's rank comes first in, and locked ones below the rest of their kind. */
+    private fun paintItems(canvas: Canvas, content: PageContent, tileRegion: Bounds, scale: Float) {
         // Ink is picked by its box, and a pixel or two of the line can lie past it, so a tile looks a little beyond its own edge.
         val region = TileGrid.cullRegion(tileRegion, scale)
         strokeToTile.setScale(scale, scale)
-        val passes: List<(PageItem) -> Boolean> = if (postItsBottom) {
-            listOf(
-                { it is StickyNoteItem },
-                { it !is StickyNoteItem && it.locked },
-                { it !is StickyNoteItem && !it.locked },
-            )
-        } else {
-            listOf({ it.locked }, { !it.locked })
-        }
+        val passes: List<(PageItem) -> Boolean> = listOf({ it.locked }, { !it.locked })
         // Highlighter strokes that must not darken where they cross are drawn opaque into one layer per see-through level,
         // at the place in the stack of the first of them, so ink drawn in between does not split them into separate layers.
         val painted = HashSet<Int>()
+        // A hidden layer is not drawn. Hiding it marks the whole page changed, so every tile that held something of it is redrawn.
+        val hidden = content.layers.hiddenIds
         // Locked items are a layer below the rest: painted first, so that whatever is not locked lies over them whatever the order.
         for (pass in passes) {
         painted.clear()
         content.forEachPaintingIn(region) { _, item ->
-            if (!pass(item)) return@forEachPaintingIn
+            if (!pass(item) || item.layer in hidden) return@forEachPaintingIn
             val alpha = if (item is StrokeItem) InkBrushes.layerAlpha(item.style) else NO_LAYER
             when {
                 item is StrokeItem && alpha == NO_LAYER -> ink.draw(canvas, source.mesh(item), strokeToTile)
@@ -223,7 +213,7 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
                     layerBounds.set(region.left - reach, region.top - reach, region.right + reach, region.bottom + reach)
                     canvas.saveLayerAlpha(layerBounds, alpha)
                     content.forEachPaintingIn(region) { _, other ->
-                        if (other is StrokeItem && pass(other) && InkBrushes.layerAlpha(other.style) == alpha) {
+                        if (other is StrokeItem && pass(other) && other.layer !in hidden && InkBrushes.layerAlpha(other.style) == alpha) {
                             ink.draw(canvas, source.opaqueMesh(other), strokeToTile)
                         }
                     }
@@ -275,11 +265,19 @@ internal class CanvasTemplateSink : TemplateSink {
         words.draw(canvas, text, x, baseline, size, color, style, align)
     }
 
-    override fun turnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int, style: TextStyle) {
+    override fun turnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int, style: TextStyle) =
+        styledTurnedText(text, cx, cy, size, degrees, color, style, null)
+
+    override fun styledText(text: String, x: Float, baseline: Float, size: Float, color: Int, style: TextStyle, align: TextAlign, font: String?) {
+        flush()
+        words.draw(canvas, text, x, baseline, size, color, style, align, font)
+    }
+
+    override fun styledTurnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int, style: TextStyle, font: String?) {
         flush()
         canvas.save()
         canvas.rotate(degrees, cx, cy)
-        words.draw(canvas, text, cx, cy + size * CENTER_TO_BASELINE, size, color, style, TextAlign.CENTER)
+        words.draw(canvas, text, cx, cy + size * CENTER_TO_BASELINE, size, color, style, TextAlign.CENTER, font)
         canvas.restore()
     }
 

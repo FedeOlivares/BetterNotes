@@ -38,6 +38,9 @@ object PlannerPages {
         semesters: List<Int> = emptyList(),
         colors: List<Int> = emptyList(),
         dateInk: List<DateStroke> = emptyList(),
+        roles: PlannerRoleStyles = PlannerRoleStyles.NONE,
+        /** The styles of single elements, kept with the page they were made on. */
+        elementStyles: Map<PlannerPage, Map<ElementKey, RoleStyle>> = emptyMap(),
     ): List<Page> {
         val plan = PlannerPlan(setup)
         val used = HashSet<Long>(reuse.values)
@@ -45,14 +48,14 @@ object PlannerPages {
         val cover = Page(
             idFor(PlannerPage.Cover),
             SIZE,
-            PageBackground(PAPER, PageTemplate.Planner(PlannerPage.Cover, setup, title, colors = colors)),
+            PageBackground(PAPER, PageTemplate.Planner(PlannerPage.Cover, setup, title, colors = colors, roles = roles.onlyRoles())),
             cover = COVER_ID,
         )
         return buildList(plan.size + 1) {
             add(cover)
             for (page in plan.pages) {
                 val shows = page.kind in DATED_PAGES
-                val template = PageTemplate.Planner(page, setup, semesters = if (shows) semesters else emptyList(), colors = colors, dateInk = if (shows) dateInk else emptyList())
+                val template = PageTemplate.Planner(page, setup, semesters = if (shows) semesters else emptyList(), colors = colors, dateInk = if (shows) dateInk else emptyList(), roles = rolesOfPage(roles, elementStyles[page]))
                 add(Page(idFor(page), SIZE, PageBackground(PAPER, template)))
             }
         }
@@ -73,7 +76,9 @@ object PlannerPages {
         if (setupOf(document) == setup) return null
         val reuse = HashMap<PlannerPage, Long>()
         for (page in document.pages) (page.background.template as? PageTemplate.Planner)?.let { reuse[it.page] = page.id }
-        return SetPlannerPages(document.pages.toList(), build(setup, reuse, ids, titleOf(document), semestersOf(document), colorsOf(document), dateInkOf(document)))
+        val own = HashMap<PlannerPage, Map<ElementKey, RoleStyle>>()
+        for (page in document.pages) (page.background.template as? PageTemplate.Planner)?.let { if (it.roles.byElement.isNotEmpty()) own[it.page] = it.roles.byElement }
+        return SetPlannerPages(document.pages.toList(), build(setup, reuse, ids, titleOf(document), semestersOf(document), colorsOf(document), dateInkOf(document), rolesOf(document), own))
     }
 
     /** The pages that show the semester dates. */
@@ -116,6 +121,102 @@ object PlannerPages {
     /** The planner's colors (see [PlannerColors]), or none when they are the defaults. */
     fun colorsOf(document: Document): List<Int> =
         (document.pages.firstOrNull()?.background?.template as? PageTemplate.Planner)?.colors.orEmpty()
+
+    private fun rolesOfPage(roles: PlannerRoleStyles, own: Map<ElementKey, RoleStyle>?): PlannerRoleStyles =
+        if (own.isNullOrEmpty()) roles.onlyRoles() else PlannerRoleStyles(roles.byRole, own)
+
+    /** The styles the owner gave to whole roles of the planner (the same on every page), or none. */
+    fun rolesOf(document: Document): PlannerRoleStyles =
+        (document.pages.firstOrNull()?.background?.template as? PageTemplate.Planner)?.roles?.onlyRoles() ?: PlannerRoleStyles.NONE
+
+    /** What the owner does to the look of elements: sets [slot] to [color] or, for the font, to [font]; a null [slot] puts back all of it. */
+    class StyleChange(val slot: RoleSlot?, val color: Int? = null, val font: String? = null) {
+        fun apply(style: RoleStyle): RoleStyle = when (slot) {
+            null -> RoleStyle()
+            RoleSlot.FONT -> style.withFont(font)
+            else -> style.withColor(slot, color)
+        }
+    }
+
+    /**
+     * The undoable change that applies [change] to the elements [keys] of the page [pageId], or, when [similar], to every element with one of
+     * their roles on every page. Null when nothing changes or this is not a planner. Elements are never moved, and their text is never changed.
+     *
+     * Putting back all ([StyleChange.slot] null) leaves the exact look the page draws: with [similar] the role's style and the style of every
+     * element of that role go, else only the elements' own styles go, and where the role is restyled they are marked plain.
+     */
+    fun restyle(document: Document, pageId: Long, keys: Collection<ElementKey>, similar: Boolean, change: StyleChange): Edit? {
+        if (document.kind != DocumentKind.PLANNER || keys.isEmpty()) return null
+        val roles = keys.mapTo(HashSet()) { it.role }
+        // A change of lines, or putting all back, reaches the lines of the other half of a section; nothing else of it.
+        val partners = if (similar && (change.slot == RoleSlot.LINE || change.slot == null)) roles.mapNotNull { linePartner(it) }.filter { it !in roles } else emptyList()
+        val lineChange = StyleChange(RoleSlot.LINE, change.color)
+        val before = document.pages.toList()
+        val after = before.map { page ->
+            val template = page.background.template as? PageTemplate.Planner ?: return@map page
+            var styles = template.roles
+            if (similar) {
+                for (role in roles) {
+                    styles = styles.withRole(role, change.apply(styles.byRole[role] ?: RoleStyle()))
+                    // An element restyled on its own takes the change too, or it would keep what the owner now wants gone.
+                    for ((key, own) in styles.byElement.entries.toList()) if (key.role == role) styles = styles.withElement(key, change.apply(own))
+                }
+                for (role in partners) styles = styles.withRoleLines(role, lineChange)
+            } else if (page.id == pageId) {
+                for (key in keys) {
+                    val own = styles.byElement[key]
+                    val next = if (change.slot == null && styles.byRole.containsKey(key.role)) RoleStyle(plain = true) else change.apply(own ?: RoleStyle())
+                    styles = styles.withElement(key, next)
+                }
+            }
+            if (styles == template.roles) page else page.copy(background = page.background.copy(template = template.copy(roles = styles)))
+        }
+        return if (after == before) null else SetPlannerPages(before, after)
+    }
+
+    /**
+     * The undoable change that gives every element like the picked [keys] (same role, every page) the look they have now: what the owner
+     * changed on them one by one, then pressed "similar" for. Null when nothing differs or this is not a planner.
+     */
+    fun spread(document: Document, pageId: Long, keys: Collection<ElementKey>): Edit? {
+        if (document.kind != DocumentKind.PLANNER || keys.isEmpty()) return null
+        val own = (document.pages.firstOrNull { it.id == pageId }?.background?.template as? PageTemplate.Planner)?.roles ?: return null
+        // What each picked role looks like on the picked elements: the first one's, with its own changes over the role's.
+        val looks = LinkedHashMap<PlannerRole, RoleStyle>()
+        for (key in keys) if (key.role !in looks) {
+            val look = own.styleOf(key.role, key.x, key.y) ?: continue
+            looks[key.role] = RoleStyle(look.text, look.line, look.background, look.shading, look.font)
+        }
+        if (looks.isEmpty()) return null
+        val before = document.pages.toList()
+        val after = before.map { page ->
+            val template = page.background.template as? PageTemplate.Planner ?: return@map page
+            var styles = template.roles
+            for ((role, look) in looks) {
+                styles = styles.withRole(role, look)
+                // An element restyled on its own takes the look too.
+                for ((key, _) in styles.byElement.entries.toList()) if (key.role == role) styles = styles.withElement(key, RoleStyle())
+                val partner = linePartner(role)
+                if (look.line != null && partner != null && partner !in looks) styles = styles.withRoleLines(partner, StyleChange(RoleSlot.LINE, look.line))
+            }
+            if (styles == template.roles) page else page.copy(background = page.background.copy(template = template.copy(roles = styles)))
+        }
+        return if (after == before) null else SetPlannerPages(before, after)
+    }
+
+    /** The lines of a section are its heading's rule and its ruled rows: for all elements like one, the owner means them together. */
+    private fun linePartner(role: PlannerRole): PlannerRole? = when (role) {
+        PlannerRole.SECTION_HEADING -> PlannerRole.ROWS
+        PlannerRole.ROWS -> PlannerRole.SECTION_HEADING
+        else -> null
+    }
+
+    /** These styles with [change], a change of lines, on [role] and on every element of it restyled on its own. */
+    private fun PlannerRoleStyles.withRoleLines(role: PlannerRole, change: StyleChange): PlannerRoleStyles {
+        var styles = withRole(role, change.apply(byRole[role] ?: RoleStyle()))
+        for ((key, own) in styles.byElement.entries.toList()) if (key.role == role) styles = styles.withElement(key, change.apply(own))
+        return styles
+    }
 
     /** The handwriting in the semester date blanks. */
     fun dateInkOf(document: Document): List<DateStroke> {

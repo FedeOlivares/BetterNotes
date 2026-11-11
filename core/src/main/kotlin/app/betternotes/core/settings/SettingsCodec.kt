@@ -11,6 +11,7 @@ import app.betternotes.core.format.pageSize
 import app.betternotes.core.format.template
 import app.betternotes.core.gesture.TwoFingerAction
 import app.betternotes.core.layout.ScrollDirection
+import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.template.PageBackground
 
 private const val SETTINGS_MAGIC = "BNST"
@@ -28,6 +29,9 @@ private const val SECTION_NOTE_NAME = 10
 private const val SECTION_SNAP = 11
 private const val SECTION_AUTO_NAME = 12
 private const val SECTION_POMODORO = 13
+
+/** Far from the others, so that sections added by other changes cannot take the same number. */
+private const val SECTION_STICKY = 40
 
 private val AUTO_NAMES = WireEnum(AutoName.AUTO, AutoName.OFF)
 
@@ -106,6 +110,7 @@ object SettingsCodec {
         }
         section(SECTION_NOTE_NAME) { NOTE_NAMES.write(this, settings.newNoteName) }
         section(SECTION_SNAP) { bool(settings.canvas.snapToAlign) }
+        if (settings.canvas.stickyOpacity != 1f) section(SECTION_STICKY) { float(settings.canvas.stickyOpacity) }
         section(SECTION_AUTO_NAME) { AUTO_NAMES.write(this, settings.autoName) }
         section(SECTION_POMODORO) {
             val p = settings.pomodoro
@@ -151,6 +156,7 @@ object SettingsCodec {
                 )
                 SECTION_NOTE_NAME -> settings.copy(newNoteName = NOTE_NAMES.read(this))
                 SECTION_SNAP -> settings.copy(canvas = settings.canvas.copy(snapToAlign = bool()))
+                SECTION_STICKY -> settings.copy(canvas = settings.canvas.copy(stickyOpacity = float().coerceIn(NoteOptions.MIN_OPACITY, 1f)))
                 SECTION_AUTO_NAME -> settings.copy(autoName = AUTO_NAMES.read(this))
                 SECTION_POMODORO -> settings.copy(
                     pomodoro = PomodoroSettings(varint(), varint(), varint(), varint(), bool(), bool()),

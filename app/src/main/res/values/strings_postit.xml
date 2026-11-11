@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="panel_opacity_percent">Opacity %1$d%%</string>
+    <string name="panel_opacity_general">Same as the other colors (%1$d%%)</string>
+    <string name="settings_sticky_opacity">Post-it opacity</string>
+    <string name="settings_sticky_opacity_detail">How see-through new post-its are. A color can have an opacity of its own in the color wheel.</string>
+    <string name="panel_list">List</string>
+    <string name="panel_list_dot_color">Dot color</string>
+    <string name="panel_list_dot_size">Dot size</string>
+    <string name="panel_list_dot_opacity">Dot opacity</string>
+</resources>

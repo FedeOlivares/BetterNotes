@@ -37,9 +37,11 @@ internal object TextFit {
                 else -> Typeface.DEFAULT
             }
         }
-        val shown = if (spanned) spannedText(text, size * scale, style, spans.map { it.scaled(scale) }) else text
+        val wide = (width * scale).roundToInt().coerceAtLeast(1)
+        val plain = if (spanned) spannedText(text, size * scale, style, spans.map { it.scaled(scale) }) else text
+        val shown = withListMarks(plain, style, 0, size * scale, paint, wide)
         val layout = StaticLayout.Builder
-            .obtain(shown, 0, text.length, paint, (width * scale).roundToInt().coerceAtLeast(1))
+            .obtain(shown, 0, text.length, paint, wide)
             .setAlignment(
                 when (style.align) {
                     HorizontalAlign.START -> Layout.Alignment.ALIGN_NORMAL

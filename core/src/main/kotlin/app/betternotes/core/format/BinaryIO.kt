@@ -25,11 +25,38 @@ internal const val LIBRARY_FORMAT_VERSION = 2
 internal const val LAYOUT_FORMAT_VERSION = 7
 
 /**
+ * Version 14 of a document file holds a planner whose elements the owner restyled (a planner page template with its styles by role and by element).
+ * Only a document that has one is written at 14; every other keeps [LAYOUT_FORMAT_VERSION], byte for byte. 8 to 13 are left to other changes.
+ * The settings and library files never use it. This is the newest version a document file can be read at.
+ */
+internal const val PLANNER_ROLES_FORMAT_VERSION = 14
+
+/**
  * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).
  * Version 4 added the tape and its shadow; 5 (release 1.3) added a locked flag on every item, a sticky note's keep-open, an image's opacity and the highlighter's no-overlap.
- * Version 6 (release 1.4) added the paint bucket's fill; 7 (release 2.0.1) the parts of a text box that look different from the rest; 8 (release 2.1) the added font of a text box and of its parts. Older pages still open, with the defaults. The other files are still at [FORMAT_VERSION].
+ * Version 6 (release 1.4) added the paint bucket's fill; 7 (release 2.0.1) the parts of a text box that look different from the rest; 8 (release 2.1) the added font of a text box and of its parts; 9 the group an item belongs to; 10 a text box that is a list. Older pages still open, with the defaults. The other files are still at [FORMAT_VERSION].
  */
-internal const val PAGE_FORMAT_VERSION = 8
+internal const val PAGE_FORMAT_VERSION = 10
+
+/**
+ * Version 11 (layers) adds, after the items, the page's layer table and how many items each layer holds. Only a page that has more than one layer, or a
+ * layer that is hidden or named, is written at this version; every other page is written at [PAGE_FORMAT_VERSION], exactly as before.
+ * Versions 9 and 10 belong to other changes. This is the newest version a page file can be read at.
+ */
+internal const val PAGE_LAYERS_FORMAT_VERSION = 11
+
+/**
+ * Version 12 adds a table's header color and a shape's mirror, as item tags of their own. Only a page that holds one of them is written at this
+ * version (with the layer table, as every version from 11 has); every other page keeps its bytes. This is the newest version a page file can be read at.
+ */
+internal const val PAGE_TOOLS_FORMAT_VERSION = 12
+
+/**
+ * Version 15 adds the pattern of a paint bucket fill (marks over its color), as an item tag of its own. Only a page that holds one is written at
+ * this version (with the layer table, as every version from 11 has); every other page keeps its bytes. Versions 13 and 14 belong to other
+ * changes. This is the newest version a page file can be read at.
+ */
+internal const val PAGE_PATTERN_FILL_FORMAT_VERSION = 15
 
 private const val MAGIC_SIZE = 4
 private const val CRC_SIZE = 4
@@ -155,6 +182,9 @@ internal class ByteReader(bytes: ByteArray, offset: Int, end: Int) {
 
     /** The format version of the file being read, for records that changed between versions. */
     var version = FORMAT_VERSION
+
+    /** The group ids of the items being read, innermost last: each item queues its own after its flags and takes it back when finished. */
+    val groups = ArrayDeque<Long>()
 
     val remaining: Int get() = buffer.remaining()
 

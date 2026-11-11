@@ -299,22 +299,22 @@ class NoteEditor(
 
     private fun loadInBackground(pageId: Long) {
         background.execute {
-            val items = try {
-                store.readPage(pageId)
+            val page = try {
+                store.readPageWithLayers(pageId)
             } catch (e: IOException) {
                 Log.e(TAG, "Could not read page $pageId", e)
                 main.post { loading.remove(pageId) }
                 return@execute
             }
-            val meshed = meshAll(items)
+            val meshed = meshAll(page.items)
             ink.warm(meshed.map { it.second })
-            main.post { install(pageId, items, meshed) }
+            main.post { install(pageId, page, meshed) }
         }
     }
 
-    private fun install(pageId: Long, items: List<PageItem>, meshed: List<Pair<StrokeItem, Stroke>>) {
+    private fun install(pageId: Long, page: app.betternotes.core.format.DecodedPage, meshed: List<Pair<StrokeItem, Stroke>>) {
         loading.remove(pageId)
-        if (!session.install(pageId, items)) return
+        if (!session.install(pageId, page.items, page.layers)) return
         for ((item, stroke) in meshed) strokes.put(item, stroke)
         onPageLoaded(pageId)
     }

@@ -2,6 +2,7 @@ package app.betternotes.core.format
 
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.PageLayers
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -44,13 +45,23 @@ class DocumentStore(val root: File) {
     fun writeDocumentBytes(bytes: ByteArray) = writeAtomically(documentFile, bytes)
 
     /** A page with no file has simply never been drawn on, so it reads as empty. */
-    fun readPage(pageId: Long): List<PageItem> {
-        val file = pageFile(pageId)
-        return if (file.exists()) PageCodec.decode(file.readBytes()) else emptyList()
+    fun readPage(pageId: Long): List<PageItem> = readPageWithLayers(pageId).items
+
+    /** The items on layers that are shown, for what draws a page without editing it: exports and thumbnails. */
+    fun readShownItems(pageId: Long): List<PageItem> {
+        val page = readPageWithLayers(pageId)
+        val hidden = page.layers.hiddenIds
+        return if (hidden.isEmpty()) page.items else page.items.filter { it.layer !in hidden }
     }
 
-    fun writePage(pageId: Long, items: List<PageItem>) =
-        writeAtomically(pageFile(pageId), PageCodec.encode(items))
+    /** The page's items and its layers. */
+    fun readPageWithLayers(pageId: Long): DecodedPage {
+        val file = pageFile(pageId)
+        return if (file.exists()) PageCodec.decodePage(file.readBytes()) else DecodedPage(emptyList(), PageLayers.Single)
+    }
+
+    fun writePage(pageId: Long, items: List<PageItem>, layers: PageLayers = PageLayers.Single) =
+        writeAtomically(pageFile(pageId), PageCodec.encode(items, layers = layers))
 
     /** The page last looked at, to continue from, or null if none was saved. */
     fun readLastPage(): Long? = try {

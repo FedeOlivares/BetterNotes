@@ -1,5 +1,7 @@
 package app.betternotes.ui.editor
 
+import app.betternotes.core.model.FillPattern
+import app.betternotes.core.model.FillPatternKind
 import android.content.Context
 import androidx.core.content.edit
 import app.betternotes.core.model.BrushKind
@@ -19,6 +21,8 @@ import app.betternotes.core.tools.ToolbarEntries
 import app.betternotes.core.tools.ToolbarGroups
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.LassoOptions
+import app.betternotes.core.model.ListKind
+import app.betternotes.core.model.ListStyle
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
@@ -29,12 +33,40 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
+/** Whether a tool gives the tool in use before back once it has been used, and after how many tenths of a second. */
+internal data class ToolReturn(val on: Boolean = true, val tenths: Int = 0)
+
 /** Remembers how each tool was left, and the theme, between launches. */
 internal class ToolStore(context: Context) {
     private val prefs = context.getSharedPreferences("editor_tools", Context.MODE_PRIVATE)
 
     init {
         addFillKind()
+        turnHelpersOn()
+    }
+
+    /**
+     * Circle to lasso, pressure and scribble to erase became on by default, but every saved ink tool carries all three values, so an
+     * untouched one cannot be told from one switched off. Once, a tool with all three off, as the old defaults were, gets them on.
+     * A tool with any of them on was changed by the owner and stays as it is, and after this the owner's choices stand.
+     */
+    private fun turnHelpersOn() {
+        if (prefs.getBoolean(KEY_HELPERS_ON, false)) return
+        prefs.edit {
+            for (tool in InkTool.entries) {
+                val saved = prefs.getString(tool.name, null) ?: continue
+                try {
+                    val json = JSONObject(saved)
+                    if (!json.optBoolean("circleToLasso") && !json.optBoolean("scribbleToErase") && !json.optBoolean("pressure")) {
+                        json.put("circleToLasso", true).put("scribbleToErase", true).put("pressure", true)
+                        putString(tool.name, json.toString())
+                    }
+                } catch (_: JSONException) {
+                    // A tool that cannot be read is replaced by the default, which has them on.
+                }
+            }
+            putBoolean(KEY_HELPERS_ON, true)
+        }
     }
 
     /**
@@ -129,6 +161,30 @@ internal class ToolStore(context: Context) {
 
     fun fillOpacity(): Float = prefs.getFloat(KEY_FILL_OPACITY, 1f)
 
+    /** The pattern the paint bucket draws over its color; solid, the default, is the color alone. */
+    fun fillPattern(): FillPattern = FillPattern(
+        kind = FillPatternKind.entries.firstOrNull { it.name == prefs.getString(KEY_PATTERN_KIND, null) } ?.takeIf { it != FillPatternKind.SOLID } ?: FillPatternKind.DOTS,
+        color = prefs.getInt(KEY_PATTERN_COLOR, DEFAULT_PATTERN_COLOR),
+        spacing = prefs.getFloat(KEY_PATTERN_SPACING, FillPattern.DEFAULT_SPACING).coerceIn(FillPattern.MIN_SPACING, FillPattern.MAX_SPACING),
+        weight = prefs.getFloat(KEY_PATTERN_WEIGHT, FillPattern.DEFAULT_WEIGHT).coerceIn(FillPattern.MIN_WEIGHT, FillPattern.MAX_WEIGHT),
+    )
+
+    /** Whether the paint bucket draws a pattern at all. Off, the default, the fill is the plain color and the pattern choices stay hidden. */
+    fun fillPatternOn(): Boolean = prefs.getBoolean(KEY_PATTERN_ON, false)
+
+    fun saveFillPatternOn(on: Boolean) {
+        prefs.edit { putBoolean(KEY_PATTERN_ON, on) }
+    }
+
+    fun saveFillPattern(pattern: FillPattern) {
+        prefs.edit {
+            putString(KEY_PATTERN_KIND, pattern.kind.name)
+            putInt(KEY_PATTERN_COLOR, pattern.color)
+            putFloat(KEY_PATTERN_SPACING, pattern.spacing)
+            putFloat(KEY_PATTERN_WEIGHT, pattern.weight)
+        }
+    }
+
     /** Whether the paint bucket gives the tool in use before back after a while, and how long that is, in tenths of a second. */
     fun fillReturn(): Boolean = prefs.getBoolean(KEY_FILL_RETURN, true)
 
@@ -138,6 +194,31 @@ internal class ToolStore(context: Context) {
         prefs.edit {
             putBoolean(KEY_FILL_RETURN, on)
             putInt(KEY_FILL_RETURN_DELAY, delayTenths)
+        }
+    }
+
+    /** Whether shapes, notes, tables and pictures give the tool in use before back once one is put down, and after how long, in tenths of a second. */
+    fun createReturn(): Boolean = prefs.getBoolean(KEY_CREATE_RETURN, true)
+
+    fun createReturnDelay(): Int = prefs.getInt(KEY_CREATE_RETURN_DELAY, 0)
+
+    fun saveCreateReturn(on: Boolean, delayTenths: Int) {
+        prefs.edit {
+            putBoolean(KEY_CREATE_RETURN, on)
+            putInt(KEY_CREATE_RETURN_DELAY, delayTenths)
+        }
+    }
+
+    /** The same for the highlighter, eraser, lasso, text and sticker tools, each on its own. Untouched, it is on and immediate, except the highlighter and the eraser, which are off. */
+    fun toolReturn(tool: ActiveTool) = ToolReturn(
+        prefs.getBoolean("return_${tool.name}", tool != ActiveTool.HIGHLIGHTER && tool != ActiveTool.ERASER),
+        prefs.getInt("return_delay_${tool.name}", 0),
+    )
+
+    fun saveToolReturn(tool: ActiveTool, choice: ToolReturn) {
+        prefs.edit {
+            putBoolean("return_${tool.name}", choice.on)
+            putInt("return_delay_${tool.name}", choice.tenths)
         }
     }
 
@@ -245,8 +326,19 @@ internal class ToolStore(context: Context) {
                 strikethrough = json.getBoolean("strike"),
                 align = HorizontalAlign.valueOf(json.getString("align")),
                 verticalAlign = VerticalAlign.valueOf(json.getString("verticalAlign")),
+                list = json.optJSONObject("list")?.let { list ->
+                    ListStyle(
+                        kind = runCatching { ListKind.valueOf(list.getString("kind")) }.getOrDefault(ListKind.BULLET),
+                        dotColor = list.optInt("dotColor", ListStyle.DEFAULT_DOT_COLOR),
+                        dotSize = list.optDouble("dotSize", ListStyle.DEFAULT_DOT_SIZE.toDouble()).toFloat(),
+                        dotOpacity = list.optDouble("dotOpacity", 1.0).toFloat(),
+                    ).clamped()
+                },
             ),
             keepOpen = json.optBoolean("keepOpen", false),
+            colorOpacity = json.optJSONArray("colorOpacity")?.let { pairs ->
+                (0 until pairs.length()).associate { pairs.getJSONArray(it).let { pair -> pair.getInt(0) to pair.getDouble(1).toFloat() } }
+            }.orEmpty(),
         )
     }
 
@@ -262,6 +354,16 @@ internal class ToolStore(context: Context) {
             put("align", options.style.align.name)
             put("verticalAlign", options.style.verticalAlign.name)
             put("keepOpen", options.keepOpen)
+            options.style.list?.let { list ->
+                put(
+                    "list",
+                    JSONObject().put("kind", list.kind.name).put("dotColor", list.dotColor)
+                        .put("dotSize", list.dotSize.toDouble()).put("dotOpacity", list.dotOpacity.toDouble()),
+                )
+            }
+            if (options.colorOpacity.isNotEmpty()) {
+                put("colorOpacity", JSONArray(options.colorOpacity.map { (rgb, opacity) -> JSONArray().put(rgb).put(opacity.toDouble()) }))
+            }
         }
         prefs.edit { putString(KEY_NOTE, json.toString()) }
     }
@@ -276,6 +378,7 @@ internal class ToolStore(context: Context) {
             colors = json.getJSONArray("colors").ints(),
             selectedColor = json.getInt("selectedColor"),
             fillColor = json.getInt("fillColor"),
+            headerColor = json.optInt("headerColor", 0),
         )
     }
 
@@ -289,6 +392,7 @@ internal class ToolStore(context: Context) {
             put("colors", JSONArray(options.colors))
             put("selectedColor", options.selectedColor)
             put("fillColor", options.fillColor)
+            put("headerColor", options.headerColor)
         }
         prefs.edit { putString(KEY_TABLE, json.toString()) }
     }
@@ -398,7 +502,7 @@ internal class ToolStore(context: Context) {
         stabilization = if (json.has("stabilizationLevel")) json.getInt("stabilizationLevel") else (json.optInt("stabilization", 1) - 1) * 2,
         brush = BrushKind.entries.firstOrNull { it.name == json.optString("brush") } ?: BrushKind.PENCIL,
         noOverlap = json.optBoolean("noOverlap", false),
-        pressure = json.optBoolean("pressure", false),
+        pressure = json.optBoolean("pressure", InkPreset.defaults(tool).pressure),
     )
 
     private fun JSONArray.ints() = List(length()) { getInt(it) }
@@ -415,9 +519,16 @@ internal class ToolStore(context: Context) {
         const val KEY_TABLE = "table"
         const val KEY_TOOLBAR_COLOR = "toolbar_color"
         const val KEY_FILL_KIND_ADDED = "fill_kind_added"
+        const val KEY_HELPERS_ON = "helpers_on"
         const val KEY_FILL_COLOR = "fill_color"
         const val KEY_FILL_COLORS = "fill_colors"
         const val KEY_FILL_OPACITY = "fill_opacity"
+        const val KEY_PATTERN_ON = "fill_pattern_on"
+        const val KEY_PATTERN_KIND = "fill_pattern_kind"
+        const val KEY_PATTERN_COLOR = "fill_pattern_color"
+        const val KEY_PATTERN_SPACING = "fill_pattern_spacing"
+        const val KEY_PATTERN_WEIGHT = "fill_pattern_weight"
+        val DEFAULT_PATTERN_COLOR = 0xFF000000.toInt()
         val DEFAULT_FILL_COLOR = 0xFFFFD54F.toInt()
         val DEFAULT_FILL_COLORS = listOf(
             0xFFE57373.toInt(),
@@ -432,6 +543,8 @@ internal class ToolStore(context: Context) {
         const val KEY_TOOLBAR_EDGE = "toolbar_edge"
         const val KEY_FILL_RETURN = "fill_return"
         const val KEY_FILL_RETURN_DELAY = "fill_return_delay"
+        const val KEY_CREATE_RETURN = "create_return"
+        const val KEY_CREATE_RETURN_DELAY = "create_return_delay"
         const val DEFAULT_FILL_RETURN_DELAY = 20
         const val KEY_TOOL_ORDER = "tool_order"
         const val KEY_TOOLS_HIDDEN = "tools_hidden"

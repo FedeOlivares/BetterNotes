@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tool_layers">Layers</string>
+    <string name="layers_title">Layers</string>
+    <string name="layer_default_name">Layer %1$d</string>
+    <string name="layers_add">Add a layer</string>
+    <string name="layers_rename">Rename the layer</string>
+    <string name="layers_merge">Merge into the layer below</string>
+    <string name="layers_delete">Delete the layer and what is on it</string>
+    <string name="layers_move_here">Move the selection to this layer</string>
+    <string name="layers_work_on">Work on this layer</string>
+    <string name="layers_show">Show the layer</string>
+    <string name="layers_hide">Hide the layer</string>
+</resources>

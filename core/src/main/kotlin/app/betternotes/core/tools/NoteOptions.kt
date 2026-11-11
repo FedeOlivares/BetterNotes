@@ -15,8 +15,22 @@ data class NoteOptions(
     val style: TextStyle = TextStyle(),
     /** New sticky notes stay open when the page is tapped elsewhere. */
     val keepOpen: Boolean = false,
+    /**
+     * Colors that have an opacity of their own, by their color without alpha. Every other color follows the general opacity, which is a
+     * setting and not part of the tool.
+     */
+    val colorOpacity: Map<Int, Float> = emptyMap(),
 ) {
     val color get() = colors[selectedColor]
+
+    /** The opacity a note of [rgb] gets: its own, or else [general]. */
+    fun opacityOf(rgb: Int, general: Float): Float = colorOpacity[rgb and RGB_MASK] ?: general
+
+    /** [rgb] with an opacity of its own, or following the general opacity when [opacity] is null. */
+    fun withOpacity(rgb: Int, opacity: Float?): NoteOptions {
+        val key = rgb and RGB_MASK
+        return copy(colorOpacity = if (opacity == null) colorOpacity - key else colorOpacity + (key to opacity.coerceIn(MIN_OPACITY, 1f)))
+    }
 
     fun withColor(value: Int): NoteOptions {
         val next = colors.toMutableList()
@@ -25,16 +39,26 @@ data class NoteOptions(
     }
 
     /** A new, open note with its corner at the given point. */
-    fun newSticky(x: Float, y: Float, ids: IdSource = IdSource.Random) = StickyNoteItem(
+    fun newSticky(x: Float, y: Float, ids: IdSource = IdSource.Random, general: Float = 1f) = StickyNoteItem(
         id = ids.next(),
         frame = Frame(x, y, STICKY_SIZE, STICKY_SIZE),
-        color = color,
+        color = argb(color, opacityOf(color, general)),
         isOpen = true,
         keepOpen = keepOpen,
     )
 
     companion object {
         const val COLOR_SLOTS = 3
+        const val RGB_MASK = 0xFFFFFF
+
+        /** The least a note shows of its color: a note that cannot be seen cannot be found to be changed. */
+        const val MIN_OPACITY = 0.05f
+
+        /** [color] with its alpha set to [opacity]. */
+        fun argb(color: Int, opacity: Float): Int = ((opacity.coerceIn(MIN_OPACITY, 1f) * 255f + 0.5f).toInt() shl 24) or (color and RGB_MASK)
+
+        /** How opaque [color] is, from 0 to 1. */
+        fun alphaOf(color: Int): Float = (color ushr 24) / 255f
         const val MIN_TEXT = 4
         const val MAX_TEXT = 72
         const val STICKY_SIZE = 200f
@@ -65,6 +89,8 @@ data class TableOptions(
     val colors: List<Int> = listOf(0xFF000000.toInt(), 0xFFD10101.toInt(), 0xFF04CEFF.toInt()),
     val selectedColor: Int = 0,
     val fillColor: Int = 0,
+    /** 0 is the usual translucent gray. */
+    val headerColor: Int = 0,
 ) {
     val color get() = colors[selectedColor]
 
@@ -86,6 +112,7 @@ data class TableOptions(
         headerRow = headerRow,
         headerColumn = headerColumn,
         fillColor = fillColor,
+        headerColor = headerColor,
     )
 
     companion object {

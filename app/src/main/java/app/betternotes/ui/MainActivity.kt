@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
         tools = ToolStore(this)
         val state = EditorState(canvas, tools)
         firstState = state
+        state.onStickyOpacity = ::saveStickyOpacity
         state.onAddSource = { request -> addSource(request, state) }
         val chrome = ComposeView(this).apply {
             setContent {
@@ -500,6 +501,7 @@ class MainActivity : ComponentActivity() {
         split.addView(pane.view)
         firstState.otherPane = pane.canvas
         pane.state.otherPane = canvas
+        pane.state.onStickyOpacity = ::saveStickyOpacity
         activate(pane)
         pane.state.quickSwitchOpen = true
     }
@@ -584,6 +586,11 @@ class MainActivity : ComponentActivity() {
                 "Scratch canvas",
             )
         }
+    }
+
+    /** The general opacity of new post-its, set in the post-it tool's panel, is kept with the other settings. */
+    private fun saveStickyOpacity(opacity: Float) {
+        settings.update { it.copy(canvas = it.canvas.copy(stickyOpacity = opacity)) }
     }
 
     /** The finger mode button and the sheet's "single finger" are one setting, so it survives a restart. */

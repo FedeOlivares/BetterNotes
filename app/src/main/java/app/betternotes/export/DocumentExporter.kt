@@ -124,7 +124,7 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
 
     private fun loadPage(index: Int): Bounds? {
         val page = pages[index]
-        val items = store.readPage(page.id)
+        val items = store.readShownItems(page.id)
         source.show(page.id, PageContent(items))
         return ExportFrame.areaOf(page, items)
     }

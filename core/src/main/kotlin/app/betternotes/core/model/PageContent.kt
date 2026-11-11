@@ -11,7 +11,7 @@ import app.betternotes.core.geometry.Bounds
  *
  * Not thread safe. The items are immutable, so a [toList] snapshot can go to a background thread.
  */
-class PageContent(initial: List<PageItem> = emptyList()) {
+class PageContent(initial: List<PageItem> = emptyList(), layers: PageLayers = PageLayers.Single) {
     @PublishedApi
     internal var items = arrayOfNulls<PageItem>(maxOf(initial.size, MIN_CAPACITY))
 
@@ -29,6 +29,16 @@ class PageContent(initial: List<PageItem> = emptyList()) {
         private set
 
     private var dirty: Bounds? = null
+
+    /** The layers of the page, bottom first. Items are kept sorted by the rank of their layer. Changes go through [restructure]. */
+    var layers: PageLayers = layers
+        private set
+
+    /** The layer that new items go on and that the tools can change. Not saved: a page opens on its top layer. */
+    var activeLayer: Long = layers.top.id
+        set(value) {
+            field = if (this.layers.rank(value) >= 0) value else this.layers.top.id
+        }
 
     init {
         initial.forEachIndexed { i, item -> put(i, item) }
@@ -82,6 +92,59 @@ class PageContent(initial: List<PageItem> = emptyList()) {
         requireAscending(insertAt, size - removeAt.size + insertAt.size)
         removeAll(removeAt)
         insertAll(insertAt, added)
+        version++
+    }
+
+    /** The place for a new item of [layer]: after everything on that layer and the layers below it. */
+    fun insertionIndex(layer: Long): Int {
+        val rank = layers.rank(layer)
+        var i = size
+        while (i > 0 && layers.rank(items[i - 1]!!.layer) > rank) i--
+        return i
+    }
+
+    /** The index where [layer] starts: how many items lie on the layers below it. */
+    fun layerStart(layer: Long): Int {
+        val rank = layers.rank(layer)
+        var i = 0
+        while (i < size && layers.rank(items[i]!!.layer) < rank) i++
+        return i
+    }
+
+    /** The indices of the items on [layer], ascending. */
+    fun indicesOn(layer: Long): IntArray {
+        var count = 0
+        for (i in 0 until size) if (items[i]!!.layer == layer) count++
+        val out = IntArray(count)
+        var k = 0
+        for (i in 0 until size) if (items[i]!!.layer == layer) out[k++] = i
+        return out
+    }
+
+    /** True if the item is on a layer the tools can change. Items on other layers are skipped like locked ones. */
+    fun isEditable(item: PageItem) = item.layer == activeLayer
+
+    /** True if the item's layer is shown. */
+    fun isShown(item: PageItem) = layers[item.layer]?.visible != false
+
+    /**
+     * Swaps everything at once: the items, which must be sorted by the rank of their layer in [newLayers], and the layers. This is how layers
+     * are added, taken away, reordered, hidden and renamed. The whole page is marked changed, since an item can paint
+     * differently from a layer being hidden or moved, and any tile might hold it.
+     */
+    fun restructure(newItems: List<PageItem>, newLayers: PageLayers) {
+        for (i in 0 until size) markDirty(items[i]!!)
+        for (item in newItems) markDirty(item)
+        layers = newLayers
+        activeLayer = activeLayer
+        items.fill(null)
+        if (items.size < newItems.size) {
+            items = arrayOfNulls(newItems.size)
+            boxes = FloatArray(items.size * BOX_STRIDE)
+            paintBoxes = FloatArray(items.size * BOX_STRIDE)
+        }
+        newItems.forEachIndexed { i, item -> put(i, item) }
+        size = newItems.size
         version++
     }
 

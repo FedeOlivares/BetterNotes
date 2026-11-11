@@ -3,6 +3,7 @@ package app.betternotes.core.tools
 import app.betternotes.core.geometry.Frame
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.InkStyle
+import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.ShapeItem
@@ -40,6 +41,9 @@ object ShapeFit {
     private const val RECT_TOLERANCE = 0.06f
     private const val POLYGON_TOLERANCE = 0.05f
     private const val LINE_TOLERANCE = 0.035f
+
+    /** A highlighter is mostly dragged along text, so a gentle bend still reads as a line. */
+    private const val HIGHLIGHTER_LINE_TOLERANCE = 0.08f
     private const val SIMPLIFY = 0.07f
     private const val CURVE_SIMPLIFY = 0.03f
     private const val MAX_CORNERS = 8
@@ -49,17 +53,17 @@ object ShapeFit {
     private const val CURVE_WORST = 0.05f
     private const val AXIS_SNAP_DEGREES = 10f
 
-    fun fit(points: StrokePoints): FittedShape? = fit(packed(points))
+    fun fit(points: StrokePoints, favorLine: Boolean = false): FittedShape? = fit(packed(points), favorLine)
 
-    /** [path] is packed x,y pairs. */
-    fun fit(path: FloatArray): FittedShape? {
+    /** [path] is packed x,y pairs. With [favorLine], an open stroke that bends only gently is a line, not a curve. */
+    fun fit(path: FloatArray, favorLine: Boolean = false): FittedShape? {
         if (path.size < 8) return null
         val length = pathLength(path)
         if (length < MIN_LENGTH_PT) return null
         val gap = hypot(path[path.size - 2] - path[0], path[path.size - 1] - path[1])
         val closed = gap <= CLOSED_GAP * length
         val even = resample(path, closed)
-        return if (closed) fitClosed(even) else fitOpen(even, length)
+        return if (closed) fitClosed(even) else fitOpen(even, length, favorLine)
     }
 
     // ---- Closed ----
@@ -249,7 +253,7 @@ object ShapeFit {
 
     // ---- Open ----
 
-    private fun fitOpen(p: FloatArray, length: Float): FittedShape? {
+    private fun fitOpen(p: FloatArray, length: Float, favorLine: Boolean): FittedShape? {
         val x0 = p[0]
         val y0 = p[1]
         val x1 = p[p.size - 2]
@@ -261,7 +265,7 @@ object ShapeFit {
             worst = maxOf(worst, distanceToSegment(p[i], p[i + 1], x0, y0, x1, y1))
             i += 2
         }
-        if (worst <= LINE_TOLERANCE * length) return FittedShape.Line(x0, y0, x1, y1)
+        if (worst <= (if (favorLine) HIGHLIGHTER_LINE_TOLERANCE else LINE_TOLERANCE) * length) return FittedShape.Line(x0, y0, x1, y1)
         val diag = diagonal(p)
         if (simplifyOpen(p, CURVE_SIMPLIFY * diag).size / 2 < 3) return FittedShape.Line(x0, y0, x1, y1)
         return FittedShape.Path(curveControls(p, diag), closed = false, smooth = true)
@@ -543,6 +547,7 @@ object ShapeFit {
                 kind = fit.kind,
                 strokeColor = color,
                 strokeWidth = width,
+                opacity = style.opacity,
             )
             is FittedShape.Line -> {
                 val arrow = fit.headLength > 0f
@@ -552,14 +557,15 @@ object ShapeFit {
                     kind = if (arrow) ShapeKind.ARROW else ShapeKind.LINE,
                     strokeColor = color,
                     strokeWidth = width,
+                    opacity = style.opacity,
                     tipLength = if (arrow) fit.headLength else 0f,
                     tipWidth = if (arrow) fit.headWidth else 0f,
                 )
             }
-            is FittedShape.Path -> PathShapeItem(id, fit.points, fit.closed, fit.smooth, color, width)
+            is FittedShape.Path -> PathShapeItem(id, fit.points, fit.closed, fit.smooth, color, width, opacity = style.opacity)
         }
     }
 
     /** The whole step: the stroke as the page item it should become, or null if it is no shape. */
-    fun convert(stroke: StrokeItem): PageItem? = fit(stroke.points)?.let { toItem(it, stroke.style) }
+    fun convert(stroke: StrokeItem): PageItem? = fit(stroke.points, stroke.style.tool == InkTool.HIGHLIGHTER)?.let { toItem(it, stroke.style) }
 }

@@ -8,6 +8,7 @@ import androidx.core.graphics.withMatrix
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.FillPattern
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.PageItem
@@ -46,6 +47,7 @@ internal class FillBucket {
         gapPt: Float,
         color: Int,
         opacity: Float,
+        pattern: FillPattern,
         pxPerPt: Float,
         viewWidthPt: Float,
         viewHeightPt: Float,
@@ -66,7 +68,7 @@ internal class FillBucket {
                 min(whole.bottom, y + halfHeight),
             )
             val covers = window.left <= whole.left && window.top <= whole.top && window.right >= whole.right && window.bottom >= whole.bottom
-            when (val result = fillIn(items, image, window, whole, edgeIsLine, x, y, gapPt, color, opacity, pxPerPt)) {
+            when (val result = fillIn(items, image, window, whole, edgeIsLine, x, y, gapPt, color, opacity, pattern, pxPerPt)) {
                 is Found -> return result.item
                 NoShape -> return null
                 // The shape reaches the edge of the part looked at: the whole page is the last place to look.
@@ -104,6 +106,7 @@ internal class FillBucket {
         gapPt: Float,
         color: Int,
         opacity: Float,
+        pattern: FillPattern,
         pxPerPt: Float,
     ): Attempt {
         val scale = min(pxPerPt, MAX_SIDE_PX / max(area.width, area.height))
@@ -118,7 +121,7 @@ internal class FillBucket {
             val loops = FloodFill.outlines(region, width, height, SIMPLIFY_PX).map { loop ->
                 FloatArray(loop.size) { i -> if (i % 2 == 0) area.left + loop[i] / scale else area.top + loop[i] / scale }
             }
-            return if (loops.isEmpty()) NoShape else Found(FillItem(IdSource.Random.next(), loops, color, opacity))
+            return if (loops.isEmpty()) NoShape else Found(FillItem(IdSource.Random.next(), loops, color, opacity, pattern = pattern))
         }
 
         // The highest layer with a closed area around the tap is the one that is filled. If one is not closed within the part looked at,

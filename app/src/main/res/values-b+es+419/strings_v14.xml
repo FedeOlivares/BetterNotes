@@ -5,11 +5,14 @@
     <string name="sticker_tab_stickers">Stickers</string>
     <string name="sticker_empty">Todavía no hay stickers. Selecciona algo en una página y pulsa el botón de sticker junto a copiar para guardarlo aquí.</string>
     <string name="sticker_empty_short">Todavía no hay stickers</string>
+    <string name="sticker_loose">Sin conjunto</string>
+    <string name="sticker_set_name">Conjunto %d</string>
     <string name="sticker_remove">Quitar stickers</string>
     <string name="sticker_done_removing">Listo</string>
     <string name="sticker_export">Exportar un sticker como PNG</string>
     <string name="sticker_done_exporting">Listo</string>
-    <string name="notice_sticker_exported">Sticker exportado como PNG</string>
+    <string name="notice_sticker_saved_to">Se guardó %1$s en %2$s</string>
+    <string name="sticker_folder_storage">el almacenamiento interno</string>
     <string name="notice_sticker_export_failed">No se pudo exportar el sticker</string>
     <string name="notice_sticker_saved">Guardado como sticker</string>
     <string name="notice_sticker_failed">No se pudo guardar el sticker</string>
@@ -51,4 +54,10 @@
     <string name="planner_color_spine">Lomo</string>
     <string name="planner_color_stripe">Franja</string>
     <string name="planner_color_accent">Páginas</string>
+    <string name="panel_header_color">Color del encabezado</string>
+    <string name="selection_table_line">Color de las líneas de la tabla</string>
+    <string name="selection_table_fill">Color de relleno de la tabla</string>
+    <string name="selection_table_header">Color del encabezado de la tabla</string>
+    <string name="selection_note_text">Editar el texto de la nota</string>
+    <string name="selection_mirror">Reflejar la forma</string>
 </resources>

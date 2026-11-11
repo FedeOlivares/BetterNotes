@@ -5,6 +5,7 @@ import app.betternotes.core.edit.UndoHistory
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.PageItem
+import app.betternotes.core.model.PageLayers
 
 /**
  * An open document: its undo history, and the pages currently in memory. Pages load the first time
@@ -27,16 +28,16 @@ class DocumentSession private constructor(
     private var savedDocumentVersion = document.version
 
     override fun content(pageId: Long): PageContent = loaded.getOrPut(pageId) {
-        PageContent(store.readPage(pageId)).also { savedVersions[pageId] = it.version }
+        store.readPageWithLayers(pageId).let { PageContent(it.items, it.layers) }.also { savedVersions[pageId] = it.version }
     }
 
     /** The page if it is in memory, without touching the disk. */
     fun loadedContent(pageId: Long): PageContent? = loaded[pageId]
 
     /** Hands over items read on another thread. Returns false if the page got loaded in the meantime. */
-    fun install(pageId: Long, items: List<PageItem>): Boolean {
+    fun install(pageId: Long, items: List<PageItem>, layers: PageLayers = PageLayers.Single): Boolean {
         if (pageId in loaded) return false
-        val page = PageContent(items)
+        val page = PageContent(items, layers)
         loaded[pageId] = page
         savedVersions[pageId] = page.version
         return true
@@ -64,7 +65,7 @@ class DocumentSession private constructor(
     fun prepareSave(): PendingSave? {
         if (!hasUnsavedChanges) return null
         val changed = loaded.filter { (id, page) -> page.version != savedVersions[id] }
-            .map { (id, page) -> PendingSave.PageSnapshot(id, page.version, page.toList()) }
+            .map { (id, page) -> PendingSave.PageSnapshot(id, page.version, page.toList(), page.layers) }
         document.modifiedAtMs = clock()
         return PendingSave(store, changed, DocumentCodec.encode(document), document.version)
     }
@@ -121,14 +122,14 @@ class PendingSave internal constructor(
     private val documentBytes: ByteArray,
     internal val documentVersion: Long,
 ) {
-    internal class PageSnapshot(val id: Long, val version: Long, val items: List<PageItem>)
+    internal class PageSnapshot(val id: Long, val version: Long, val items: List<PageItem>, val layers: PageLayers)
 
     /**
      * Pages go first: if the app dies between the two steps, a new page's file is an orphan to clean
      * up, which beats a document listing a page whose ink never landed.
      */
     fun write() {
-        for (page in pages) store.writePage(page.id, page.items)
+        for (page in pages) store.writePage(page.id, page.items, page.layers)
         store.writeDocumentBytes(documentBytes)
     }
 }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fill_pattern">Patrones</string>
+    <string name="fill_pattern_solid">Liso</string>
+    <string name="fill_pattern_dots">Puntos</string>
+    <string name="fill_pattern_lines">Líneas</string>
+    <string name="fill_pattern_diagonal">Líneas diagonales</string>
+    <string name="fill_pattern_crosshatch">Rayado cruzado</string>
+    <string name="fill_pattern_color">Color del patrón</string>
+    <string name="fill_pattern_density">Densidad</string>
+    <string name="fill_pattern_weight">Tamaño</string>
+</resources>

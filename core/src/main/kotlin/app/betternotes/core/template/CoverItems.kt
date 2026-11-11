@@ -1,6 +1,9 @@
 package app.betternotes.core.template
 
 import app.betternotes.core.geometry.Frame
+import app.betternotes.core.geometry.PageSize
+import app.betternotes.core.model.withLocked
+import app.betternotes.core.tools.isCoverBackground
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PathShapeItem
@@ -11,12 +14,13 @@ import app.betternotes.core.model.TextItem
 /**
  * The design as items the owner can select, move, recolor and delete: fills become rectangles, dots ellipses, and lines and
  * waves paths. A cover page made this way holds them as its own content, so the drawn design is turned off with it (see
- * [CoverDesign.CUSTOM_ID]). Items come back in the order they were drawn, bottom first.
+ * [CoverDesign.CUSTOM_ID]). Items come back in the order they were drawn, bottom first. The background, the shape that
+ * colors the whole page, comes locked, so the lasso leaves it alone until the owner unlocks it.
  */
 fun CoverDesign.toItems(width: Float, height: Float, ids: IdSource = IdSource.Random, recolor: Map<Int, Int> = emptyMap()): List<PageItem> {
     val sink = ItemSink(ids)
     draw(sink, width, height, recolor)
-    return sink.items
+    return sink.items.map { if (it is ShapeItem && it.isCoverBackground(PageSize(width, height))) it.withLocked(true) else it }
 }
 
 private class ItemSink(private val ids: IdSource) : TemplateSink {
@@ -39,7 +43,11 @@ private class ItemSink(private val ids: IdSource) : TemplateSink {
 
     override fun text(text: String, x: Float, baseline: Float, size: Float, color: Int, style: TextStyle, align: TextAlign) {
         val width = size * 0.8f * text.length + size
-        val left = if (align == TextAlign.CENTER) x - width / 2f else x
+        val left = when (align) {
+            TextAlign.CENTER -> x - width / 2f
+            TextAlign.END -> x - width
+            TextAlign.START -> x
+        }
         items += TextItem(ids.next(), Frame(left, baseline - size, width, size * 1.4f), text, size, color)
     }
 }

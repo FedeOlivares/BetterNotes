@@ -156,6 +156,7 @@ internal fun EraserPanel(state: EditorState, options: EraserOptions, notices: No
         }
         LabeledRow(R.string.panel_erase_following) {}
         KindFilters(options.kinds) { kind -> state.updateEraser { it.copy(kinds = it.kinds.toggled(kind)) } }
+        ToolReturnRows(state, ActiveTool.ERASER)
         PanelDivider()
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -261,6 +262,7 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
                 state.updateLasso { it.copy(fullSelectionOnly = on) }
             }
         }
+        ToolReturnRows(state, ActiveTool.LASSO)
         // With strips of tape selected, their thickness and opacity can be changed here.
         val tape by produceState<TapeLook?>(null) {
             while (true) {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fill_pattern">Patterns</string>
+    <string name="fill_pattern_solid">Solid</string>
+    <string name="fill_pattern_dots">Dots</string>
+    <string name="fill_pattern_lines">Lines</string>
+    <string name="fill_pattern_diagonal">Diagonal lines</string>
+    <string name="fill_pattern_crosshatch">Crosshatch</string>
+    <string name="fill_pattern_color">Pattern color</string>
+    <string name="fill_pattern_density">Density</string>
+    <string name="fill_pattern_weight">Size</string>
+</resources>

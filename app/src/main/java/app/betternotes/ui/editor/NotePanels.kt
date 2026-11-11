@@ -61,7 +61,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.Canvas
 import app.betternotes.R
 import app.betternotes.canvas.TextEditRequest
+import app.betternotes.canvas.drawListMark
+import app.betternotes.canvas.listMargin
+import app.betternotes.core.model.ListMarkers
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import app.betternotes.core.model.HorizontalAlign
+import app.betternotes.core.model.ListKind
+import app.betternotes.core.model.ListStyle
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextStyle
 import app.betternotes.fonts.FontLibrary
@@ -74,6 +82,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.AnnotatedString
 import app.betternotes.core.model.VerticalAlign
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.tools.NoteOptions
 import app.betternotes.core.tools.TableOptions
 import app.betternotes.ui.icons.EditorIcons
@@ -120,6 +129,9 @@ private fun StyleButtons(style: TextStyle, toggle: (StyleKind) -> Unit, update: 
     ToolbarIcon(style.verticalAlign.icon(), stringResource(R.string.panel_vertical_alignment)) {
         update { it.copy(verticalAlign = VerticalAlign.entries[(it.verticalAlign.ordinal + 1) % VerticalAlign.entries.size]) }
     }
+    ToolbarIcon(EditorIcons.List, stringResource(R.string.panel_list), accent = style.list != null) {
+        update { it.copy(list = if (it.list == null) ListStyle() else null) }
+    }
 }
 
 /** The row of a text box that is selected: its size and style, which change that text. */
@@ -138,6 +150,44 @@ internal fun TextSelectionRow(state: EditorState, item: TextItem, modifier: Modi
                 item.style,
                 { kind -> state.changeSelectedText { it.copy(style = it.style.toggled(kind)) } },
             ) { change -> state.changeSelectedText { it.copy(style = change(it.style)) } }
+        }
+    }
+}
+
+/** The row of post-its that are selected: their color and how see-through they are, which change those post-its. */
+@Composable
+internal fun StickySelectionRow(state: EditorState, notes: List<StickyNoteItem>, modifier: Modifier) {
+    Pill(modifier) {
+        ToolStrip {
+            for (color in NoteOptions.STICKY_PALETTE) {
+                val chosen = notes.all { (it.color and NoteOptions.RGB_MASK) == (color and NoteOptions.RGB_MASK) }
+                ToolbarCellBox(onClick = { state.pickSelectedNotesColor(color) }) {
+                    ColorDot(color, diameter = 24.dp)
+                    if (chosen) SelectedDot()
+                }
+            }
+            ToolbarIcon(EditorIcons.EditColor, stringResource(R.string.selection_note_color)) {
+                state.colorTarget = ColorTarget.SELECTED_NOTE
+            }
+            PillDivider()
+            // The slider shows the first post-it's opacity, and moves them all to the one it is set to.
+            var shown by remember { mutableStateOf<Float?>(null) }
+            val opacity = shown ?: NoteOptions.alphaOf(notes.first().color)
+            ValueText("${(opacity * 100f).roundToInt()}%")
+            StepperSlider(
+                fraction = (opacity - NoteOptions.MIN_OPACITY) / (1f - NoteOptions.MIN_OPACITY),
+                onChange = { f ->
+                    val next = opacityAt(f)
+                    shown = next
+                    state.adjustSelectedNotesOpacity(next)
+                },
+                steps = OPACITY_STEPS,
+                onChangeFinished = {
+                    shown = null
+                    state.finishSelectionAdjust()
+                },
+                modifier = Modifier.width(240.dp),
+            )
         }
     }
 }
@@ -170,7 +220,7 @@ internal fun NotePanel(state: EditorState, notices: Notices, options: NoteOption
                 val fold = 16.dp.toPx()
                 val left = center.x - side / 2f
                 val top = center.y - side / 2f
-                drawRect(Color(options.color), Offset(left, top), Size(side, side))
+                drawRect(Color(NoteOptions.argb(options.color, options.opacityOf(options.color, state.stickyOpacity))), Offset(left, top), Size(side, side))
                 val cut = androidx.compose.ui.graphics.Path().apply {
                     moveTo(left + side - fold, top + side)
                     lineTo(left + side, top + side - fold / 2f)
@@ -229,6 +279,7 @@ internal fun NotePanel(state: EditorState, notices: Notices, options: NoteOption
                 },
             )
         }
+        ListSection(state, style)
         if (sticky) {
             LabeledRow(R.string.panel_keep_open, info = { notices.say(R.string.info_keep_open) }) {
                 PanelSwitch(options.keepOpen, stringResource(R.string.panel_keep_open)) { on ->
@@ -252,11 +303,107 @@ internal fun NotePanel(state: EditorState, notices: Notices, options: NoteOption
                     }
                 }
             }
+            // How see-through new post-its are, unless a color has an opacity of its own, which the color wheel sets.
+            val general = state.stickyOpacity
+            LabeledRow(R.string.settings_sticky_opacity, info = { notices.say(R.string.settings_sticky_opacity_detail) }) {
+                ValuePill { ValueText("${(general * 100f).roundToInt()}%") }
+            }
+            StepperSlider(
+                fraction = (general - NoteOptions.MIN_OPACITY) / (1f - NoteOptions.MIN_OPACITY),
+                onChange = { f -> state.setStickyOpacity(opacityAt(f)) },
+                steps = OPACITY_STEPS,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            CreateReturnRows(state)
+            Spacer(Modifier.height(10.dp))
         } else {
-            Spacer(Modifier.height(16.dp))
+            ToolReturnRows(state, ActiveTool.TEXT)
+            Spacer(Modifier.height(10.dp))
         }
     }
 }
+
+/** Whether the text is a list, and what marks each paragraph: a character, a number or a letter, or a dot of a color, size and opacity. */
+@Composable
+private fun ListSection(state: EditorState, style: TextStyle) {
+    val colors = LocalEditorColors.current
+    val list = style.list
+    LabeledRow(R.string.panel_list) {
+        PanelSwitch(list != null, stringResource(R.string.panel_list)) { on ->
+            state.updateNoteStyle { it.copy(list = if (on) (it.list ?: ListStyle()) else null) }
+        }
+    }
+    if (list == null) return
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PanelPadding - 8.dp, end = PanelPadding - 8.dp, bottom = 8.dp)
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        for (kind in ListKind.entries) {
+            val chosen = kind == list.kind
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .padding(horizontal = 2.dp)
+                    .size(width = 48.dp, height = 40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (chosen) colors.toolSelected else Color.Transparent)
+                    .clickable(role = Role.Button) { state.updateNoteStyle { it.copy(list = list.copy(kind = kind)) } },
+            ) {
+                val sample = ListMarkers.label(kind, 0)
+                if (sample != null) {
+                    Text(sample, color = colors.title, fontSize = 16.sp)
+                } else {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(Color(list.dotArgb)))
+                }
+            }
+        }
+    }
+    if (list.kind != ListKind.DOT) return
+    LabeledRow(R.string.panel_list_dot_color) {}
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = PanelPadding - 8.dp, end = PanelPadding - 8.dp, bottom = 8.dp)
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        for (color in LIST_DOT_COLORS) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(40.dp).tappable(radius = 20.dp) {
+                    state.updateNoteStyle { it.copy(list = list.copy(dotColor = color)) }
+                },
+            ) {
+                if (color == (list.dotColor or OPAQUE)) Box(Modifier.size(35.dp).border(5.dp, colors.swatchRing, CircleShape))
+                ColorDot(color)
+            }
+        }
+        ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) { state.colorTarget = ColorTarget.LIST_DOT }
+    }
+    LabeledRow(R.string.panel_list_dot_size) { ValuePill { ValueText("${(list.dotSize * 100f).roundToInt()}%") } }
+    PanelSlider(
+        fraction = (list.dotSize - ListStyle.MIN_DOT_SIZE) / (ListStyle.MAX_DOT_SIZE - ListStyle.MIN_DOT_SIZE),
+        onChange = { f ->
+            val size = ListStyle.MIN_DOT_SIZE + f * (ListStyle.MAX_DOT_SIZE - ListStyle.MIN_DOT_SIZE)
+            state.updateNoteStyle { it.copy(list = list.copy(dotSize = size).clamped()) }
+        },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding),
+    )
+    LabeledRow(R.string.panel_list_dot_opacity) { ValuePill { ValueText("${(list.dotOpacity * 100f).roundToInt()}%") } }
+    PanelSlider(
+        fraction = list.dotOpacity,
+        onChange = { f -> state.updateNoteStyle { it.copy(list = list.copy(dotOpacity = f).clamped()) } },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding),
+    )
+}
+
+private const val OPAQUE = 0xFF000000.toInt()
+
+private val LIST_DOT_COLORS = listOf(
+    0xFF1E1F24.toInt(), 0xFFD10101.toInt(), 0xFFF28C28.toInt(), 0xFFF5C400.toInt(),
+    0xFF2E9E4F.toInt(), 0xFF04CEFF.toInt(), 0xFF2F5BEA.toInt(), 0xFF8E44AD.toInt(),
+)
 
 private class Segment(val icon: ImageVector, val label: Int, val on: Boolean, val onClick: () -> Unit)
 
@@ -389,6 +536,12 @@ internal fun TablePanel(state: EditorState, options: TableOptions, modifier: Mod
                 FillSwatch(options.fillColor)
             }
         }
+        LabeledRow(R.string.panel_header_color) {
+            Box(Modifier.size(36.dp).clip(CircleShape).clickable { state.colorTarget = ColorTarget.TABLE_HEADER }, Alignment.Center) {
+                FillSwatch(options.headerColor)
+            }
+        }
+        CreateReturnRows(state)
         Spacer(Modifier.height(10.dp))
     }
 }
@@ -453,6 +606,14 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
             TransformedText(AnnotatedString(text.text, styles), OffsetMapping.Identity)
         }
     }
+    // A list keeps a margin on every paragraph, and the markers are drawn in it from where each paragraph starts.
+    val list = style.list
+    var textLayout by remember(request) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+    val listFace = remember(style.font, style.bold, style.italic) {
+        FontLibrary.face(style.font, style.bold, style.italic)
+    }
+    val marginPx = list?.let { listMargin(it, ListMarkers.paragraphs(value.text), request.textSizePx, listFace) } ?: 0
+    val markInk = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
     val decoration = listOfNotNull(
         TextDecoration.Underline.takeIf { style.underline },
         TextDecoration.LineThrough.takeIf { style.strikethrough },
@@ -496,6 +657,7 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
         },
         visualTransformation = transformation,
         onTextLayout = { layout ->
+            textLayout = layout
             val end = layout.getCursorRect(layout.layoutInput.text.length)
             request.endX = end.left
             request.endY = end.top
@@ -509,6 +671,12 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
             fontWeight = if (wholeFont != null) FontWeight.Normal else if (style.bold) FontWeight.Bold else FontWeight.Normal,
             fontStyle = if (wholeFont != null) FontStyle.Normal else if (style.italic) FontStyle.Italic else FontStyle.Normal,
             fontFamily = wholeFont,
+            textIndent = if (list != null) {
+                val margin = with(density) { marginPx.toSp() }
+                androidx.compose.ui.text.style.TextIndent(margin, margin)
+            } else {
+                null
+            },
             textDecoration = TextDecoration.combine(decoration),
             textAlign = when (style.align) {
                 HorizontalAlign.START -> TextAlign.Start
@@ -516,7 +684,29 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
                 HorizontalAlign.END -> TextAlign.End
             },
         ),
-        modifier = Modifier.fillMaxWidth().focusRequester(focus),
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focus)
+            .drawBehind {
+                val layout = textLayout
+                if (list == null || layout == null) return@drawBehind
+                val text = layout.layoutInput.text.text
+                drawIntoCanvas { canvas ->
+                    var index = 0
+                    var from = 0
+                    while (from <= text.length) {
+                        val line = layout.getLineForOffset(from.coerceAtMost(text.length))
+                        drawListMark(
+                            canvas.nativeCanvas, markInk, list, request.color, request.textSizePx, listFace, index,
+                            0f, marginPx, layout.getLineBaseline(line),
+                        )
+                        val next = text.indexOf('\n', from)
+                        if (next < 0) break
+                        from = next + 1
+                        index++
+                    }
+                }
+            },
     )
     }
     }

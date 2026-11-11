@@ -24,9 +24,19 @@ fun plannerActionAt(page: PlannerPage, setup: PlannerSetup, size: PageSize, x: F
     return hit
 }
 
+/**
+ * The elements a planner [page] draws, in the page's points: what the lasso can pick, each with its role and what of it can be changed.
+ * They come from the same drawing code as the page, so they cannot drift from what is seen. The cover has none.
+ */
+fun plannerElements(page: PlannerPage, setup: PlannerSetup, size: PageSize): List<PlannerElement> {
+    val list = ArrayList<PlannerElement>()
+    PlannerDrawing.draw(page, setup, size, BuiltInInk(PLAIN_PAPER), NullSink, null, found = list)
+    return list
+}
+
 private const val PLAIN_PAPER = 0xFFFFFFFF.toInt()
 
-private object NullSink : TemplateSink {
+internal object NullSink : TemplateSink {
     override fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int) = Unit
     override fun dot(x: Float, y: Float, radius: Float, color: Int) = Unit
     override fun fill(x: Float, y: Float, width: Float, height: Float, color: Int) = Unit
@@ -59,10 +69,18 @@ internal object PlannerDrawing {
         title: String = "",
         semesters: List<Int> = emptyList(),
         dateInk: List<DateStroke> = emptyList(),
+        roles: PlannerRoleStyles = PlannerRoleStyles.NONE,
+        /** When given, the elements of the page are listed here (in the page's points) and nothing is styled. */
+        found: MutableList<PlannerElement>? = null,
     ) {
-        val c = Layer(size, ink, sink, 0f, 0f, W, H, links)
-        val s = Sheet(c, ink, setup, sink, size, paper, semesters, dateInk)
-        if (page.kind == PlannerKind.COVER) return s.cover(title)
+        if (page.kind == PlannerKind.COVER) {
+            val c = Layer(size, ink, sink, 0f, 0f, W, H, links)
+            return Sheet(c, ink, setup, sink, size, paper, semesters, dateInk).cover(title)
+        }
+        // Only a planner that was restyled, or a lasso looking for elements, goes through the role sink; any other is drawn as before.
+        val out = if (roles.isEmpty && found == null) sink else PlannerRoleSink(sink, roles, size.widthPt / W, size.heightPt / H, found)
+        val c = Layer(size, ink, out, 0f, 0f, W, H, links, out as? ElementHost)
+        val s = Sheet(c, ink, setup, out, size, paper, semesters, dateInk)
         s.tabs(page)
         when (page.kind) {
             PlannerKind.DASHBOARD -> s.dashboard()
@@ -154,10 +172,24 @@ internal object PlannerDrawing {
 
         /** The handwriting of date [slot], with its blank's top-left at ([x], [y]). */
         private fun writing(slot: Int, x: Float, y: Float) {
-            for (stroke in dateInk) if (stroke.slot == slot) c.polyline(stroke.points, x, y, stroke.width, stroke.color)
+            // The owner's own handwriting keeps its colors: no role.
+            element(PlannerRole.NONE, 0f, 0f, 0f, 0f) {
+                for (stroke in dateInk) if (stroke.slot == slot) c.polyline(stroke.points, x, y, stroke.width, stroke.color)
+            }
         }
 
         private fun two(n: Int) = n.toString().padStart(2, '0')
+
+        /** Everything [body] draws is one element of [role], in the box ([x0], [y0]) to ([x1], [y1]); [r] rounds its background. */
+        private inline fun element(role: PlannerRole, x0: Float, y0: Float, x1: Float, y1: Float, r: Float = 0f, body: () -> Unit) {
+            c.begin(role, x0, y0, x1, y1, r)
+            body()
+            c.end()
+        }
+
+        /** A frame in [color]: one element, a box. */
+        private fun frame(x0: Float, y0: Float, x1: Float, y1: Float, color: Int, weight: Float = 2f) =
+            element(PlannerRole.BOX, x0, y0, x1, y1) { c.box(x0, y0, x1, y1, color, weight) }
 
         // ---- Drawing helpers ---------------------------------------------------------------------------------
 
@@ -166,19 +198,25 @@ internal object PlannerDrawing {
         /** Text that ends at [right]. The width is estimated, because a sink only measures nothing. */
         fun rightText(text: String, right: Float, y: Float, size: Float, style: TextStyle = TextStyle.HEADING, color: Int = ink.text) {
             val width = text.length * size * (if (style == TextStyle.TITLE) 0.6f else 0.74f)
-            c.text(text, right - width / 2f, y, size, color, style, TextAlign.CENTER)
+            // The right edge stays at [right] whatever the font, so a wider one grows to the left.
+            element(PlannerRole.SUBTITLE, right - width, y - size, right, y + size * 0.4f) { c.text(text, right, y, size, color, style, TextAlign.END) }
         }
 
         fun heading(text: String, x0: Float, x1: Float, y: Float) {
-            c.text(text, x0, y, 16f, style = TextStyle.HEADING)
-            c.hline(x0, x1, y + 18f, ink.accent)
+            element(PlannerRole.SECTION_HEADING, x0, y - 16f, x1, y + 20f) {
+                c.text(text, x0, y, 16f, style = TextStyle.HEADING)
+                c.hline(x0, x1, y + 18f, ink.accent)
+            }
         }
 
         /**
          * A blue rule on top, [n] rows closed by gray rules (the last by a blue one), and an optional vertical gray divider at [divX].
          * [slashes] puts a date slash in a column [slashW] wide at the left.
          */
-        fun rows(x0: Float, x1: Float, top: Float, n: Int, step: Float, divX: Float? = null, slashW: Float = 0f, numbered: Boolean = false) {
+        fun rows(x0: Float, x1: Float, top: Float, n: Int, step: Float, divX: Float? = null, slashW: Float = 0f, numbered: Boolean = false) =
+            element(PlannerRole.ROWS, x0, top, x1, top + step * n) { rowsBody(x0, x1, top, n, step, divX, slashW, numbered) }
+
+        private fun rowsBody(x0: Float, x1: Float, top: Float, n: Int, step: Float, divX: Float?, slashW: Float, numbered: Boolean) {
             c.hline(x0, x1, top, ink.accent)
             for (i in 0 until n) {
                 val y = top + step * (i + 1)
@@ -192,7 +230,10 @@ internal object PlannerDrawing {
         }
 
         /** Rows with a label at the left of each. */
-        fun labelRows(x0: Float, x1: Float, top: Float, labels: List<String>, step: Float, lastAccent: Boolean = true) {
+        fun labelRows(x0: Float, x1: Float, top: Float, labels: List<String>, step: Float, lastAccent: Boolean = true) =
+            element(PlannerRole.ROWS, x0, top, x1, top + step * labels.size) { labelRowsBody(x0, x1, top, labels, step, lastAccent) }
+
+        private fun labelRowsBody(x0: Float, x1: Float, top: Float, labels: List<String>, step: Float, lastAccent: Boolean) {
             c.hline(x0, x1, top, ink.accent)
             for ((i, label) in labels.withIndex()) {
                 val y = top + step * (i + 1)
@@ -214,8 +255,11 @@ internal object PlannerDrawing {
         }
 
         fun button(x0: Float, y0: Float, x1: Float, y1: Float, text: String, action: PlannerAction?, size: Float = 15f) {
-            roundBox(x0, y0, x1, y1, minOf(BUTTON_RADIUS, (y1 - y0) / 2f), ink.rule)
-            c.text(text, (x0 + x1) / 2f, (y0 + y1) / 2f, size, align = TextAlign.CENTER)
+            val r = minOf(BUTTON_RADIUS, (y1 - y0) / 2f)
+            element(PlannerRole.BUTTON, x0, y0, x1, y1, r) {
+                roundBox(x0, y0, x1, y1, r, ink.rule)
+                c.text(text, (x0 + x1) / 2f, (y0 + y1) / 2f, size, align = TextAlign.CENTER)
+            }
             if (action != null) c.link(x0, y0, x1, y1, action)
         }
 
@@ -230,7 +274,7 @@ internal object PlannerDrawing {
             return top + ((items.size + cols - 1) / cols) * (height + gap)
         }
 
-        fun box(x0: Float, y0: Float, x1: Float, y1: Float) = c.box(x0, y0, x1, y1, ink.accent)
+        fun box(x0: Float, y0: Float, x1: Float, y1: Float) = frame(x0, y0, x1, y1, ink.accent)
 
         // ---- Tabs ----------------------------------------------------------------------------------------------
 
@@ -295,15 +339,6 @@ internal object PlannerDrawing {
             for ((i, tab) in tabs.withIndex()) {
                 val y0 = top + step * i
                 val y1 = y0 + step
-                if (i != current) {
-                    tabBody(x0, y0, x1, y1, r, loose)
-                    // The shadow of the tab above falls along the top and fades down; the foot is a little darker too.
-                    for (band in 0 until 6) {
-                        c.fill(x0, y0 + band * 3f, x1 - r, y0 + band * 3f + 3f, shadow(0x26 - band * 5))
-                    }
-                    c.fill(x0, y1 - 4f, x1 - r, y1, shadow(0x0E))
-                    tabOutline(x0, y0, x1, y1, r, ink.rule)
-                }
                 val label = when (tab.kind) {
                     PlannerTab.Kind.INDEX -> t("INDEX", "ÍNDICE")
                     PlannerTab.Kind.YEAR -> t("YEAR", "AÑO")
@@ -311,18 +346,29 @@ internal object PlannerDrawing {
                 }
                 c.link(x0, y0, W, y1, go(tab.target))
                 if (i == current) continue
-                c.turnedText(label, (x0 + x1) / 2f + 2f, (y0 + y1) / 2f, 14f, 90f, style = TextStyle.HEADING)
+                element(PlannerRole.TAB, x0, y0, x1, y1, r) {
+                    tabBody(x0, y0, x1, y1, r, loose)
+                    // The shadow of the tab above falls along the top and fades down; the foot is a little darker too.
+                    for (band in 0 until 6) {
+                        c.fill(x0, y0 + band * 3f, x1 - r, y0 + band * 3f + 3f, shadow(0x26 - band * 5))
+                    }
+                    c.fill(x0, y1 - 4f, x1 - r, y1, shadow(0x0E))
+                    tabOutline(x0, y0, x1, y1, r, ink.rule)
+                    c.turnedText(label, (x0 + x1) / 2f + 2f, (y0 + y1) / 2f, 14f, 90f, style = TextStyle.HEADING)
+                }
             }
             if (current >= 0) {
                 // On top of the others, in the paper's color so it is one piece with the page.
-                tabBody(x0 - 3f, joinTop, x1, joinBottom, r, paper)
-                tabOutline(x0 - 1f, joinTop, x1, joinBottom, r, ink.rule)
                 val label = when (val tab = tabs[current]) {
                     PlannerTab(PlannerTab.Kind.INDEX) -> t("INDEX", "ÍNDICE")
                     PlannerTab(PlannerTab.Kind.YEAR) -> t("YEAR", "AÑO")
                     else -> monthsShort[(setup.monthStart(tab.month).monthValue - 1)]
                 }
-                c.turnedText(label, (x0 + x1) / 2f + 2f, (joinTop + joinBottom) / 2f, 15f, 90f, ink.accent, TextStyle.HEADING)
+                element(PlannerRole.TAB, x0 - 3f, joinTop, x1, joinBottom, r) {
+                    tabBody(x0 - 3f, joinTop, x1, joinBottom, r, paper)
+                    tabOutline(x0 - 1f, joinTop, x1, joinBottom, r, ink.rule)
+                    c.turnedText(label, (x0 + x1) / 2f + 2f, (joinTop + joinBottom) / 2f, 15f, 90f, ink.accent, TextStyle.HEADING)
+                }
             }
         }
 
@@ -420,8 +466,11 @@ internal object PlannerDrawing {
             for ((i, item) in items.withIndex()) {
                 val x = L + (i % cols) * (width + gap)
                 val y = top + (i / cols) * (height + gap)
-                roundBox(x, y, x + width, y + height, TILE_RADIUS, ink.rule)
-                c.text(item.first, (x + x + width) / 2f, y + height / 2f, 19f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+                // A tile is a big button: the same role, so recoloring one recolors them all.
+                element(PlannerRole.BUTTON, x, y, x + width, y + height, TILE_RADIUS) {
+                    roundBox(x, y, x + width, y + height, TILE_RADIUS, ink.rule)
+                    c.text(item.first, (x + x + width) / 2f, y + height / 2f, 19f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+                }
                 if (item.second != null) c.link(x, y, x + width, y + height, item.second!!)
             }
             return top + ((items.size + cols - 1) / cols) * (height + gap)
@@ -507,7 +556,9 @@ internal object PlannerDrawing {
             val bottom = 900f
             val dayW = (R - left) / 7f
             val step = (bottom - head) / hours
-            for (d in 0 until 7) c.text(weekdaysShort[d], left + dayW * (d + 0.5f), (top + head) / 2f, 15f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+            element(PlannerRole.WEEKDAY_HEADER, left, top, R, head) {
+                for (d in 0 until 7) c.text(weekdaysShort[d], left + dayW * (d + 0.5f), (top + head) / 2f, 15f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+            }
             for (h in 0 until hours) {
                 val y = head + step * h
                 c.text(((h + 7) % 12 + 1).toString(), L + 14f, y + step / 2f, 14f, ink.faint, align = TextAlign.CENTER)
@@ -521,7 +572,7 @@ internal object PlannerDrawing {
             for (i in 0 until PlannerPage.COURSES) {
                 val x = L + (i % 2) * (w + gap)
                 val y = 985f + (i / 2) * 58f
-                c.box(x, y, x + w, y + 50f, ink.rule, 1.5f)
+                frame(x, y, x + w, y + 50f, ink.rule, 1.5f)
                 c.hline(x, x + w, y + 25f, ink.rule, 1.5f)
                 c.text(t("Course ${i + 1}:", "Materia ${i + 1}:"), x + 8f, y + 12f, 14f)
                 c.text(t("Location:", "Aula:"), x + 8f, y + 38f, 14f)
@@ -580,7 +631,7 @@ internal object PlannerDrawing {
             heading(t("GROUP MEMBERS", "INTEGRANTES"), L, mid, 400f)
             for (i in 0 until 6) {
                 val y = 425f + i * 150f
-                c.box(L, y, mid, y + 128f, ink.rule, 1.5f)
+                frame(L, y, mid, y + 128f, ink.rule, 1.5f)
                 c.hline(L, mid, y + 42f, ink.rule, 1.5f)
                 c.hline(L, mid, y + 86f, ink.rule, 1.5f)
                 c.text(t("Name:", "Nombre:"), L + 10f, y + 21f, 14f)
@@ -620,7 +671,9 @@ internal object PlannerDrawing {
             val top = 160f
             val bottom = 700f
             val dayW = (R - left) / 7f
-            for (d in 0 until 7) c.text(weekdaysShort[d], left + dayW * (d + 0.5f), top - 14f, 14f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+            element(PlannerRole.WEEKDAY_HEADER, left, top - 28f, R, top) {
+                for (d in 0 until 7) c.text(weekdaysShort[d], left + dayW * (d + 0.5f), top - 14f, 14f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+            }
             val meals = listOf(t("BREAKFAST", "DESAYUNO"), t("LUNCH", "ALMUERZO"), t("DINNER", "CENA"), t("SNACKS", "MERIENDA"))
             val rowH = (bottom - top) / 4f
             for ((i, name) in meals.withIndex()) {
@@ -673,8 +726,8 @@ internal object PlannerDrawing {
             val cellW = (R - cellsX) / 16f
             for (r in 0 until rows) {
                 val y = top + rowH * r
-                c.box(L, y, cellsX, y + rowH, ink.accent, 1.2f)
-                c.box(cellsX, y, R, y + rowH, ink.accent, 1.2f)
+                frame(L, y, cellsX, y + rowH, ink.accent, 1.2f)
+                frame(cellsX, y, R, y + rowH, ink.accent, 1.2f)
                 c.hline(cellsX, R, y + rowH / 2f, ink.rule, 1f)
                 for (k in 0 until 16) {
                     val x = cellsX + cellW * (k + 0.5f)
@@ -693,12 +746,12 @@ internal object PlannerDrawing {
             heading(t("TARGET DATE", "FECHA OBJETIVO"), 510f, R, 330f)
             rows(510f, R, 348f, 1, 40f, slashW = 60f)
             c.text(t("PROGRESS", "PROGRESO"), 510f, 440f, 15f, style = TextStyle.HEADING)
-            for (i in 0 until 10) c.box(510f + i * 38f, 462f, 510f + i * 38f + 32f, 494f, ink.accent, 1.2f)
+            for (i in 0 until 10) frame(510f + i * 38f, 462f, 510f + i * 38f + 32f, 494f, ink.accent, 1.2f)
             heading(t("ACTION STEPS", "PASOS"), L, R, 560f)
             c.hline(L, R, 580f, ink.accent)
             for (i in 0 until 9) {
                 val y = 580f + 46f * (i + 1)
-                c.box(L + 8f, y - 33f, L + 28f, y - 13f, ink.rule, 1.2f)
+                frame(L + 8f, y - 33f, L + 28f, y - 13f, ink.rule, 1.2f)
                 c.text("/", R - 40f, y - 23f, 17f, ink.faint, align = TextAlign.CENTER)
                 c.hline(L, R, y, ink.rule)
             }
@@ -720,7 +773,7 @@ internal object PlannerDrawing {
             val n = 21
             for (i in 0 until n) {
                 val y = 370f + 44f * (i + 1)
-                c.box(L + 8f, y - 33f, L + 28f, y - 13f, ink.rule, 1.2f)
+                frame(L + 8f, y - 33f, L + 28f, y - 13f, ink.rule, 1.2f)
                 c.hline(L, R, y, if (i == n - 1) ink.accent else ink.rule)
             }
             c.vline(R - 90f, 370f, 370f + 44f * n, ink.rule)
@@ -731,9 +784,15 @@ internal object PlannerDrawing {
             var x = L
             val widthTotal = columns.sumOf { it.second.toDouble() }.toFloat()
             val scale = (R - L) / widthTotal
-            c.fill(L, top, R, top + 36f, ink.tint)
-            for ((name, w) in columns) {
-                c.text(name, x + 6f, top + 18f, 13f, style = TextStyle.HEADING)
+            element(PlannerRole.TABLE_HEADER, L, top, R, top + 36f) {
+                c.fill(L, top, R, top + 36f, ink.tint)
+                var tx = L
+                for ((name, w) in columns) {
+                    c.text(name, tx + 6f, top + 18f, 13f, style = TextStyle.HEADING)
+                    tx += w * scale
+                }
+            }
+            for ((_, w) in columns) {
                 x += w * scale
                 if (x < R - 1f) c.vline(x, top, top + 36f + step * n, ink.rule)
             }
@@ -746,7 +805,7 @@ internal object PlannerDrawing {
                 val x0 = R - columns.last().second * scale
                 for (i in 0 until n) {
                     val y = top + 36f + step * i + step / 2f
-                    c.box(x0 + 10f, y - 9f, x0 + 28f, y + 9f, ink.rule, 1.2f)
+                    frame(x0 + 10f, y - 9f, x0 + 28f, y + 9f, ink.rule, 1.2f)
                 }
             }
         }
@@ -837,7 +896,8 @@ internal object PlannerDrawing {
 
         fun pattern(template: PageTemplate) {
             val width = size.widthPt * (XE - 6f) / W
-            template.draw(size, Bounds(0f, 0f, width, size.heightPt), sink, paper = paper)
+            // The pattern is paper, not an element: no role, so no style and nothing for the lasso.
+            element(PlannerRole.NONE, 0f, 0f, 0f, 0f) { template.draw(size, Bounds(0f, 0f, width, size.heightPt), sink, paper = paper) }
         }
 
         // ---- Calendar pages ------------------------------------------------------------------------------------
@@ -886,7 +946,9 @@ internal object PlannerDrawing {
             val left = L + 30f
             val top = 175f
             val dayW = (R - left) / 7f
-            for (d in 0 until 7) c.text(weekdaysShort[d], left + dayW * (d + 0.5f), 155f, 14f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+            element(PlannerRole.WEEKDAY_HEADER, left, 141f, R, 169f) {
+                for (d in 0 until 7) c.text(weekdaysShort[d], left + dayW * (d + 0.5f), 155f, 14f, style = TextStyle.HEADING, align = TextAlign.CENTER)
+            }
             val last = first.withDayOfMonth(first.lengthOfMonth())
             val rowsCount = (((setup.mondayOf(last).toEpochDay() - setup.mondayOf(first).toEpochDay()) / 7).toInt()) + 1
             val rowH = minOf(150f, 760f / rowsCount)
@@ -965,11 +1027,14 @@ internal object PlannerDrawing {
             val date = setup.day(index)
             val dayName = weekdays[setup.weekday(date)]
             val titleSize = 34f
-            c.text("$dayName, ${longDate(date)}", L, TOP_TITLE, titleSize, style = TextStyle.TITLE)
-            // The width of the weekday is estimated, which is enough for an underline and a tap area.
             val nameWidth = dayName.length * titleSize * 0.5f
-            // The weekday is a menu: picking another one moves every date of the planner.
-            c.hline(L, L + nameWidth, TOP_TITLE + 22f, ink.accent, 1.5f)
+            val fullWidth = "$dayName, ${longDate(date)}".length * titleSize * 0.5f
+            element(PlannerRole.DAY_DATE, L, TOP_TITLE - 30f, L + fullWidth, TOP_TITLE + 26f) {
+                c.text("$dayName, ${longDate(date)}", L, TOP_TITLE, titleSize, style = TextStyle.TITLE)
+                // The width of the weekday is estimated, which is enough for an underline and a tap area.
+                // The weekday is a menu: picking another one moves every date of the planner.
+                c.hline(L, L + nameWidth, TOP_TITLE + 22f, ink.accent, 1.5f)
+            }
             c.link(L - 4f, TOP_TITLE - 30f, L + nameWidth + 8f, TOP_TITLE + 30f, PlannerAction.PickWeekday(index))
             val week = setup.weekIndexOf(date)
             button(740f, 88f, R, 128f, t("VIEW WEEK", "VER SEMANA"), go(PlannerPage.week(week)), 14f)

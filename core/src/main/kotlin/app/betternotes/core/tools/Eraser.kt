@@ -102,7 +102,7 @@ class EraseSession(
     private fun step(tip: Capsule) {
         val changes = ChangeList()
         content.forEachIntersecting(tip.bounds) { index, item ->
-            if (item.locked && !includeLocked) return@forEachIntersecting
+            if ((item.locked && !includeLocked) || !content.isEditable(item)) return@forEachIntersecting
             when (mode) {
                 EraseMode.PARTIAL -> if (item is StrokeItem && item.kind in kinds) {
                     cutStroke(item.points, tip, item.style.width / 2f)?.let { pieces ->
@@ -130,11 +130,11 @@ class EraseSession(
 fun clearEdit(pageId: Long, content: PageContent, region: Bounds?, ids: IdSource = IdSource.Random): ItemsEdit? {
     val changes = ChangeList()
     if (region == null) {
-        for (i in 0 until content.size) if (!content[i].locked) changes.replace(i, content[i], emptyList())
+        for (i in 0 until content.size) if (!content[i].locked && content.isEditable(content[i])) changes.replace(i, content[i], emptyList())
     } else {
         val clipper = RectClipper(region)
         content.forEachIntersecting(region) { index, item ->
-            if (item.locked) return@forEachIntersecting
+            if (item.locked || !content.isEditable(item)) return@forEachIntersecting
             if (region.contains(item.bounds)) {
                 changes.replace(index, item, emptyList())
             } else if (item is StrokeItem) {

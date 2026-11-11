@@ -16,6 +16,7 @@ import app.betternotes.core.gesture.InputMode
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.InkStyle
 import app.betternotes.core.model.PageContent
+import app.betternotes.core.gesture.RotationGesture
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.TableItem
@@ -425,7 +426,7 @@ class CanvasViewTest {
     @Test
     fun theLoupeShowsTheTurnedPageSoInkInItFollowsTheTurn() {
         twist(startDegrees = 0f, endDegrees = 100f)
-        assertEquals(90f, onMain { canvas.rotationDegrees }, 0f)
+        assertEquals(TURN_AFTER_100_TWIST, onMain { canvas.rotationDegrees }, 1.5f)
         val top = onMain {
             canvas.setLoupeArea(0f, canvas.height / 2f, canvas.width.toFloat(), canvas.height.toFloat())
             canvas.loupeOpen = true
@@ -438,9 +439,10 @@ class CanvasViewTest {
         val last = stroke.points.size - 1
         val pxPerPt = onMain { canvas.viewport.pxPerPt }
         val expected = drag * 0.45f / pxPerPt
-        // A drag across the window runs along the page's height once the page is turned a quarter.
-        assertEquals(0f, stroke.points.x(last) - stroke.points.x(0), 1f)
-        assertEquals(expected, Math.abs(stroke.points.y(last) - stroke.points.y(0)), 1f)
+        // A drag across the window runs along the page's own direction, which the turn has swung round by that many degrees.
+        val turn = Math.toRadians(TURN_AFTER_100_TWIST.toDouble())
+        assertEquals(expected * Math.cos(turn).toFloat(), Math.abs(stroke.points.x(last) - stroke.points.x(0)), 0.05f * expected)
+        assertEquals(expected * Math.sin(turn).toFloat(), Math.abs(stroke.points.y(last) - stroke.points.y(0)), 0.05f * expected)
     }
 
     @Test
@@ -476,7 +478,7 @@ class CanvasViewTest {
         val before = onMain { canvas.pageOriginYForTest(1) }
         twist(startDegrees = 0f, endDegrees = 50f)
         val turned = onMain { canvas.pageTurnForTest(0) }
-        assertEquals(40f, turned, 1.5f)
+        assertEquals(TURN_AFTER_50_TWIST, turned, 1.5f)
         assertEquals(0f, onMain { canvas.pageTurnForTest(1) }, 0f)
         // A4 turned by 40 degrees is taller than upright, so the next page starts lower.
         assertTrue(onMain { canvas.pageOriginYForTest(1) } > before)
@@ -860,7 +862,7 @@ class CanvasViewTest {
         twist(startDegrees = 0f, endDegrees = 50f)
         // The turn starts counting once the twist passes its 10 degree threshold.
         val turned = onMain { canvas.rotationDegrees }
-        assertEquals(40f, turned, 1.5f)
+        assertEquals(TURN_AFTER_50_TWIST, turned, 1.5f)
 
         val from = (canvas.width * 0.4f) to (canvas.height * 0.4f)
         val to = (canvas.width * 0.6f) to (canvas.height * 0.5f)
@@ -894,10 +896,10 @@ class CanvasViewTest {
     }
 
     @Test
-    fun aTwistNearARightAngleSnapsToIt() {
-        // 100 degrees of twist is 90 of turn, once the 10 degree threshold is taken off.
+    fun aTwistNearARightAngleTurnsFreelyWithoutSnapping() {
+        // Version 1.5: rotation begins after a deliberate 20 degree twist and supports free angles without snapping.
         twist(startDegrees = 0f, endDegrees = 100f)
-        assertEquals(90f, onMain { canvas.rotationDegrees }, 0f)
+        assertEquals(TURN_AFTER_100_TWIST, onMain { canvas.rotationDegrees }, 1.5f)
     }
 
     @Test
@@ -926,6 +928,14 @@ class CanvasViewTest {
     }
 
     /** Two fingers 300 px apart around the middle of the view, turning their line from one angle to another. */
+    /**
+     * What the page has turned once [twist] has gone [degrees] in 40 steps: the page follows from the first move past the threshold,
+     * so it lacks the threshold and one step.
+     */
+    private fun turnAfterTwist(degrees: Float) = degrees - RotationGesture.DEFAULT_THRESHOLD_DEGREES - degrees / 40f
+    private val TURN_AFTER_50_TWIST get() = turnAfterTwist(50f)
+    private val TURN_AFTER_100_TWIST get() = turnAfterTwist(100f)
+
     private fun twist(startDegrees: Float, endDegrees: Float) {
         val tool = MotionEvent.TOOL_TYPE_FINGER
         val cx = canvas.width / 2f
@@ -979,7 +989,7 @@ class CanvasViewTest {
             canvas.loupeOpen = true
         }
         twist(startDegrees = 0f, endDegrees = 50f)
-        assertEquals(40f, onMain { canvas.pageTurnForTest(0) }, 1.5f)
+        assertEquals(TURN_AFTER_50_TWIST, onMain { canvas.pageTurnForTest(0) }, 1.5f)
         assertTrue(onMain { canvas.loupeOpen })
     }
 
@@ -1131,6 +1141,79 @@ class CanvasViewTest {
             source,
             0,
         )
+    }
+
+    private fun addBox(id: Long, left: Float, top: Float): ShapeItem {
+        val box = ShapeItem(id, app.betternotes.core.geometry.Frame(left, top, 100f, 100f, 0f), ShapeKind.RECTANGLE, fillColor = 0xFF88AACC.toInt())
+        onMain { editor.perform(app.betternotes.core.edit.ItemsEdit.addOnTop(pageId, editor.content(pageId), box)) }
+        return box
+    }
+
+    @Test
+    fun holdingThePenOnAnItemSelectsItAndTheInkToolStays() {
+        addBox(41L, 200f, 200f)
+        val tool = CanvasTool.Ink(InkStyle())
+        onMain { canvas.tool = tool }
+        val at = worldToScreen(250f, 250f)
+        val down = SystemClock.uptimeMillis()
+        send(event(down, down, MotionEvent.ACTION_DOWN, MotionEvent.TOOL_TYPE_STYLUS, listOf(at), 1f))
+        SystemClock.sleep(800)
+        send(event(down, down + 810, MotionEvent.ACTION_UP, MotionEvent.TOOL_TYPE_STYLUS, listOf(at), 1f))
+        waitUntil { canvas.hasSelection }
+        assertEquals("The tool must not change", tool, onMain { canvas.tool })
+        assertEquals("The held touch must leave no dot", 1, pageContent().size)
+    }
+
+    @Test
+    fun aSelectionMadeByAHoldIsCarriedByAnotherHoldWhileInkStaysInHand() {
+        addBox(42L, 200f, 200f)
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle()) }
+        val at = worldToScreen(250f, 250f)
+        val pen = MotionEvent.TOOL_TYPE_STYLUS
+        val first = SystemClock.uptimeMillis()
+        send(event(first, first, MotionEvent.ACTION_DOWN, pen, listOf(at), 1f))
+        SystemClock.sleep(800)
+        send(event(first, first + 810, MotionEvent.ACTION_UP, pen, listOf(at), 1f))
+        waitUntil { canvas.hasSelection }
+        // A plain stroke on the body writes ink and leaves the box where it is.
+        stylusStroke(at, worldToScreen(300f, 250f))
+        waitUntil { pageContent().size == 2 }
+        assertEquals(200f, onMain { (pageContent()[0] as ShapeItem).frame.left }, 1f)
+    }
+
+    @Test
+    fun holdingStillOnASelectionAndDraggingCarriesIt() {
+        addBox(45L, 200f, 200f)
+        onMain { canvas.tool = CanvasTool.Ink(InkStyle()) }
+        val at = worldToScreen(250f, 250f)
+        val to = worldToScreen(350f, 250f)
+        val pen = MotionEvent.TOOL_TYPE_STYLUS
+        val first = SystemClock.uptimeMillis()
+        send(event(first, first, MotionEvent.ACTION_DOWN, pen, listOf(at), 1f))
+        SystemClock.sleep(800)
+        send(event(first, first + 810, MotionEvent.ACTION_UP, pen, listOf(at), 1f))
+        waitUntil { canvas.hasSelection }
+        val second = SystemClock.uptimeMillis()
+        send(event(second, second, MotionEvent.ACTION_DOWN, pen, listOf(at), 1f))
+        SystemClock.sleep(800)
+        send(event(second, second + 810, MotionEvent.ACTION_MOVE, pen, listOf(to), 1f))
+        send(event(second, second + 820, MotionEvent.ACTION_UP, pen, listOf(to), 1f))
+        waitUntil { (pageContent()[0] as ShapeItem).frame.left > 250f }
+        assertEquals(300f, onMain { (pageContent()[0] as ShapeItem).frame.left }, 3f)
+        assertEquals("Carrying draws no ink", 1, pageContent().size)
+    }
+
+    @Test
+    fun anItemMovedOverAnotherEndsAboveIt() {
+        addBox(43L, 100f, 100f)
+        addBox(44L, 400f, 100f)
+        onMain { canvas.tool = CanvasTool.Lasso(rectangle = true, kinds = app.betternotes.core.tools.ALL_ITEM_KINDS, fullOnly = false) }
+        // The first box is picked and dropped over the second one.
+        stylusStroke(worldToScreen(90f, 90f), worldToScreen(210f, 210f))
+        waitUntil { canvas.hasSelection }
+        stylusStroke(worldToScreen(150f, 150f), worldToScreen(450f, 150f))
+        waitUntil { pageContent()[1].id == 43L }
+        assertEquals(400f, onMain { (pageContent()[1] as ShapeItem).frame.left }, 3f)
     }
 
     private fun send(event: MotionEvent) {

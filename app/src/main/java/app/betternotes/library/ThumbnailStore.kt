@@ -32,6 +32,7 @@ import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.PageSource
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.canvas.spannedText
 import app.betternotes.core.model.TextItem
@@ -105,8 +106,8 @@ class ThumbnailStore(context: Context, private val library: LibraryStore) {
 
     private fun file(key: String) = File(folder, "$key.webp")
 
-    /** The last number is the picture's shape (2: square, 3: landscape covers zoomed), so pictures kept from the older shape are drawn again. */
-    private fun key(id: Long, savedAtMs: Long) = java.lang.Long.toHexString(id) + "-" + savedAtMs + "-3"
+    /** The last number is the picture's shape (2: square, 3: landscape covers zoomed, 4: post-its, tables and tape drawn; 5: locked items under the rest; 6: what open post-its hold), so pictures kept from the older shape are drawn again. */
+    private fun key(id: Long, savedAtMs: Long) = java.lang.Long.toHexString(id) + "-" + savedAtMs + "-6"
 
     private companion object {
         const val TAG = "Thumbnails"
@@ -137,7 +138,7 @@ internal object ThumbnailRenderer {
     fun render(store: DocumentStore): Bitmap {
         val document = store.readDocument()
         val page = document.pages[0]
-        val items = store.readPage(page.id)
+        val items = store.readShownItems(page.id)
         val isPdf = document.kind == DocumentKind.PDF
         // A cover is shown across its whole width and cut at the top and bottom around its middle.
         val heightPx = HEIGHT_PX
@@ -165,7 +166,7 @@ internal object ThumbnailRenderer {
         val document = store.readDocument()
         val page = document.pages[0]
         val size = page.size ?: return createBitmap(widthPx, widthPx).also { it.eraseColor(page.background.color) }
-        val items = store.readPage(page.id)
+        val items = store.readShownItems(page.id)
         val scale = widthPx / size.widthPt
         val bitmap = createBitmap(widthPx, (size.heightPt * scale).toInt().coerceAtLeast(1))
         bitmap.eraseColor(page.background.color)
@@ -223,38 +224,41 @@ internal object ThumbnailRenderer {
         sink.flush()
     }
 
-    /** Only ink, pictures and typed text for now. New item types need adding here as well as in the canvas's painter. */
+    /** Every item type: ink, pictures and text are drawn here, the rest by the canvas's own painter. */
     private fun drawItems(canvas: Canvas, store: DocumentStore, items: List<PageItem>, scale: Float) {
         val renderer = CanvasStrokeRenderer.create(BrushTextures)
         val strokeToBitmap = Matrix().apply { setScale(scale, scale) }
         // Shapes and paths, such as the items of a cover the owner has made editable, paint as they do on the page.
         val shapes = ItemPainter()
-        for (item in items) {
+        // Locked items, such as a cover's design, are a layer below the rest whatever the order, as on the page.
+        for (item in items.filter { it.locked } + items.filter { !it.locked }) {
             when (item) {
                 is StrokeItem -> InkBrushes.draw(renderer, canvas, item.toInkStroke(), strokeToBitmap)
                 is ImageItem -> drawImage(canvas, store, item, scale)
                 is TextItem -> drawText(canvas, item)
-                is FillItem -> drawFill(canvas, item)
-                is ShapeItem, is PathShapeItem -> shapes.paint(canvas, item)
-                else -> Unit
+                // A post-it shows as on the page: its paper, and open, what it holds, ink and pictures too, drawn whole past its edges.
+                is StickyNoteItem -> {
+                    shapes.paint(canvas, item.copy(items = emptyList()))
+                    if (item.isOpen && item.items.isNotEmpty()) {
+                        val frame = item.frame
+                        canvas.withRotation(frame.rotation, frame.centerX, frame.centerY) {
+                            withTranslation(frame.left, frame.top) { drawItems(this, store, item.items, scale) }
+                        }
+                    }
+                }
+                else -> shapes.paint(canvas, item)
             }
         }
     }
 
-    /** A paint bucket fill, which lies under the ink, so its place in the order of drawing is the page's own. */
-    private fun drawFill(canvas: Canvas, item: FillItem) {
-        val path = Path().apply { fillType = Path.FillType.EVEN_ODD }
-        for (loop in item.loops) {
-            path.moveTo(loop[0], loop[1])
-            for (i in 2 until loop.size step 2) path.lineTo(loop[i], loop[i + 1])
-            path.close()
-        }
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-            color = item.color
-            alpha = (android.graphics.Color.alpha(item.color) * item.opacity).toInt().coerceIn(0, 255)
-        }
-        canvas.drawPath(path, paint)
+    /** A picture read at about the size it is shown, for items inside a post-it. */
+    private fun assetBitmap(store: DocumentStore, assetId: String, scale: Float): Bitmap? {
+        val file = store.assetFile(assetId)
+        if (!file.exists()) return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.path, bounds)
+        val shownPx = (bounds.outWidth * scale).toInt().coerceAtLeast(1)
+        return BitmapFactory.decodeFile(file.path, BitmapFactory.Options().apply { inSampleSize = (bounds.outWidth / shownPx).coerceAtLeast(1) })
     }
 
     private fun drawText(canvas: Canvas, item: TextItem) {
@@ -264,8 +268,10 @@ internal object ThumbnailRenderer {
             textSize = item.textSize
             if (item.spans.isEmpty()) app.betternotes.fonts.FontLibrary.face(item.style.font, item.style.bold, item.style.italic)?.let { typeface = it }
         }
-        val shown = if (item.spans.isEmpty()) item.text else spannedText(item.text, item.textSize, item.style, item.spans)
-        val layout = StaticLayout.Builder.obtain(shown, 0, item.text.length, paint, frame.width.toInt().coerceAtLeast(1)).build()
+        val wide = frame.width.toInt().coerceAtLeast(1)
+        val plain = if (item.spans.isEmpty()) item.text else spannedText(item.text, item.textSize, item.style, item.spans)
+        val shown = app.betternotes.canvas.withListMarks(plain, item.style, item.color, item.textSize, paint, wide)
+        val layout = StaticLayout.Builder.obtain(shown, 0, item.text.length, paint, wide).build()
         canvas.withTranslation(frame.left, frame.top) { layout.draw(this) }
     }
 

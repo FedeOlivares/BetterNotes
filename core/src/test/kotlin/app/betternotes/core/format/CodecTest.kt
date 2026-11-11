@@ -5,6 +5,9 @@ import app.betternotes.core.geometry.LengthUnit
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.AudioItem
 import app.betternotes.core.model.Document
+import app.betternotes.core.model.FillItem
+import app.betternotes.core.model.FillPattern
+import app.betternotes.core.model.FillPatternKind
 import app.betternotes.core.model.DocumentKind
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
@@ -174,6 +177,51 @@ class CodecTest {
     }
 
     @Test
+    fun `a table with a header color survives a round trip, and a table without one is written as before`() {
+        val frame = Frame(1f, 2f, 30f, 40f)
+        val colored = TableItem(
+            1, frame, listOf(1f), listOf(1f), listOf("x"),
+            lineColor = 0xFFD10101.toInt(), fillColor = 0x80FFFF00.toInt(), headerRow = true, headerColor = 0xFF04CEFF.toInt(),
+        )
+        assertEquals(listOf<PageItem>(colored), PageCodec.decode(PageCodec.encode(listOf(colored))))
+        val plain = colored.copy(headerColor = 0)
+        assertEquals(listOf<PageItem>(plain), PageCodec.decode(PageCodec.encode(listOf(plain))))
+        // A table without a header color is written as before, apart from the file's version number.
+        assertEquals(PageCodec.encode(listOf(plain), 7).size, PageCodec.encode(listOf(plain)).size)
+    }
+
+    @Test
+    fun `a pattern fill survives a round trip at page format 15, and a page of solid fills is written as before`() {
+        val loop = floatArrayOf(0f, 0f, 600f, 0f, 600f, 500f, 0f, 500f)
+        val solid = FillItem(1, listOf(loop), 0xFFFFCC00.toInt(), 0.8f)
+        val dotted = FillItem(2, listOf(loop), 0xFFFFCC00.toInt(), 0.8f, locked = true, pattern = FillPattern(FillPatternKind.DOTS, 0xFFD10101.toInt(), 5.5f, 0.25f))
+        for (kind in FillPatternKind.entries.filter { it != FillPatternKind.SOLID }) {
+            val item = FillItem(3, listOf(loop), 0xFF112233.toInt(), 1f, pattern = FillPattern(kind, 0xFF445566.toInt(), 9f, 0.15f))
+            assertEquals(listOf<PageItem>(item), PageCodec.decode(PageCodec.encode(listOf(item))))
+        }
+        assertEquals(listOf<PageItem>(solid, dotted), PageCodec.decode(PageCodec.encode(listOf(solid, dotted))))
+        // Only a page with a pattern fill is written at format 15. The version is the varint after the 4 magic bytes.
+        assertEquals(15, PageCodec.encode(listOf(solid, dotted))[4].toInt())
+        assertEquals(10, PageCodec.encode(listOf(solid))[4].toInt())
+        assertEquals(FillPattern.SOLID, (PageCodec.decode(PageCodec.encode(listOf(solid))).single() as FillItem).pattern)
+    }
+
+    @Test
+    fun `a pattern fill asked to be written at an older version is written at 15, so the pattern is not lost`() {
+        val item = FillItem(1, listOf(floatArrayOf(0f, 0f, 6f, 0f, 6f, 5f)), 0xFFFFCC00.toInt(), pattern = FillPattern(FillPatternKind.LINES))
+        assertEquals(listOf<PageItem>(item), PageCodec.decode(PageCodec.encode(listOf(item), 10)))
+    }
+
+    @Test
+    fun `a pattern fill inside a post-it is written at 15 and survives a round trip`() {
+        val fill = FillItem(2, listOf(floatArrayOf(0f, 0f, 6f, 0f, 6f, 5f)), 0xFFFFCC00.toInt(), pattern = FillPattern(FillPatternKind.DOTS))
+        val note = app.betternotes.core.model.StickyNoteItem(1, app.betternotes.core.geometry.Frame(0f, 0f, 100f, 100f), color = 0, items = listOf(fill))
+        val bytes = PageCodec.encode(listOf(note))
+        assertEquals(15, bytes[4].toInt())
+        assertEquals(listOf<PageItem>(note), PageCodec.decode(bytes))
+    }
+
+    @Test
     fun `an empty page survives a round trip`() {
         assertEquals(emptyList<PageItem>(), PageCodec.decode(PageCodec.encode(emptyList())))
     }
@@ -245,9 +293,9 @@ class CodecTest {
 
     @Test
     fun `a newer version is refused, not skipped`() {
-        val newer = encodeWithVersion("BNPG", 9)
+        val newer = encodeWithVersion("BNPG", 99)
         val thrown = assertThrows(UnsupportedVersionException::class.java) { PageCodec.decode(newer) }
-        assertEquals(9, thrown.version)
+        assertEquals(99, thrown.version)
     }
 
     /** Builds a well-formed file with a bad body, to check values the checksum cannot catch. */

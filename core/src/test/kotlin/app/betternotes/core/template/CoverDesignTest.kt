@@ -34,6 +34,15 @@ class CoverDesignTest {
     }
 
     @Test
+    fun `the background of a design comes locked, and nothing small does`() {
+        for (design in CoverDesign.ALL) {
+            val items = design.toItems(595f, 842f)
+            assertTrue(design.id, items.first().locked)
+            assertTrue(design.id, items.filter { it.locked }.all { it.bounds.width >= 595f && it.bounds.height >= 842f })
+        }
+    }
+
+    @Test
     fun `the palette lists the main colors and recoloring swaps them`() {
         val design = CoverDesign.byId("solid-blue")!!
         val colors = design.palette()

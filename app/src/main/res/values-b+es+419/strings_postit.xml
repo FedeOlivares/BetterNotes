@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="panel_opacity_percent">Opacidad %1$d%%</string>
+    <string name="panel_opacity_general">Igual que los demás colores (%1$d%%)</string>
+    <string name="settings_sticky_opacity">Opacidad de las notas adhesivas</string>
+    <string name="settings_sticky_opacity_detail">Qué tan transparentes son las notas adhesivas nuevas. Un color puede tener su propia opacidad en la rueda de color.</string>
+    <string name="panel_list">Lista</string>
+    <string name="panel_list_dot_color">Color del punto</string>
+    <string name="panel_list_dot_size">Tamaño del punto</string>
+    <string name="panel_list_dot_opacity">Opacidad del punto</string>
+</resources>

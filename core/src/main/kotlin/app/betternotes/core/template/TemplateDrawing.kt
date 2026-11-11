@@ -38,6 +38,14 @@ interface TemplateSink {
     /** Text turned [degrees] clockwise about its center ([cx], [cy]), for the side labels and tabs of a planner. A sink may leave it out. */
     fun turnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int, style: TextStyle) = Unit
 
+    /** [text] in the font named [font] (a font of the font library) when it is not null. A sink with no fonts draws it in its own. */
+    fun styledText(text: String, x: Float, baseline: Float, size: Float, color: Int, style: TextStyle, align: TextAlign, font: String?) =
+        text(text, x, baseline, size, color, style, align)
+
+    /** [turnedText] in the font named [font] when it is not null. */
+    fun styledTurnedText(text: String, cx: Float, cy: Float, size: Float, degrees: Float, color: Int, style: TextStyle, font: String?) =
+        turnedText(text, cx, cy, size, degrees, color, style)
+
     /** The language of the words on a built-in page: "es" or anything else for English. */
     val language: String get() = "en"
 }
@@ -45,7 +53,8 @@ interface TemplateSink {
 /** How a label looks: a serif title, a wide-set bold heading, or plain small text. */
 enum class TextStyle { TITLE, HEADING, LABEL }
 
-enum class TextAlign { START, CENTER }
+/** [END] puts the text's right edge at its x, so a wider font grows to the left and not over what is next to it. */
+enum class TextAlign { START, CENTER, END }
 
 private const val LEGAL_MARGIN_GAP_PT = 3f
 private const val STAFF_SIDE_MARGIN_PT = 36f
@@ -102,7 +111,7 @@ fun PageTemplate.draw(
         PageTemplate.WeekPlanner -> page?.let { WeekPlannerPage.draw(it, BuiltInInk(paper), sink) }
         is PageTemplate.Planner -> page?.let {
             val accent = app.betternotes.core.planner.PlannerColors.of(colors, app.betternotes.core.planner.PlannerColors.ACCENT)
-            app.betternotes.core.planner.PlannerDrawing.draw(this.page, setup, it, BuiltInInk(paper, accent), sink, null, paper, title, semesters, dateInk)
+            app.betternotes.core.planner.PlannerDrawing.draw(this.page, setup, it, BuiltInInk(paper, accent), sink, null, paper, title, semesters, dateInk, roles)
         }
         is PageTemplate.Custom -> if (page != null) {
             layout.base.draw(page, region, sink, layout.frameLines, paper)

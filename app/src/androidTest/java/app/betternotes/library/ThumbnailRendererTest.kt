@@ -10,6 +10,8 @@ import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
 import app.betternotes.core.model.InkStyle
+import app.betternotes.core.geometry.Frame
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.StrokeItem
 import app.betternotes.core.model.StrokePointsBuilder
 import app.betternotes.core.template.PageBackground
@@ -124,5 +126,20 @@ class ThumbnailRendererTest {
         assertEquals(Color.WHITE, bitmap.getPixel(700, 500))
         assertTrue(Color.red(bitmap.getPixel(100, 20)) > 200 && Color.green(bitmap.getPixel(100, 20)) < 80)
         assertTrue(bitmap.hasInkIn(130, 110, 350, 130))
+    }
+
+    @Test
+    fun aPostItShowsInTheTilePicture() {
+        val document = Document.newNote("Note", PageSize.A4, PageBackground(color = paper), 0L)
+        store.writeDocument(document)
+        store.writePage(document.pages[0].id, listOf(StickyNoteItem(id = 1, frame = Frame(100f, 100f, 200f, 200f), color = Color.RED)))
+
+        val bitmap = ThumbnailRenderer.render(store)
+
+        // About 100 points in from the left and top, at the picture's scale.
+        val scale = ThumbnailRenderer.WIDTH_PX / PageSize.A4.widthPt
+        val x = (150 * scale).toInt()
+        val y = (150 * scale).toInt()
+        assertTrue(Color.red(bitmap.getPixel(x, y)) > 200 && Color.green(bitmap.getPixel(x, y)) < 80)
     }
 }

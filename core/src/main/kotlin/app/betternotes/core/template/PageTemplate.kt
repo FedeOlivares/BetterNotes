@@ -172,6 +172,11 @@ sealed interface PageTemplate {
         val colors: List<Int> = emptyList(),
         /** The handwriting in the semester date blanks, kept on the pages that show them, like [semesters]. */
         val dateInk: List<app.betternotes.core.planner.DateStroke> = emptyList(),
+        /**
+         * How the owner restyled the planner's elements (format 14): by role, on every page, and by single element, on its own page.
+         * Empty for a planner nobody restyled, which is drawn and saved exactly as before.
+         */
+        val roles: app.betternotes.core.planner.PlannerRoleStyles = app.betternotes.core.planner.PlannerRoleStyles.NONE,
     ) : PageTemplate {
         init {
             require(semesters.isEmpty() || semesters.size == app.betternotes.core.planner.PlannerPages.SEMESTER_DATES) { "Semester dates: 8 numbers or none" }

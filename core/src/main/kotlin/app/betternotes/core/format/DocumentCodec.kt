@@ -4,7 +4,11 @@ import app.betternotes.core.geometry.LengthUnit
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
 import app.betternotes.core.planner.DateStroke
+import app.betternotes.core.planner.ElementKey
 import app.betternotes.core.planner.PlannerColors
+import app.betternotes.core.planner.PlannerRole
+import app.betternotes.core.planner.PlannerRoleStyles
+import app.betternotes.core.planner.RoleStyle
 import app.betternotes.core.planner.PlannerKind
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
@@ -49,6 +53,9 @@ private const val TEMPLATE_PLANNER_DATED = 18
 /** A planner page with chosen colors or handwriting in the date blanks (format 7): the title, the semester dates (or none), the colors (or none) and the strokes. */
 private const val TEMPLATE_PLANNER_STYLED = 19
 
+/** A planner page whose elements were restyled (format 14): everything of tag 19, then the styles by role and by element. */
+private const val TEMPLATE_PLANNER_ROLES = 20
+
 private const val ELEMENT_LINE = 0
 private const val ELEMENT_RECTANGLE = 1
 private const val ELEMENT_TABLE = 2
@@ -63,7 +70,8 @@ internal val LENGTH_UNITS = WireEnum(LengthUnit.PT, LengthUnit.INCH, LengthUnit.
 
 /** The file describing a document and listing its pages in order. */
 object DocumentCodec {
-    fun encode(document: Document, version: Int = LAYOUT_FORMAT_VERSION): ByteArray = encodeFile(DOCUMENT_MAGIC, version) {
+    /** A document is written at [LAYOUT_FORMAT_VERSION], or at [PLANNER_ROLES_FORMAT_VERSION] only when a planner page was restyled. */
+    fun encode(document: Document, version: Int = versionOf(document)): ByteArray = encodeFile(DOCUMENT_MAGIC, version) {
         long(document.id)
         string(document.title)
         DOCUMENT_KINDS.write(this, document.kind)
@@ -73,7 +81,10 @@ object DocumentCodec {
         document.pages.forEach { page(it) }
     }
 
-    fun decode(bytes: ByteArray): Document = decodeFile(bytes, DOCUMENT_MAGIC, LAYOUT_FORMAT_VERSION) {
+    private fun versionOf(document: Document): Int =
+        if (document.pages.any { (it.background.template as? PageTemplate.Planner)?.roles?.isEmpty == false }) PLANNER_ROLES_FORMAT_VERSION else LAYOUT_FORMAT_VERSION
+
+    fun decode(bytes: ByteArray): Document = decodeFile(bytes, DOCUMENT_MAGIC, PLANNER_ROLES_FORMAT_VERSION) {
         val id = long()
         val title = string()
         val kind = DOCUMENT_KINDS.read(this)
@@ -206,6 +217,7 @@ internal fun ByteWriter.template(template: PageTemplate) {
         is PageTemplate.Planner -> {
             byte(
                 when {
+                    !template.roles.isEmpty -> TEMPLATE_PLANNER_ROLES
                     template.colors.isNotEmpty() || template.dateInk.isNotEmpty() -> TEMPLATE_PLANNER_STYLED
                     template.semesters.isNotEmpty() -> TEMPLATE_PLANNER_DATED
                     template.title.isEmpty() -> TEMPLATE_PLANNER
@@ -217,7 +229,7 @@ internal fun ByteWriter.template(template: PageTemplate) {
             varint(template.setup.startYear)
             byte(template.setup.startMonth)
             byte(template.setup.weekdayShift)
-            if (template.colors.isNotEmpty() || template.dateInk.isNotEmpty()) {
+            if (template.colors.isNotEmpty() || template.dateInk.isNotEmpty() || !template.roles.isEmpty) {
                 string(template.title)
                 bool(template.semesters.isNotEmpty())
                 template.semesters.forEach { int(it) }
@@ -231,6 +243,7 @@ internal fun ByteWriter.template(template: PageTemplate) {
                     varint(stroke.points.size / 2)
                     stroke.points.forEach { float(it) }
                 }
+                if (!template.roles.isEmpty) roleStyles(template.roles)
             } else if (template.semesters.isNotEmpty()) {
                 string(template.title)
                 template.semesters.forEach { int(it) }
@@ -266,10 +279,11 @@ internal fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_PLANNER_TITLED -> plannerTemplate(titled = true, dated = false)
     TEMPLATE_PLANNER_DATED -> plannerTemplate(titled = true, dated = true)
     TEMPLATE_PLANNER_STYLED -> plannerTemplate(titled = true, dated = false, styled = true)
+    TEMPLATE_PLANNER_ROLES -> plannerTemplate(titled = true, dated = false, styled = true, restyled = true)
     else -> throw CorruptFileException("Unknown template $tag")
 }
 
-private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean, styled: Boolean = false): PageTemplate {
+private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean, styled: Boolean = false, restyled: Boolean = false): PageTemplate {
     val kinds = PlannerKind.entries
     val kind = byte()
     if (kind !in kinds.indices) throw CorruptFileException("Unknown planner page $kind")
@@ -299,7 +313,80 @@ private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean, styled: 
         if (points !in 1..DateStroke.MAX_POINTS) throw CorruptFileException("Planner date stroke points: $points")
         DateStroke(slot, color, width, List(points * 2) { float() })
     }
-    return PageTemplate.Planner(page, setup, title, semesters, colors, ink)
+    val roles = if (restyled) roleStyles() else PlannerRoleStyles.NONE
+    return PageTemplate.Planner(page, setup, title, semesters, colors, ink, roles)
+}
+
+private const val STYLE_TEXT = 1
+private const val STYLE_LINE = 2
+private const val STYLE_BACKGROUND = 4
+private const val STYLE_SHADING = 8
+private const val STYLE_FONT = 16
+private const val STYLE_PLAIN = 32
+
+private fun ByteWriter.roleStyle(style: RoleStyle) {
+    var mask = 0
+    if (style.text != null) mask = mask or STYLE_TEXT
+    if (style.line != null) mask = mask or STYLE_LINE
+    if (style.background != null) mask = mask or STYLE_BACKGROUND
+    if (style.shading != null) mask = mask or STYLE_SHADING
+    if (style.font != null) mask = mask or STYLE_FONT
+    if (style.plain) mask = mask or STYLE_PLAIN
+    byte(mask)
+    style.text?.let { int(it) }
+    style.line?.let { int(it) }
+    style.background?.let { int(it) }
+    style.shading?.let { int(it) }
+    style.font?.let { string(it) }
+}
+
+private fun ByteReader.roleStyle(): RoleStyle {
+    val mask = byte()
+    if (mask == 0 || mask >= STYLE_PLAIN * 2) throw CorruptFileException("Planner style parts: $mask")
+    val text = if (mask and STYLE_TEXT != 0) int() else null
+    val line = if (mask and STYLE_LINE != 0) int() else null
+    val background = if (mask and STYLE_BACKGROUND != 0) int() else null
+    val shading = if (mask and STYLE_SHADING != 0) int() else null
+    val font = if (mask and STYLE_FONT != 0) string() else null
+    return RoleStyle(text, line, background, shading, font, mask and STYLE_PLAIN != 0)
+}
+
+private fun ByteWriter.roleStyles(roles: PlannerRoleStyles) {
+    varint(roles.byRole.size)
+    for ((role, style) in roles.byRole) {
+        byte(role.ordinal)
+        roleStyle(style)
+    }
+    varint(roles.byElement.size)
+    for ((key, style) in roles.byElement) {
+        byte(key.role.ordinal)
+        int(key.x)
+        int(key.y)
+        roleStyle(style)
+    }
+}
+
+private fun ByteReader.roleStyles(): PlannerRoleStyles {
+    val roles = PlannerRole.entries
+    val roleCount = varint()
+    if (roleCount !in 0..roles.size) throw CorruptFileException("Planner role styles: $roleCount")
+    val byRole = LinkedHashMap<PlannerRole, RoleStyle>()
+    repeat(roleCount) {
+        val ordinal = byte()
+        if (ordinal !in 1 until roles.size) throw CorruptFileException("Unknown planner role $ordinal")
+        byRole[roles[ordinal]] = roleStyle()
+    }
+    val elementCount = varint()
+    if (elementCount !in 0..PlannerRoleStyles.MAX_ELEMENTS) throw CorruptFileException("Planner element styles: $elementCount")
+    val byElement = LinkedHashMap<ElementKey, RoleStyle>()
+    repeat(elementCount) {
+        val ordinal = byte()
+        if (ordinal !in 1 until roles.size) throw CorruptFileException("Unknown planner role $ordinal")
+        val x = int()
+        val y = int()
+        byElement[ElementKey(roles[ordinal], x, y)] = roleStyle()
+    }
+    return PlannerRoleStyles(byRole, byElement)
 }
 
 internal fun ByteWriter.customLayout(layout: CustomLayout) {

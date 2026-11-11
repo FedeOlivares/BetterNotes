@@ -10,16 +10,19 @@ enum class ZPlace { FRONT, MIDDLE, BACK }
 class Rearrangement(val edit: ItemsEdit, val newIndices: IntArray)
 
 /**
- * Moves the items at [indices] (ascending) to the front, the back, or the middle of [content]'s stack, keeping their order among
+ * Moves the items at [indices] (ascending, all on one layer) to the front, the back, or the middle of that layer's stack, keeping their order among
  * themselves and the order of everything else. The middle is halfway through what is left. Null when they are already there.
  */
 fun rearrange(pageId: Long, content: PageContent, indices: IntArray, place: ZPlace): Rearrangement? {
     val count = indices.size
-    if (count == 0 || count == content.size) return null
-    val start = when (place) {
-        ZPlace.FRONT -> content.size - count
+    if (count == 0) return null
+    // The stack is the layer the items are on, since an item never changes layer by being moved in the stack.
+    val layer = content.indicesOn(content[indices[0]].layer)
+    if (count == layer.size) return null
+    val start = layer[0] + when (place) {
+        ZPlace.FRONT -> layer.size - count
         ZPlace.BACK -> 0
-        ZPlace.MIDDLE -> (content.size - count) / 2
+        ZPlace.MIDDLE -> (layer.size - count) / 2
     }
     val target = IntArray(count) { start + it }
     if (target.contentEquals(indices)) return null

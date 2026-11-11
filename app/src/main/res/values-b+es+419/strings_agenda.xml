@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Recoloring the generated parts of a planner page -->
+    <string name="planner_style_text">Texto</string>
+    <string name="planner_style_lines">Líneas</string>
+    <string name="planner_style_background">Fondo</string>
+    <string name="planner_style_shading">Sombreado</string>
+    <string name="planner_style_font">Fuente</string>
+    <string name="planner_style_similar">Aplicar a elementos similares</string>
+    <string name="planner_style_similar_short">Similares</string>
+    <string name="planner_style_reset">Restablecer</string>
+    <string name="planner_style_done">Listo</string>
+</resources>

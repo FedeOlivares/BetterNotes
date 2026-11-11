@@ -3,6 +3,7 @@ package app.betternotes.core.tools
 import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InkPresetTest {
@@ -69,6 +70,17 @@ class InkPresetTest {
     fun turningHoldOffMeansNoDelay() {
         assertEquals(InkPreset.DEFAULT_HOLD_MS, pen.holdToLineMs)
         assertEquals(0, pen.copy(holdToLine = false).holdToLineMs)
+    }
+
+    @Test
+    fun everyInkToolStartsWithTheFourHelpersOn() {
+        for (tool in InkTool.entries) {
+            val preset = InkPreset.defaults(tool)
+            assertTrue("$tool circle to lasso", preset.circleToLasso)
+            assertTrue("$tool pressure", preset.pressure)
+            assertTrue("$tool scribble to erase", preset.scribbleToErase)
+            assertTrue("$tool hold to draw", preset.holdToLine)
+        }
     }
 
     @Test

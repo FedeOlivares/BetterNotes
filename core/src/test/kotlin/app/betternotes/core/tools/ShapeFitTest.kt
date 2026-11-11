@@ -185,6 +185,29 @@ class ShapeFitTest {
     }
 
     @Test
+    fun aGentleBendIsALineForTheHighlighterOnly() {
+        val bend = (0..100).map { (40f + it * 3f) to (200f - 15f * sin(it / 100.0 * PI).toFloat()) }
+        val packed = shaky(bend, 0.5f)
+        assertIs<FittedShape.Path>(ShapeFit.fit(packed))
+        assertIs<FittedShape.Line>(ShapeFit.fit(packed, favorLine = true))
+        val deep = shaky((0..100).map { (40f + it * 3f) to (200f - 50f * sin(it / 100.0 * PI).toFloat()) }, 0.5f)
+        assertIs<FittedShape.Path>(ShapeFit.fit(deep, favorLine = true))
+    }
+
+    @Test
+    fun theShapeKeepsTheHighlightersOpacityWidthAndColor() {
+        val style = InkStyle(tool = app.betternotes.core.model.InkTool.HIGHLIGHTER, color = 0xFFFFEB3B.toInt(), width = 14f, opacity = 0.4f)
+        val line = assertIs<ShapeItem>(ShapeFit.toItem(FittedShape.Line(0f, 0f, 100f, 0f), style))
+        assertEquals(0.4f, line.opacity, 0f)
+        assertEquals(14f, line.strokeWidth, 0f)
+        assertEquals(0xFFFFEB3B.toInt(), line.strokeColor)
+        val curve = assertIs<PathShapeItem>(ShapeFit.toItem(FittedShape.Path(floatArrayOf(0f, 0f, 50f, 20f, 100f, 0f), closed = false, smooth = true), style))
+        assertEquals(0.4f, curve.opacity, 0f)
+        val box = assertIs<ShapeItem>(ShapeFit.toItem(FittedShape.Box(ShapeKind.ELLIPSE, 0f, 0f, 50f, 30f, 0f), style))
+        assertEquals(0.4f, box.opacity, 0f)
+    }
+
+    @Test
     fun aSimpleBowGetsFewControlPoints() {
         val bow = (0..100).map { (40f + it * 3f) to (200f - 50f * sin(it / 100.0 * PI).toFloat()) }
         val path = assertIs<FittedShape.Path>(ShapeFit.fit(shaky(bow, 1.5f)))

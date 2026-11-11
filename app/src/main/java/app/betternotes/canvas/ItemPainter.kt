@@ -21,6 +21,7 @@ import app.betternotes.core.model.TextStyle
 import app.betternotes.core.model.VerticalAlign
 import app.betternotes.core.model.VideoItem
 import app.betternotes.core.model.FillItem
+import app.betternotes.core.tools.PatternMarks
 import app.betternotes.core.model.PathShapeItem
 import app.betternotes.core.model.ImageItem
 import app.betternotes.core.model.ImageShape
@@ -110,7 +111,15 @@ internal class ItemPainter(
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val fillPath = Path().apply { fillType = Path.FillType.EVEN_ODD }
 
-    /** A paint bucket fill: its loops as one path, filled with the even-odd rule so that a loop inside another is a hole. */
+    private val patternMarks = PatternMarks()
+    private val markPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.BUTT }
+    private val clipArea = android.graphics.Rect()
+
+    /**
+     * A paint bucket fill: its loops as one path, filled with the even-odd rule so that a loop inside another is a hole. A pattern is drawn
+     * over the color, clipped to the loops, from a grid that belongs to the page and only over what the canvas shows, so every tile,
+     * thumbnail and export draws the same marks and a mark that reaches into the next tile is drawn in both.
+     */
     private fun paintFill(canvas: Canvas, item: FillItem) {
         fillPath.rewind()
         for (loop in item.loops) {
@@ -121,6 +130,33 @@ internal class ItemPainter(
         fillPaint.color = item.color
         fillPaint.alpha = (Color.alpha(item.color) * item.opacity).toInt().coerceIn(0, 255)
         canvas.drawPath(fillPath, fillPaint)
+        if (!item.pattern.isSolid) paintPattern(canvas, item)
+    }
+
+    private fun paintPattern(canvas: Canvas, item: FillItem) {
+        val pattern = item.pattern
+        canvas.withClip(fillPath) {
+            // What can be seen: the fill's own box and what the canvas clips to, here the tile or the page.
+            val box = item.bounds
+            if (!getClipBounds(clipArea)) return@withClip
+            val left = maxOf(box.left, clipArea.left.toFloat())
+            val top = maxOf(box.top, clipArea.top.toFloat())
+            val right = minOf(box.right, clipArea.right.toFloat())
+            val bottom = minOf(box.bottom, clipArea.bottom.toFloat())
+            if (right < left || bottom < top) return@withClip
+            patternMarks.make(pattern, left, top, right, bottom)
+            markPaint.color = pattern.color
+            markPaint.alpha = (Color.alpha(pattern.color) * item.opacity).toInt().coerceIn(0, 255)
+            markPaint.strokeWidth = patternMarks.thickness
+            if (patternMarks.dotCount > 0) {
+                markPaint.strokeCap = Paint.Cap.ROUND
+                drawPoints(patternMarks.dots, 0, patternMarks.dotCount, markPaint)
+            }
+            if (patternMarks.lineCount > 0) {
+                markPaint.strokeCap = Paint.Cap.BUTT
+                drawLines(patternMarks.lines, 0, patternMarks.lineCount, markPaint)
+            }
+        }
     }
 
     /** Runs [draw] with the frame's top-left corner at the origin, turned by its rotation. */
@@ -130,10 +166,16 @@ internal class ItemPainter(
         }
     }
 
+    private val mirror = android.graphics.Matrix()
+
     private fun paintShape(canvas: Canvas, item: ShapeItem) {
         val width = item.frame.width
         val height = item.frame.height
         ShapePaths.build(path, item.kind, width, height, item.cornerRadius, item.tipLength, item.tipWidth)
+        if (item.mirrored && item.kind != ShapeKind.TAPE) {
+            mirror.setScale(-1f, 1f, width / 2f, 0f)
+            path.transform(mirror)
+        }
         val alpha = (item.opacity * OPAQUE).roundToInt()
         if (item.kind == ShapeKind.TAPE) {
             paintTape(canvas, item)
@@ -416,7 +458,7 @@ internal class ItemPainter(
             fill.color = item.fillColor
             canvas.drawRect(0f, 0f, width, height, fill)
         }
-        fill.color = TABLE_HEADER
+        fill.color = if (item.headerColor != 0) item.headerColor else TABLE_HEADER
         if (item.headerRow) canvas.drawRect(0f, 0f, width, item.rowWeights[0] / rowTotal * height, fill)
         if (item.headerColumn) canvas.drawRect(0f, 0f, item.columnWeights[0] / columnTotal * width, height, fill)
         applyLine(item.lineColor, item.lineWidth, LineStyle.Solid)
@@ -470,9 +512,11 @@ internal class ItemPainter(
                 else -> Typeface.DEFAULT
             }
         }
-        val shown = if (spanned) spannedText(value, size * TEXT_LAYOUT_SCALE, style, spans.map { it.scaled(TEXT_LAYOUT_SCALE) }) else value
+        val wide = (width * TEXT_LAYOUT_SCALE).roundToInt().coerceAtLeast(1)
+        val plain = if (spanned) spannedText(value, size * TEXT_LAYOUT_SCALE, style, spans.map { it.scaled(TEXT_LAYOUT_SCALE) }) else value
+        val shown = withListMarks(plain, style, color, size * TEXT_LAYOUT_SCALE, text, wide)
         val layout = StaticLayout.Builder
-            .obtain(shown, 0, value.length, text, (width * TEXT_LAYOUT_SCALE).roundToInt().coerceAtLeast(1))
+            .obtain(shown, 0, value.length, text, wide)
             .setAlignment(
                 when (style.align) {
                     HorizontalAlign.START -> Layout.Alignment.ALIGN_NORMAL
@@ -491,6 +535,12 @@ internal class ItemPainter(
             scale(1f / TEXT_LAYOUT_SCALE, 1f / TEXT_LAYOUT_SCALE)
             layout.draw(this)
         }
+    }
+
+    /** The fold's shade, as see-through as the note it is on. */
+    private fun shadeOver(note: Int): Int {
+        val alpha = (FOLD_SHADE ushr ALPHA_SHIFT) * (note ushr ALPHA_SHIFT) / 255
+        return (alpha shl ALPHA_SHIFT) or (FOLD_SHADE and 0xFFFFFF)
     }
 
     private fun paintSticky(canvas: Canvas, item: StickyNoteItem) {
@@ -512,13 +562,11 @@ internal class ItemPainter(
             path.lineTo(frame.width - fold, frame.height)
             path.lineTo(frame.width - fold * FOLD_TIP, frame.height - fold)
             path.close()
-            fill.color = FOLD_SHADE
+            fill.color = shadeOver(item.color)
             canvas.drawPath(path, fill)
             if (item.isOpen) {
-                // Everything in a note stays in it.
-                canvas.withClip(0f, 0f, frame.width, frame.height) {
-                    for (inner in item.items) paint(this, inner)
-                }
+                // What is in a note is drawn whole, also where a line or tape runs past the edge. See StickyNoteItem.paintBounds.
+                for (inner in item.items) paint(canvas, inner)
             }
         }
     }

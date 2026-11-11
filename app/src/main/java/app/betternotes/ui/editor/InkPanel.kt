@@ -257,6 +257,7 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
             steps = InkPreset.MAX_STABILIZATION,
             modifier = Modifier.fillMaxWidth(),
         )
+        if (preset.tool == InkTool.HIGHLIGHTER) ToolReturnRows(state, ActiveTool.HIGHLIGHTER)
         ColorSection(state, preset, notices)
     }
 }

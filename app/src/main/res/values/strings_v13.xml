@@ -16,6 +16,8 @@
     <!-- Selection -->
     <string name="selection_lock">Lock in place</string>
     <string name="selection_unlock">Unlock</string>
+    <string name="selection_group">Group</string>
+    <string name="selection_ungroup">Ungroup</string>
     <string name="selection_note_color">Note color</string>
     <string name="selection_keep_open">Keep open</string>
     <string name="selection_translucent">Translucent</string>

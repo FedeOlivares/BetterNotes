@@ -5,11 +5,14 @@
     <string name="sticker_tab_stickers">Stickers</string>
     <string name="sticker_empty">No stickers yet. Select something on a page and press the sticker button next to copy to keep it here.</string>
     <string name="sticker_empty_short">No stickers yet</string>
+    <string name="sticker_loose">Not in a set</string>
+    <string name="sticker_set_name">Set %d</string>
     <string name="sticker_remove">Remove stickers</string>
     <string name="sticker_done_removing">Done removing</string>
     <string name="sticker_export">Export a sticker as PNG</string>
     <string name="sticker_done_exporting">Done exporting</string>
-    <string name="notice_sticker_exported">Sticker exported as PNG</string>
+    <string name="notice_sticker_saved_to">Saved %1$s in %2$s</string>
+    <string name="sticker_folder_storage">internal storage</string>
     <string name="notice_sticker_export_failed">Could not export the sticker</string>
     <string name="notice_sticker_saved">Saved as a sticker</string>
     <string name="notice_sticker_failed">Could not save the sticker</string>
@@ -51,4 +54,10 @@
     <string name="planner_color_spine">Spine</string>
     <string name="planner_color_stripe">Stripe</string>
     <string name="planner_color_accent">Pages</string>
+    <string name="panel_header_color">Header color</string>
+    <string name="selection_table_line">Table line color</string>
+    <string name="selection_table_fill">Table fill color</string>
+    <string name="selection_table_header">Table header color</string>
+    <string name="selection_note_text">Edit note text</string>
+    <string name="selection_mirror">Mirror shape</string>
 </resources>

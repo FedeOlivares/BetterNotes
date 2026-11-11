@@ -239,6 +239,7 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
                 FillSwatch(options.fillColor)
             }
         }
+        CreateReturnRows(state)
         Spacer(Modifier.height(10.dp))
     }
 }

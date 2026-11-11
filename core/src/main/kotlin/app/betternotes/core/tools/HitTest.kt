@@ -33,7 +33,7 @@ fun PageContent.topItemAt(x: Float, y: Float, tolerance: Float = 0f): Int {
     var top = -1
     var topLocked = -1
     forEachIntersecting(probe.bounds) { index, item ->
-        if (item.touches(probe)) {
+        if (isEditable(item) && item.touches(probe)) {
             if (item.locked) topLocked = index else top = index
         }
     }

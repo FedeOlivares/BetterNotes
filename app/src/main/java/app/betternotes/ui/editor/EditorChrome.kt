@@ -8,6 +8,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.draw.alpha
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -85,6 +87,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.tools.InkPreset
@@ -174,7 +177,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
 @Composable
 private fun ToolRowTransition(state: EditorState, recorder: RecorderState, sources: ImageSources) {
     val colors = LocalEditorColors.current
-    val target = if (recorder.recording) null else state.activeTool
+    val target = if (recorder.recording) null else state.shownTool
     var shown by remember { mutableStateOf(target) }
     // The tool whose icons may be seen. While it is not the one shown, the icons are hidden, with no frame in between.
     var revealedFor by remember { mutableStateOf(target) }
@@ -221,6 +224,8 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
             TextSelectionRow(state, state.selection!!.single() as TextItem, none)
         tool == ActiveTool.LASSO -> LassoRow(state, state.lasso, none)
         tool == ActiveTool.SHAPE -> ShapeRow(state, state.shape, none)
+        tool == ActiveTool.STICKY && state.selectionIsNotes ->
+            StickySelectionRow(state, state.selection!!.filterIsInstance<StickyNoteItem>(), none)
         tool == ActiveTool.STICKY || tool == ActiveTool.TEXT -> NoteRow(state, state.note, none, tool == ActiveTool.STICKY)
         tool == ActiveTool.TABLE -> TableRow(state, state.table, none)
         tool == ActiveTool.FILL -> FillRow(state, none)
@@ -250,7 +255,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
     }
     Box(Modifier.fillMaxSize()) {
         // A touch outside an open panel closes it. It sits under the toolbars, so they still work.
-        if (state.panelOpen || state.colorTarget != null || state.toolbarSettingsOpen || state.customizeOpen || state.clipboardOpen) {
+        if (state.panelOpen || state.colorTarget != null || state.toolbarSettingsOpen || state.customizeOpen || state.clipboardOpen || state.layersOpen) {
             Box(
                 Modifier
                     .fillMaxSize()
@@ -262,6 +267,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                             state.toolbarSettingsOpen = false
                             state.customizeOpen = false
                             state.clipboardOpen = false
+                            state.layersOpen = false
                         }
                     },
             )
@@ -412,6 +418,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         if (state.loupeOpen && !state.viewOnly) LoupeBar(state, Modifier.align(Alignment.BottomCenter))
         ToolbarPaint(state) {
             SelectionBar(state)
+            PlannerRecolorBar(state)
             // Where the map of an infinite canvas goes, which a page of fixed size has none of.
             // In the bottom corner only when the toolbar is along the bottom, as the map is; otherwise in the middle, as before.
             val badgeAt = if (state.toolbarEdge == ToolbarEdge.BOTTOM || compact) {
@@ -443,16 +450,6 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
         }
         state.playingVideo?.let { request -> VideoPlayer(request) { state.playingVideo = null } }
         if (state.moreMenuOpen) EditorMenu(state, actions) { state.moreMenuOpen = false }
-        // The sticker being dragged out of the list follows the finger.
-        val dragged = state.stickerDragId
-        val draggedAt = state.stickerDragPoint
-        if (dragged != null && draggedAt != null) {
-            Box(
-                Modifier
-                    .offset { androidx.compose.ui.unit.IntOffset((draggedAt.x - 48.dp.toPx()).roundToInt(), (draggedAt.y - 48.dp.toPx()).roundToInt()) }
-                    .graphicsLayer { alpha = 0.9f },
-            ) { StickerThumb(state, dragged, 96.dp) }
-        }
         if (state.colorListOpen && preset != null) ColorListSheet(state, preset, notices)
         if (state.sourcesOpen) SourcesColumn(state, actions, sources, recorder, notices) { state.sourcesOpen = false }
         state.scanPhoto?.let { ScanCrop(state, it) }
@@ -498,6 +495,8 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             ToolbarSettingsPanel(state, notices, panelModifier.masksInk(state, "toolbarSettings"))
         } else if (state.clipboardOpen) {
             ClipboardSheet(state, panelModifier.masksInk(state, "clipboard"))
+        } else if (state.layersOpen) {
+            LayersSheet(state, panelModifier.masksInk(state, "layers"))
         } else if (state.panelOpen) {
             val sheet = panelModifier.masksInk(state, "panel")
             when {
@@ -510,11 +509,21 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
                 state.activeTool == ActiveTool.TEXT -> NotePanel(state, notices, state.note, sheet, sticky = false)
                 state.activeTool == ActiveTool.TABLE -> TablePanel(state, state.table, sheet)
                 state.activeTool == ActiveTool.IMAGE -> ImagePanel(state, sources, notices, sheet)
-                // Hidden, not closed, while a sticker is dragged out of it, or the drag would end with it.
+                // Stays open while a sticker is dragged out of it: it is the place to drop one sticker on another.
                 state.activeTool == ActiveTool.FILL -> FillPanel(state, sheet)
-                state.activeTool == ActiveTool.EMOJI -> EmojiPanel(state, sheet.graphicsLayer { alpha = if (state.stickerDragId != null) 0f else 1f })
+                state.activeTool == ActiveTool.EMOJI -> EmojiPanel(state, sheet.onGloballyPositioned { state.stickerPanelBounds = it.boundsInWindow() })
                 state.activeTool == ActiveTool.LASER -> LaserPanel(state, sheet)
             }
+        }
+        // The sticker being dragged out of the list follows the finger, over the panel.
+        val dragged = state.stickerDragId
+        val draggedAt = state.stickerDragPoint
+        if (dragged != null && draggedAt != null) {
+            Box(
+                Modifier
+                    .offset { androidx.compose.ui.unit.IntOffset((draggedAt.x - 48.dp.toPx()).roundToInt(), (draggedAt.y - 48.dp.toPx()).roundToInt()) }
+                    .graphicsLayer { alpha = 0.9f },
+            ) { StickerThumb(state, dragged, 96.dp) }
         }
     }
 }
@@ -558,6 +567,7 @@ internal val StripItems by lazy {
         StripItem("recorder", EditorIcons.Mic, R.string.tool_recorder),
         StripItem("laser", EditorIcons.Laser, R.string.tool_laser, ActiveTool.LASER),
         StripItem("fill", EditorIcons.Bucket, R.string.tool_fill, ActiveTool.FILL),
+        StripItem("layers", EditorIcons.Layers, R.string.tool_layers),
         StripItem("settings", EditorIcons.Settings, R.string.tool_settings),
     )
 }
@@ -698,7 +708,8 @@ private fun HiddenToolsButton(hidden: List<StripItem>, state: EditorState, recor
 private fun stripSelected(item: StripItem, state: EditorState) = when (item.label) {
     R.string.tool_ruler -> state.rulerOn
     R.string.tool_loupe -> state.loupeOpen
-    else -> item.tool == state.activeTool
+    R.string.tool_layers -> state.layersOpen
+    else -> item.tool == state.shownTool
 }
 
 private fun stripClick(item: StripItem, state: EditorState, recorder: RecorderState, sources: ImageSources, notices: Notices) {
@@ -707,10 +718,12 @@ private fun stripClick(item: StripItem, state: EditorState, recorder: RecorderSt
         tool != null -> state.select(tool)
         item.label == R.string.tool_ruler -> state.toggleRuler()
         item.label == R.string.tool_clipboard -> state.openClipboard()
+        item.label == R.string.tool_layers -> state.toggleLayers()
         item.label == R.string.tool_loupe -> state.toggleLoupe()
         item.label == R.string.tool_settings -> {
             state.panelOpen = false
             state.clipboardOpen = false
+            state.layersOpen = false
             state.toolbarSettingsOpen = !state.toolbarSettingsOpen
         }
         item.label == R.string.tool_add_element -> sources.pickVideo()
