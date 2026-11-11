@@ -465,6 +465,10 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     fun setPlannerTitle(title: String) = canvas.setPlannerTitle(title)
 
+    val plannerColors get() = canvas.plannerColors
+
+    fun setPlannerColors(colors: List<Int>) = canvas.setPlannerColors(colors)
+
     fun setPlannerSetup(setup: app.betternotes.core.planner.PlannerSetup, stayOn: app.betternotes.core.planner.PlannerPage?) =
         canvas.setPlannerSetup(setup, stayOn)
 

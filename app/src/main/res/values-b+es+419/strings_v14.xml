@@ -46,4 +46,9 @@
     <string name="planner_years_mid_detail">De julio a julio del año siguiente.</string>
     <string name="planner_years_full_detail">De enero a diciembre.</string>
     <string name="planner_years_apply">Aplicar</string>
+    <string name="planner_colors_title">Colores</string>
+    <string name="planner_color_cover">Portada</string>
+    <string name="planner_color_spine">Lomo</string>
+    <string name="planner_color_stripe">Franja</string>
+    <string name="planner_color_accent">Páginas</string>
 </resources>

@@ -1,3 +1,14 @@
+# Better Notes 2.3.0 — Release Notes
+
+Planner colors and shared dates.
+
+- The planner's colors can be changed, like those of any other cover: when making a planner, four color dots under its cover (cover, spine, stripe, pages) open the color grid; on an existing planner, tap the years on the cover and use the Colors row. The pages' color is the blue of the rules, boxes and headings, and every page follows it. One undo step brings the old colors back.
+- Handwriting in a semester or quarter start or end date blank on the index or on the Semester / Quarter planning page now shows on the other page too. The eraser removes it from both, and Clear in the date picker clears the typed date and the handwriting of that date. Each blank keeps up to 40 strokes, drawn at a constant width. The start and end blanks on the Semester overview page are still separate.
+- Planners with colors or handwritten dates use a newer notebook file format (document version 7), which older versions of the app cannot open. Planners that use neither are saved as before, and older planners open as they were.
+- Checked on the PC only (unit tests, lint, debug and release builds). The color choices, the handwriting in the date blanks and the eraser were not tried on the Pad 7 or on an emulator.
+
+---
+
 # Better Notes 2.2.0 — Release Notes
 
 Draw your own font, a layout for phones, and handwriting models that come inside the app.

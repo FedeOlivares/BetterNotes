@@ -165,8 +165,18 @@ sealed interface PageTemplate {
          * shows on the other.
          */
         val semesters: List<Int> = emptyList(),
+        /**
+         * The planner's colors ([app.betternotes.core.planner.PlannerColors.COUNT] ARGB numbers: cover, spine, stripe, page accent), or none
+         * for the defaults. Kept on every page, so a page draws itself from its own template.
+         */
+        val colors: List<Int> = emptyList(),
+        /** The handwriting in the semester date blanks, kept on the pages that show them, like [semesters]. */
+        val dateInk: List<app.betternotes.core.planner.DateStroke> = emptyList(),
     ) : PageTemplate {
-        init { require(semesters.isEmpty() || semesters.size == app.betternotes.core.planner.PlannerPages.SEMESTER_DATES) { "Semester dates: 8 numbers or none" } }
+        init {
+            require(semesters.isEmpty() || semesters.size == app.betternotes.core.planner.PlannerPages.SEMESTER_DATES) { "Semester dates: 8 numbers or none" }
+            require(colors.isEmpty() || colors.size == app.betternotes.core.planner.PlannerColors.COUNT) { "Planner colors: ${app.betternotes.core.planner.PlannerColors.COUNT} numbers or none" }
+        }
 
         companion object {
             const val NO_DATE = 0

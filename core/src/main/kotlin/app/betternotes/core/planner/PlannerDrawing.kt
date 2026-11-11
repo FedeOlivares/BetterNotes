@@ -58,9 +58,10 @@ internal object PlannerDrawing {
         paper: Int = PLAIN_PAPER,
         title: String = "",
         semesters: List<Int> = emptyList(),
+        dateInk: List<DateStroke> = emptyList(),
     ) {
         val c = Layer(size, ink, sink, 0f, 0f, W, H, links)
-        val s = Sheet(c, ink, setup, sink, size, paper, semesters)
+        val s = Sheet(c, ink, setup, sink, size, paper, semesters, dateInk)
         if (page.kind == PlannerKind.COVER) return s.cover(title)
         s.tabs(page)
         when (page.kind) {
@@ -102,6 +103,7 @@ internal object PlannerDrawing {
         val size: PageSize,
         val paper: Int,
         val semesters: List<Int>,
+        val dateInk: List<DateStroke>,
     ) {
         private val es = sink.language == "es"
         private fun t(en: String, es: String) = c.pick(en, es)
@@ -149,6 +151,11 @@ internal object PlannerDrawing {
         /** A date as the day pages write it: "Wednesday, July 1, 2026" or "Miércoles, 1 de julio de 2026" (without the weekday). */
         private fun longDate(date: LocalDate) =
             if (es) "${date.dayOfMonth} de ${monthName(date).lowercase()} de ${date.year}" else "${monthName(date)} ${date.dayOfMonth}, ${date.year}"
+
+        /** The handwriting of date [slot], with its blank's top-left at ([x], [y]). */
+        private fun writing(slot: Int, x: Float, y: Float) {
+            for (stroke in dateInk) if (stroke.slot == slot) c.polyline(stroke.points, x, y, stroke.width, stroke.color)
+        }
 
         private fun two(n: Int) = n.toString().padStart(2, '0')
 
@@ -376,10 +383,16 @@ internal object PlannerDrawing {
                 c.hline(startX, endX - 12f, top + 36f, ink.rule)
                 c.text(endLabel, endX, top + 18f, 14f)
                 c.hline(endX, x + half - 14f, top + 36f, ink.rule)
-                semesterDate(i * 2, short = true)?.let { c.text(it, startX + startLabel.length * 6.6f + 6f, top + 18f, 13f) }
-                semesterDate(i * 2 + 1, short = true)?.let { c.text(it, endX + endLabel.length * 6.6f + 6f, top + 18f, 13f) }
-                c.link(startX, top, endX - 12f, top + 36f, PlannerAction.PickDate(i, false))
-                c.link(endX, top, x + half - 14f, top + 36f, PlannerAction.PickDate(i, true))
+                // The blank starts after the label and reaches its rule at the foot; handwriting is kept relative to it.
+                val startInkX = startX + startLabel.length * 6.6f + 6f
+                val endInkX = endX + endLabel.length * 6.6f + 6f
+                val inkY = top + 36f - DateStroke.SLOT_HEIGHT
+                semesterDate(i * 2, short = true)?.let { c.text(it, startInkX, top + 18f, 13f) }
+                semesterDate(i * 2 + 1, short = true)?.let { c.text(it, endInkX, top + 18f, 13f) }
+                writing(i * 2, startInkX, inkY)
+                writing(i * 2 + 1, endInkX, inkY)
+                c.link(startX, top, endX - 12f, top + 36f, PlannerAction.PickDate(i, false, startInkX, inkY))
+                c.link(endX, top, x + half - 14f, top + 36f, PlannerAction.PickDate(i, true, endInkX, inkY))
             }
             y += 120f
             heading(t("ACADEMIC PLANNING PAGES", "PÁGINAS ACADÉMICAS"), L, R, y + 12f)
@@ -470,8 +483,11 @@ internal object PlannerDrawing {
                 c.hline(x + half / 2f + 100f, x + half, y + 62f, ink.rule)
                 semesterDate(i * 2)?.let { c.text(it, x + 116f, y + 52f, 15f) }
                 semesterDate(i * 2 + 1)?.let { c.text(it, x + half / 2f + 106f, y + 52f, 15f) }
-                c.link(x, y + 30f, x + half / 2f - 10f, y + 70f, PlannerAction.PickDate(i, false))
-                c.link(x + half / 2f + 10f, y + 30f, x + half, y + 70f, PlannerAction.PickDate(i, true))
+                val inkY = y + 62f - DateStroke.SLOT_HEIGHT
+                writing(i * 2, x + 116f, inkY)
+                writing(i * 2 + 1, x + half / 2f + 106f, inkY)
+                c.link(x, y + 30f, x + half / 2f - 10f, y + 70f, PlannerAction.PickDate(i, false, x + 116f, inkY))
+                c.link(x + half / 2f + 10f, y + 30f, x + half, y + 70f, PlannerAction.PickDate(i, true, x + half / 2f + 106f, inkY))
                 c.text(t("COURSES", "MATERIAS"), x, y + 112f, 15f, style = TextStyle.HEADING)
                 rows(x, x + half, y + 126f, 6, 36f)
                 c.text(t("GOALS", "METAS"), x, y + 388f, 15f, style = TextStyle.HEADING)

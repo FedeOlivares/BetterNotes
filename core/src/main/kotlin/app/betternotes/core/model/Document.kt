@@ -205,8 +205,8 @@ class Document(
             Document(ids.next(), title, DocumentKind.TEXT, nowMs, nowMs, listOf(Page(ids.next(), size, background)))
 
         /** A planner for the dates of [setup]: the cover, then every page in order. */
-        fun newPlanner(title: String, setup: PlannerSetup, nowMs: Long, ids: IdSource = IdSource.Random): Document {
-            val pages = PlannerPages.build(setup, emptyMap(), ids)
+        fun newPlanner(title: String, setup: PlannerSetup, nowMs: Long, ids: IdSource = IdSource.Random, colors: List<Int> = emptyList()): Document {
+            val pages = PlannerPages.build(setup, emptyMap(), ids, colors = colors)
             return Document(ids.next(), title, DocumentKind.PLANNER, nowMs, nowMs, pages)
         }
 

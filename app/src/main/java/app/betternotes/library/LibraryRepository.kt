@@ -130,7 +130,8 @@ class LibraryRepository private constructor(context: Context) {
         setup: app.betternotes.core.planner.PlannerSetup,
         language: String,
         onCreated: (Long) -> Unit,
-    ) = create(folderId, onCreated, language) { now -> Document.newPlanner(title, setup, now) }
+        colors: List<Int> = emptyList(),
+    ) = create(folderId, onCreated, language) { now -> Document.newPlanner(title, setup, now, colors = colors) }
 
     /** Creates a typed notebook, and passes its id on once it is on the disk. */
     fun createText(title: String, folderId: Long?, onCreated: (Long) -> Unit) = create(folderId, onCreated) { now ->

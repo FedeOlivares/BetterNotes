@@ -36,6 +36,8 @@ object PlannerPages {
         ids: IdSource,
         title: String = "",
         semesters: List<Int> = emptyList(),
+        colors: List<Int> = emptyList(),
+        dateInk: List<DateStroke> = emptyList(),
     ): List<Page> {
         val plan = PlannerPlan(setup)
         val used = HashSet<Long>(reuse.values)
@@ -43,14 +45,15 @@ object PlannerPages {
         val cover = Page(
             idFor(PlannerPage.Cover),
             SIZE,
-            PageBackground(PAPER, PageTemplate.Planner(PlannerPage.Cover, setup, title)),
+            PageBackground(PAPER, PageTemplate.Planner(PlannerPage.Cover, setup, title, colors = colors)),
             cover = COVER_ID,
         )
         return buildList(plan.size + 1) {
             add(cover)
             for (page in plan.pages) {
-                val dated = if (page.kind in DATED_PAGES) semesters else emptyList()
-                add(Page(idFor(page), SIZE, PageBackground(PAPER, PageTemplate.Planner(page, setup, semesters = dated))))
+                val shows = page.kind in DATED_PAGES
+                val template = PageTemplate.Planner(page, setup, semesters = if (shows) semesters else emptyList(), colors = colors, dateInk = if (shows) dateInk else emptyList())
+                add(Page(idFor(page), SIZE, PageBackground(PAPER, template)))
             }
         }
     }
@@ -70,11 +73,14 @@ object PlannerPages {
         if (setupOf(document) == setup) return null
         val reuse = HashMap<PlannerPage, Long>()
         for (page in document.pages) (page.background.template as? PageTemplate.Planner)?.let { reuse[it.page] = page.id }
-        return SetPlannerPages(document.pages.toList(), build(setup, reuse, ids, titleOf(document), semestersOf(document)))
+        return SetPlannerPages(document.pages.toList(), build(setup, reuse, ids, titleOf(document), semestersOf(document), colorsOf(document), dateInkOf(document)))
     }
 
     /** The pages that show the semester dates. */
     private val DATED_PAGES = setOf(PlannerKind.DASHBOARD, PlannerKind.SEMESTER_PLAN)
+
+    /** Whether a page of [kind] has semester date blanks, where handwriting is shared. */
+    fun showsDates(kind: PlannerKind) = kind in DATED_PAGES
 
     /** The semester dates (8 numbers, [PageTemplate.Planner.NO_DATE] for none), or all none. */
     fun semestersOf(document: Document): List<Int> {
@@ -91,11 +97,115 @@ object PlannerPages {
         if (document.kind != DocumentKind.PLANNER || semester !in 0..3) return null
         val dates = semestersOf(document).toMutableList()
         dates[semester * 2 + if (end) 1 else 0] = epochDay ?: PageTemplate.Planner.NO_DATE
+        val slot = semester * 2 + if (end) 1 else 0
+        val wipeInk = epochDay == null
         val edits = document.pages.mapNotNull { page ->
             val template = page.background.template as? PageTemplate.Planner ?: return@mapNotNull null
-            if (template.page.kind !in DATED_PAGES || template.semesters == dates) return@mapNotNull null
+            val ink = if (wipeInk) template.dateInk.filter { it.slot != slot } else template.dateInk
+            if (template.page.kind !in DATED_PAGES || (template.semesters == dates && ink == template.dateInk)) return@mapNotNull null
             val dated = if (dates.all { it == PageTemplate.Planner.NO_DATE }) emptyList() else dates
-            UpdatePage(page, page.copy(background = page.background.copy(template = template.copy(semesters = dated))))
+            UpdatePage(page, page.copy(background = page.background.copy(template = template.copy(semesters = dated, dateInk = ink))))
+        }
+        return when (edits.size) {
+            0 -> null
+            1 -> edits[0]
+            else -> app.betternotes.core.edit.BatchEdit(edits)
+        }
+    }
+
+    /** The planner's colors (see [PlannerColors]), or none when they are the defaults. */
+    fun colorsOf(document: Document): List<Int> =
+        (document.pages.firstOrNull()?.background?.template as? PageTemplate.Planner)?.colors.orEmpty()
+
+    /** The handwriting in the semester date blanks. */
+    fun dateInkOf(document: Document): List<DateStroke> {
+        val page = document.pages.firstOrNull { (it.background.template as? PageTemplate.Planner)?.page?.kind == PlannerKind.DASHBOARD }
+        return (page?.background?.template as? PageTemplate.Planner)?.dateInk.orEmpty()
+    }
+
+    /** The undoable change to the planner's [colors] on every page, or null if they are the same or this is not a planner. Ink on the pages stays. */
+    fun recolor(document: Document, colors: List<Int>): Edit? {
+        if (document.kind != DocumentKind.PLANNER) return null
+        val clean = PlannerColors.normalized(colors)
+        if (colorsOf(document) == clean) return null
+        val before = document.pages.toList()
+        val after = before.map { page ->
+            val template = page.background.template as? PageTemplate.Planner ?: return@map page
+            page.copy(background = page.background.copy(template = template.copy(colors = clean)))
+        }
+        return SetPlannerPages(before, after)
+    }
+
+    /**
+     * The undoable change that adds [stroke] (in reference units, relative to its blank) to the handwriting of its date on every page
+     * that shows it. Null when this is not a planner or that date already holds as many strokes as it keeps.
+     */
+    fun addDateInk(document: Document, stroke: DateStroke): Edit? {
+        val ink = dateInkOf(document)
+        if (ink.count { it.slot == stroke.slot } >= DateStroke.MAX_PER_SLOT) return null
+        return setDateInk(document, ink + stroke)
+    }
+
+    /** The undoable change that takes the handwriting of [slot] away ([slot] null: of every date), or null if there is none. */
+    fun clearDateInk(document: Document, slot: Int?): Edit? {
+        val ink = dateInkOf(document)
+        val kept = if (slot == null) emptyList() else ink.filter { it.slot != slot }
+        return if (kept.size == ink.size) null else setDateInk(document, kept)
+    }
+
+    /** The undoable change that takes one [stroke] of the handwriting away, or null when it is not there. */
+    fun removeDateStroke(document: Document, stroke: DateStroke): Edit? {
+        val ink = dateInkOf(document)
+        val at = ink.indexOf(stroke)
+        if (at < 0) return null
+        return setDateInk(document, ink.filterIndexed { i, _ -> i != at })
+    }
+
+    /** The undoable change that takes all of [strokes] away, or null when none of them is there. */
+    fun removeDateStrokes(document: Document, strokes: Collection<DateStroke>): Edit? {
+        val ink = dateInkOf(document)
+        val kept = ink.filter { it !in strokes }
+        return if (kept.size == ink.size) null else setDateInk(document, kept)
+    }
+
+    /**
+     * A pen stroke ([xy]: x, y pairs in the page's points) as the handwriting of the date blank [action] names, measured from the blank's
+     * top-left in the planner's reference units. A stroke with more points than a template keeps is thinned.
+     */
+    fun dateStroke(action: PlannerAction.PickDate, size: PageSize, xy: FloatArray, color: Int, widthPt: Float): DateStroke {
+        val sx = PlannerDrawing.W / size.widthPt
+        val sy = PlannerDrawing.H / size.heightPt
+        val count = xy.size / 2
+        val step = (count + DateStroke.MAX_POINTS - 1) / DateStroke.MAX_POINTS
+        val out = ArrayList<Float>(minOf(count, DateStroke.MAX_POINTS) * 2 + 2)
+        fun add(i: Int) {
+            out += xy[2 * i] * sx - action.inkX
+            out += xy[2 * i + 1] * sy - action.inkY
+        }
+        for (i in 0 until count step step) add(i)
+        if ((count - 1) % step != 0) add(count - 1)
+        return DateStroke(action.semester * 2 + if (action.end) 1 else 0, color, widthPt * sx, out)
+    }
+
+    /** The strokes of the date blank under ([x], [y]) on [page] (page points) that an eraser of [radiusPt] there touches. */
+    fun dateStrokesNear(page: Page, x: Float, y: Float, radiusPt: Float): List<DateStroke> {
+        val template = page.background.template as? PageTemplate.Planner ?: return emptyList()
+        val size = page.size ?: return emptyList()
+        if (template.dateInk.isEmpty() || template.page.kind !in DATED_PAGES) return emptyList()
+        val action = plannerActionAt(template.page, template.setup, size, x, y) as? PlannerAction.PickDate ?: return emptyList()
+        val slot = action.semester * 2 + if (action.end) 1 else 0
+        val sx = PlannerDrawing.W / size.widthPt
+        val px = x * sx - action.inkX
+        val py = y * (PlannerDrawing.H / size.heightPt) - action.inkY
+        return template.dateInk.filter { it.slot == slot && it.touches(px, py, radiusPt * sx) }
+    }
+
+    private fun setDateInk(document: Document, ink: List<DateStroke>): Edit? {
+        if (document.kind != DocumentKind.PLANNER) return null
+        val edits = document.pages.mapNotNull { page ->
+            val template = page.background.template as? PageTemplate.Planner ?: return@mapNotNull null
+            if (template.page.kind !in DATED_PAGES || template.dateInk == ink) return@mapNotNull null
+            UpdatePage(page, page.copy(background = page.background.copy(template = template.copy(dateInk = ink))))
         }
         return when (edits.size) {
             0 -> null

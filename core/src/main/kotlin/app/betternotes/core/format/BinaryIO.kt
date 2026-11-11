@@ -19,10 +19,10 @@ internal const val LIBRARY_FORMAT_VERSION = 2
 
 /**
  * The document and settings files are at version 2, because they hold custom layouts: a layout gained a paper color,
- * a base pattern and book style (2), and the positions of a frame's movable lines (3), and a page the angle it is shown at (4), and the cover page's design (5, release 1.4.1), and the planner: a document kind and a page template that holds its page and dates (6, release 1.6). Older files still open, with the defaults.
+ * a base pattern and book style (2), and the positions of a frame's movable lines (3), and a page the angle it is shown at (4), and the cover page's design (5, release 1.4.1), and the planner: a document kind and a page template that holds its page and dates (6, release 1.6), and the planner's colors and the handwriting in its date blanks (7, release 2.3.0). Older files still open, with the defaults.
  * The other files are still at [FORMAT_VERSION].
  */
-internal const val LAYOUT_FORMAT_VERSION = 6
+internal const val LAYOUT_FORMAT_VERSION = 7
 
 /**
  * The page files are at version 3: shapes gained a tip length and width (2), and ink a creative brush kind (3).

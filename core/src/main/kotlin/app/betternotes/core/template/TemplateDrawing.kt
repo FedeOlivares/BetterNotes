@@ -100,7 +100,10 @@ fun PageTemplate.draw(
         PageTemplate.Semester -> page?.let { SemesterPage.draw(it, BuiltInInk(paper), sink) }
         PageTemplate.MindMap -> page?.let { MindMapPage.draw(it, BuiltInInk(paper), sink) }
         PageTemplate.WeekPlanner -> page?.let { WeekPlannerPage.draw(it, BuiltInInk(paper), sink) }
-        is PageTemplate.Planner -> page?.let { app.betternotes.core.planner.PlannerDrawing.draw(this.page, setup, it, BuiltInInk(paper), sink, null, paper, title, semesters) }
+        is PageTemplate.Planner -> page?.let {
+            val accent = app.betternotes.core.planner.PlannerColors.of(colors, app.betternotes.core.planner.PlannerColors.ACCENT)
+            app.betternotes.core.planner.PlannerDrawing.draw(this.page, setup, it, BuiltInInk(paper, accent), sink, null, paper, title, semesters, dateInk)
+        }
         is PageTemplate.Custom -> if (page != null) {
             layout.base.draw(page, region, sink, layout.frameLines, paper)
             layout.elements.forEach { it.draw(sink) }

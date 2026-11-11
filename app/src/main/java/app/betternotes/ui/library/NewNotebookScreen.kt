@@ -51,6 +51,7 @@ import app.betternotes.ui.theme.isCompactScreen
 import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.geometry.PageSize
+import app.betternotes.core.planner.PlannerColors
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
 import android.content.Intent
@@ -98,6 +99,8 @@ internal class NotebookChoice(
     val planner: Boolean = false,
     /** Colors of the cover's design the owner changed: each key is swapped for its value. */
     val recolor: Map<Int, Int> = emptyMap(),
+    /** A planner's colors ([PlannerColors]: cover, spine, stripe, page accent), or none for the defaults. */
+    val plannerColors: List<Int> = emptyList(),
     /** The cover was edited on a canvas, and is in the cover draft; it goes on the notebook's cover as it is. */
     val draft: Boolean = false,
 )
@@ -141,7 +144,10 @@ internal fun NewNotebookScreen(
     // A planner is chosen below the covers and needs nothing else decided: its cover, paper and A4 portrait page are its own.
     var planner by remember { mutableStateOf(false) }
     val plannerName = if (language == "es") "Agenda" else "Planner"
-    val plannerPattern = remember { PageTemplate.Planner(PlannerPage.Cover, PlannerPages.defaultSetup(java.time.LocalDate.now())) }
+    var plannerColors by remember { mutableStateOf(PlannerColors.DEFAULT) }
+    val plannerPattern = remember(plannerColors) {
+        PageTemplate.Planner(PlannerPage.Cover, PlannerPages.defaultSetup(java.time.LocalDate.now()), colors = PlannerColors.normalized(plannerColors))
+    }
     if (planner) landscape = false
     val page = if (landscape) PageSize(PageSize.A4.heightPt, PageSize.A4.widthPt) else PageSize.A4
     val template = remember(kind) { kind.newTemplate() }
@@ -278,6 +284,10 @@ internal fun NewNotebookScreen(
                             )
                         }
                     }
+                    if (planner) {
+                        Spacer(Modifier.height(10.dp))
+                        PlannerColorRow(plannerColors, compact, colors.secondaryText, colors.border) { plannerColors = it }
+                    }
                     // The colors the design is made of: tap one to change it, and the picture above follows.
                     val design = if (planner || draftEdited) null else CoverDesign.byId(coverId)?.takeIf { it.id != CoverDesign.CUSTOM_ID }
                     if (design != null) {
@@ -367,7 +377,7 @@ internal fun NewNotebookScreen(
                 Pill(stringResource(R.string.notebook_cancel), colors.title, null, colors.border, onCancel)
                 Spacer(Modifier.width(14.dp))
                 Pill(stringResource(if (coverOnly) R.string.notebook_save_cover else R.string.notebook_create), Color.White, BLUE, null) {
-                    onCreate(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language, planner, recolor, draftEdited))
+                    onCreate(NotebookChoice(title.trim().ifEmpty { initialTitle }, coverId, PageBackground(paperColor, template), landscape, language, planner, recolor, PlannerColors.normalized(plannerColors), draftEdited))
                 }
             }
         }
@@ -637,7 +647,7 @@ private val SWATCHES = listOf(
 
 /** A grid of colors to pick from, with the one now in use marked, and a way back to the design's own. */
 @Composable
-private fun ColorSwatchDialog(current: Int, onPick: (Int) -> Unit, onReset: () -> Unit, onDismiss: () -> Unit) {
+internal fun ColorSwatchDialog(current: Int, onPick: (Int) -> Unit, onReset: () -> Unit, onDismiss: () -> Unit) {
     val colors = LocalAppColors.current
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,

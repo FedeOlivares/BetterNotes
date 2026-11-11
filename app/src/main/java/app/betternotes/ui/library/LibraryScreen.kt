@@ -427,7 +427,7 @@ internal fun LibraryScreen(
                 newNotebook = false
                 if (choice.planner) {
                     val setup = app.betternotes.core.planner.PlannerPages.defaultSetup(java.time.LocalDate.now())
-                    repository.createPlanner(choice.title, folderForNewItems, setup, choice.language, flows.open)
+                    repository.createPlanner(choice.title, folderForNewItems, setup, choice.language, flows.open, choice.plannerColors)
                     return@NewNotebookScreen
                 }
                 val a4 = PageSize.A4

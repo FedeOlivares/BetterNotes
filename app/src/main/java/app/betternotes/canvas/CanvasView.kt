@@ -82,6 +82,8 @@ import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TapePathItem
 import app.betternotes.core.planner.PlannerAction
 import app.betternotes.core.template.PageTemplate
+import app.betternotes.core.planner.DateStroke
+import app.betternotes.core.planner.PlannerColors
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
 import app.betternotes.core.planner.PlannerPlan
@@ -1755,6 +1757,48 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         syncChanges()
     }
 
+    /** Takes the date handwriting the eraser touched away, as one undoable step. */
+    private fun eraseDateInk() {
+        if (dateEraseHits.isEmpty()) return
+        val open = editor
+        val edit = if (open == null) null else PlannerPages.removeDateStrokes(open.document, dateEraseHits)
+        dateEraseHits.clear()
+        if (open == null || edit == null) return
+        open.perform(edit)
+        syncChanges()
+    }
+
+    /**
+     * A pen stroke that is drawn in a semester date blank of a planner becomes the handwriting of that date, which every page showing the
+     * date draws. Says whether it was taken; a dot (a tap) and highlighter strokes are not.
+     */
+    private fun captureDateInk(editor: NoteEditor, pageId: Long, item: StrokeItem): Boolean {
+        if (item.style.tool == InkTool.HIGHLIGHTER || (item.bounds.width < TAP_DOT_PT && item.bounds.height < TAP_DOT_PT)) return false
+        val page = editor.document.pages.firstOrNull { it.id == pageId } ?: return false
+        val template = page.background.template as? PageTemplate.Planner ?: return false
+        if (!PlannerPages.showsDates(template.page.kind)) return false
+        val size = page.size ?: return false
+        val bounds = item.bounds
+        val action = plannerActionAt(template.page, template.setup, size, bounds.centerX, bounds.centerY) as? PlannerAction.PickDate ?: return false
+        val xy = FloatArray(item.points.size * 2) { if (it % 2 == 0) item.points.x(it / 2) else item.points.y(it / 2) }
+        val edit = PlannerPages.addDateInk(editor.document, PlannerPages.dateStroke(action, size, xy, item.style.color, item.style.width)) ?: return false
+        lasso.clear()
+        editor.perform(edit)
+        return true
+    }
+
+    /** The planner's four colors (cover, spine, stripe, page accent), defaults filled in. */
+    val plannerColors: List<Int> get() = editor?.document?.let { doc -> PlannerPages.colorsOf(doc).ifEmpty { PlannerColors.DEFAULT } } ?: PlannerColors.DEFAULT
+
+    /** Gives every page of the planner these colors as one undoable step; the cover and all pages are drawn again. */
+    fun setPlannerColors(colors: List<Int>) {
+        val open = editor ?: return
+        val edit = PlannerPages.recolor(open.document, colors) ?: return
+        lasso.clear()
+        open.perform(edit)
+        syncChanges()
+    }
+
     /** The title on the planner's cover, shown when it is edited. */
     val plannerTitle: String get() = editor?.document?.let { PlannerPages.titleOf(it) }.orEmpty()
 
@@ -2161,6 +2205,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (session != null) {
             session.finish()?.let { editor?.record(it) }
             erase = null
+            eraseDateInk()
             return
         }
         if (shapes.hasSnap) {
@@ -2226,6 +2271,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         if (session != null) {
             session.finish()?.let { editor?.discard(it) }
             erase = null
+            dateEraseHits.clear()
             redrawChanges(drawPageIndex)
             return
         }
@@ -4027,8 +4073,16 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         update(x, y, elapsedMs, InputToolType.STYLUS, STROKE_UNIT_CM, STRAIGHT_LINE_PRESSURE)
     }
 
+    /** Strokes of a planner's date blanks the eraser has passed over in this drag; they go, on every page that shows them, when it lifts. */
+    private val dateEraseHits = LinkedHashSet<DateStroke>()
+
     private fun eraseAt(x: Float, y: Float) {
         erase?.eraseTo(pageX(x, y, drawPageIndex), pageY(x, y, drawPageIndex))
+        val page = editor?.document?.pages?.getOrNull(drawPageIndex)
+        if (page != null && page.background.template is PageTemplate.Planner) {
+            val radius = (tool as? CanvasTool.Eraser ?: DEFAULT_ERASER).radiusPt
+            dateEraseHits += PlannerPages.dateStrokesNear(page, pageX(x, y, drawPageIndex), pageY(x, y, drawPageIndex), radius)
+        }
         redrawChanges(drawPageIndex)
     }
 
@@ -4087,6 +4141,10 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             // A tap on a text box with the pen is a touch on the box, not a dot: it selects the box.
             if (item.bounds.width < TAP_DOT_PT && item.bounds.height < TAP_DOT_PT && selectTextUnderDot(editor, pending.pageId, item)) continue
+            if (captureDateInk(editor, pending.pageId, item)) {
+                holdWet += id
+                continue
+            }
             // The ink the wet layer made is of the line as drawn, so a smoothed line is built afresh.
             if (item === drawn) editor.strokes.put(item, stroke)
             editor.perform(ItemsEdit.addOnTop(pending.pageId, editor.content(pending.pageId), item))

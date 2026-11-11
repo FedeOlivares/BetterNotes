@@ -218,4 +218,136 @@ class PlannerTest {
         assertEquals(before, document.pages.toList())
         assertEquals(null, PlannerPages.change(document, july))
     }
+
+    private fun targetOf(document: Document) = object : EditTarget {
+        override val document = document
+        override fun content(pageId: Long) = PageContent()
+    }
+
+    private class Lines : TemplateSink {
+        val polylines = ArrayList<Pair<FloatArray, Int>>()
+        val colors = HashSet<Int>()
+        override fun line(x0: Float, y0: Float, x1: Float, y1: Float, width: Float, color: Int) { colors += color }
+        override fun dot(x: Float, y: Float, radius: Float, color: Int) { colors += color }
+        override fun fill(x: Float, y: Float, width: Float, height: Float, color: Int) { colors += color }
+        override fun polyline(points: FloatArray, width: Float, color: Int) { polylines += points to color }
+    }
+
+    private fun drawn(document: Document, page: PlannerKind): Lines {
+        val sink = Lines()
+        document.pages.first { (it.background.template as? PageTemplate.Planner)?.page?.kind == page }.let {
+            it.background.template.draw(size, Bounds(0f, 0f, size.widthPt, size.heightPt), sink)
+        }
+        return sink
+    }
+
+    @Test
+    fun `planner colors reach every page, draw the accent, survive a save and undo, and a default planner keeps its old bytes`() {
+        val document = Document.newPlanner("Agenda", july, 0, ids())
+        val plain = DocumentCodec.encode(document)
+        val target = targetOf(document)
+        val orange = 0xFFE8590C.toInt()
+        val colors = PlannerColors.DEFAULT.toMutableList().also { it[PlannerColors.ACCENT] = orange; it[PlannerColors.COVER] = 0xFF123456.toInt() }
+        val edit = PlannerPages.recolor(document, colors)
+        assertNotNull(edit)
+        edit!!.apply(target)
+        assertTrue(document.pages.all { (it.background.template as PageTemplate.Planner).colors == colors })
+        assertTrue(orange in drawn(document, PlannerKind.DASHBOARD).colors)
+        assertTrue(PlannerColors.DEFAULT[PlannerColors.ACCENT] !in drawn(document, PlannerKind.DASHBOARD).colors)
+        val back = DocumentCodec.decode(DocumentCodec.encode(document))
+        assertEquals(colors, PlannerPages.colorsOf(back))
+        // A change of years keeps the colors.
+        PlannerPages.change(document, PlannerSetup(2027, 1), ids())!!.apply(target)
+        assertEquals(colors, PlannerPages.colorsOf(document))
+        assertEquals(null, PlannerPages.recolor(document, colors))
+        // Setting the defaults again is the same as never having chosen: the file is as it was.
+        PlannerPages.recolor(document, PlannerColors.DEFAULT)!!.apply(target)
+        assertTrue(PlannerPages.colorsOf(document).isEmpty())
+        val fresh = Document.newPlanner("Agenda", july, 0, ids())
+        assertTrue(plain.contentEquals(DocumentCodec.encode(fresh)))
+    }
+
+    @Test
+    fun `the cover is drawn in the chosen cover colors`() {
+        val sink = Lines()
+        val colors = listOf(0xFF111111.toInt(), 0xFF222222.toInt(), 0xFF333333.toInt(), PlannerColors.DEFAULT[PlannerColors.ACCENT])
+        val template = PageTemplate.Planner(PlannerPage.Cover, july, colors = colors)
+        app.betternotes.core.template.CoverDesign.PLANNER.draw(sink, size, template)
+        assertTrue(0xFF111111.toInt() in sink.colors && 0xFF222222.toInt() in sink.colors && 0xFF333333.toInt() in sink.colors)
+        assertTrue(PlannerColors.DEFAULT[PlannerColors.COVER] !in sink.colors)
+    }
+
+    @Test
+    fun `handwriting in a date blank shows on the index and the semester page, goes with undo, and is kept`() {
+        val document = Document.newPlanner("Agenda", july, 0, ids())
+        val target = targetOf(document)
+        val stroke = DateStroke(2, 0xFF000000.toInt(), 2f, listOf(1f, 30f, 10f, 12f, 20f, 30f))
+        val edit = PlannerPages.addDateInk(document, stroke)
+        assertNotNull(edit)
+        edit!!.apply(target)
+        for (kind in listOf(PlannerKind.DASHBOARD, PlannerKind.SEMESTER_PLAN)) {
+            assertEquals(1, drawn(document, kind).polylines.size)
+        }
+        assertEquals(0, drawn(document, PlannerKind.NOTES).polylines.size)
+        assertEquals(listOf(stroke), PlannerPages.dateInkOf(DocumentCodec.decode(DocumentCodec.encode(document))))
+        // The semester overview's own fields are not tied to it.
+        assertEquals(0, drawn(document, PlannerKind.SEMESTER_OVERVIEW).polylines.size)
+        PlannerPages.change(document, PlannerSetup(2027, 1), ids())!!.apply(target)
+        assertEquals(listOf(stroke), PlannerPages.dateInkOf(document))
+        // Clearing the date takes its handwriting with it; another date's stays.
+        val other = stroke.copy(slot = 5)
+        PlannerPages.addDateInk(document, other)!!.apply(target)
+        PlannerPages.setSemesterDate(document, 1, false, null)!!.apply(target)
+        assertEquals(listOf(other), PlannerPages.dateInkOf(document))
+        PlannerPages.removeDateStroke(document, other)!!.apply(target)
+        assertTrue(PlannerPages.dateInkOf(document).isEmpty())
+        assertTrue(document.pages.all { (it.background.template as PageTemplate.Planner).dateInk.isEmpty() })
+        edit.revert(target)
+    }
+
+    @Test
+    fun `a date blank reports where its handwriting is measured from, the same height on both pages`() {
+        val index = ArrayList<PlannerAction.PickDate>()
+        val plan = ArrayList<PlannerAction.PickDate>()
+        for ((page, into) in listOf(PlannerKind.DASHBOARD to index, PlannerKind.SEMESTER_PLAN to plan)) {
+            PlannerDrawing.draw(PlannerPage(page), july, size, app.betternotes.core.template.BuiltInInk(0xFFFFFFFF.toInt()), Lines(), LinkOut { _, _, _, _, a -> (a as? PlannerAction.PickDate)?.let(into::add) })
+        }
+        assertEquals(8, index.size)
+        assertEquals(8, plan.size)
+        assertTrue(index.all { it.inkY > 0f } && plan.all { it.inkY > 0f })
+    }
+
+    @Test
+    fun `a pen stroke in a blank becomes shared ink that lands the same on the other page, and the eraser finds it`() {
+        val document = Document.newPlanner("Agenda", july, 0, ids())
+        val target = targetOf(document)
+        val index = document.pages.first { (it.background.template as? PageTemplate.Planner)?.page?.kind == PlannerKind.DASHBOARD }
+        val plan = document.pages.first { (it.background.template as? PageTemplate.Planner)?.page?.kind == PlannerKind.SEMESTER_PLAN }
+        // Find the blank of the first semester's start date on the index.
+        var action: PlannerAction.PickDate? = null
+        var box = floatArrayOf()
+        PlannerDrawing.draw(PlannerPage.Dashboard, july, size, app.betternotes.core.template.BuiltInInk(0xFFFFFFFF.toInt()), Lines(), LinkOut { x0, y0, x1, y1, a ->
+            if (a is PlannerAction.PickDate && a.semester == 0 && !a.end) { action = a; box = floatArrayOf(x0, y0, x1, y1) }
+        })
+        val pick = action!!
+        val cx = (box[0] + box[2]) / 2f
+        val cy = (box[1] + box[3]) / 2f
+        val xy = floatArrayOf(cx - 8f, cy, cx, cy - 6f, cx + 8f, cy)
+        val stroke = PlannerPages.dateStroke(pick, size, xy, 0xFF000000.toInt(), 1.2f)
+        assertEquals(0, stroke.slot)
+        PlannerPages.addDateInk(document, stroke)!!.apply(target)
+        // The eraser finds it at the same place, and not far from it.
+        val inked = document.pages.first { it.id == index.id }
+        assertEquals(listOf(stroke), PlannerPages.dateStrokesNear(inked, cx, cy - 3f, 4f))
+        assertTrue(PlannerPages.dateStrokesNear(inked, cx, cy + 60f, 4f).isEmpty())
+        assertTrue(PlannerPages.dateStrokesNear(document.pages[3], cx, cy, 4f).isEmpty())
+        // The semester page draws it inside its own blank, the same height above that blank's rule as on the index.
+        val onPlan = drawn(document, PlannerKind.SEMESTER_PLAN).polylines.single().first
+        val onIndex = drawn(document, PlannerKind.DASHBOARD).polylines.single().first
+        val sy = size.heightPt / 1414f
+        assertEquals(onIndex[1] / sy - pick.inkY, onPlan[1] / sy - (62f + 170f - DateStroke.SLOT_HEIGHT), 0.01f)
+        PlannerPages.removeDateStrokes(document, listOf(stroke))!!.apply(target)
+        assertTrue(PlannerPages.dateInkOf(document).isEmpty())
+        assertNotNull(plan)
+    }
 }

@@ -6,10 +6,11 @@ import app.betternotes.core.geometry.PageSize
  * The ink of the built-in pages that have words on them. It is picked from the paper, so the page reads on
  * light paper and on dark paper alike.
  */
-internal class BuiltInInk(paper: Int) {
+/** [accentOverride] replaces the accent (the planner lets its owner pick one); the tints follow it. */
+internal class BuiltInInk(paper: Int, accentOverride: Int? = null) {
     private val dark = luminance(paper) < DARK_PAPER_LUMINANCE
 
-    val accent = if (dark) 0xFF8FA0F0.toInt() else 0xFF5B6EC7.toInt()
+    val accent = accentOverride ?: if (dark) 0xFF8FA0F0.toInt() else 0xFF5B6EC7.toInt()
     val rule = if (dark) 0xFF6E6E6E.toInt() else 0xFFC4C4C4.toInt()
     val text = if (dark) 0xFFE8E8E8.toInt() else 0xFF2B2B2B.toInt()
     val faint = if (dark) 0xFF8C8C8C.toInt() else 0xFFB3B1A6.toInt()
@@ -68,6 +69,16 @@ internal class Layer(
     fun hline(x0: Float, x1: Float, y: Float, color: Int, weight: Float = RULE_PX) = sink.line(x(x0), y(y), x(x1), y(y), weight * sx, color)
 
     fun vline(x: Float, y0: Float, y1: Float, color: Int, weight: Float = RULE_PX) = sink.line(x(x), y(y0), x(x), y(y1), weight * sx, color)
+
+    /** Joined segments through [points] (x, y pairs in the reference's units). */
+    fun polyline(points: List<Float>, dx: Float, dy: Float, weight: Float, color: Int) {
+        val out = FloatArray(points.size)
+        for (i in points.indices step 2) {
+            out[i] = x(points[i] + dx)
+            out[i + 1] = y(points[i + 1] + dy)
+        }
+        sink.polyline(out, weight * sx, color)
+    }
 
     fun line(x0: Float, y0: Float, x1: Float, y1: Float, color: Int, weight: Float = RULE_PX) =
         sink.line(x(x0), y(y0), x(x1), y(y1), weight * sx, color)

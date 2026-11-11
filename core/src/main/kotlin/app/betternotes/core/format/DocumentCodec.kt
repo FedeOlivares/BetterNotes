@@ -3,6 +3,8 @@ package app.betternotes.core.format
 import app.betternotes.core.geometry.LengthUnit
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.model.Document
+import app.betternotes.core.planner.DateStroke
+import app.betternotes.core.planner.PlannerColors
 import app.betternotes.core.planner.PlannerKind
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
@@ -43,6 +45,9 @@ private const val TEMPLATE_PLANNER_TITLED = 17
 
 /** A planner page with semester dates (and a title, which may be empty): the index and the semester planning page once a date is typed. */
 private const val TEMPLATE_PLANNER_DATED = 18
+
+/** A planner page with chosen colors or handwriting in the date blanks (format 7): the title, the semester dates (or none), the colors (or none) and the strokes. */
+private const val TEMPLATE_PLANNER_STYLED = 19
 
 private const val ELEMENT_LINE = 0
 private const val ELEMENT_RECTANGLE = 1
@@ -201,6 +206,7 @@ internal fun ByteWriter.template(template: PageTemplate) {
         is PageTemplate.Planner -> {
             byte(
                 when {
+                    template.colors.isNotEmpty() || template.dateInk.isNotEmpty() -> TEMPLATE_PLANNER_STYLED
                     template.semesters.isNotEmpty() -> TEMPLATE_PLANNER_DATED
                     template.title.isEmpty() -> TEMPLATE_PLANNER
                     else -> TEMPLATE_PLANNER_TITLED
@@ -211,7 +217,21 @@ internal fun ByteWriter.template(template: PageTemplate) {
             varint(template.setup.startYear)
             byte(template.setup.startMonth)
             byte(template.setup.weekdayShift)
-            if (template.semesters.isNotEmpty()) {
+            if (template.colors.isNotEmpty() || template.dateInk.isNotEmpty()) {
+                string(template.title)
+                bool(template.semesters.isNotEmpty())
+                template.semesters.forEach { int(it) }
+                byte(template.colors.size)
+                template.colors.forEach { int(it) }
+                varint(template.dateInk.size)
+                for (stroke in template.dateInk) {
+                    byte(stroke.slot)
+                    int(stroke.color)
+                    float(stroke.width)
+                    varint(stroke.points.size / 2)
+                    stroke.points.forEach { float(it) }
+                }
+            } else if (template.semesters.isNotEmpty()) {
                 string(template.title)
                 template.semesters.forEach { int(it) }
             } else if (template.title.isNotEmpty()) {
@@ -245,10 +265,11 @@ internal fun ByteReader.template(): PageTemplate = when (val tag = byte()) {
     TEMPLATE_PLANNER -> plannerTemplate(titled = false, dated = false)
     TEMPLATE_PLANNER_TITLED -> plannerTemplate(titled = true, dated = false)
     TEMPLATE_PLANNER_DATED -> plannerTemplate(titled = true, dated = true)
+    TEMPLATE_PLANNER_STYLED -> plannerTemplate(titled = true, dated = false, styled = true)
     else -> throw CorruptFileException("Unknown template $tag")
 }
 
-private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean): PageTemplate {
+private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean, styled: Boolean = false): PageTemplate {
     val kinds = PlannerKind.entries
     val kind = byte()
     if (kind !in kinds.indices) throw CorruptFileException("Unknown planner page $kind")
@@ -259,7 +280,26 @@ private fun ByteReader.plannerTemplate(titled: Boolean, dated: Boolean): PageTem
     if (year !in PlannerSetup.MIN_YEAR..PlannerSetup.MAX_YEAR || month !in 1..12 || shift !in 0..6) {
         throw CorruptFileException("Planner dates out of range: $year, $month, $shift")
     }
-    return PageTemplate.Planner(PlannerPage(kinds[kind], arg), PlannerSetup(year, month, shift), if (titled) string() else "", if (dated) List(PlannerPages.SEMESTER_DATES) { int() } else emptyList())
+    val page = PlannerPage(kinds[kind], arg)
+    val setup = PlannerSetup(year, month, shift)
+    if (!styled) return PageTemplate.Planner(page, setup, if (titled) string() else "", if (dated) List(PlannerPages.SEMESTER_DATES) { int() } else emptyList())
+    val title = string()
+    val semesters = if (bool()) List(PlannerPages.SEMESTER_DATES) { int() } else emptyList()
+    val colorCount = byte()
+    if (colorCount != 0 && colorCount != PlannerColors.COUNT) throw CorruptFileException("Planner colors: $colorCount")
+    val colors = List(colorCount) { int() }
+    val strokeCount = varint()
+    if (strokeCount !in 0..PlannerPages.SEMESTER_DATES * DateStroke.MAX_PER_SLOT) throw CorruptFileException("Planner date strokes: $strokeCount")
+    val ink = List(strokeCount) {
+        val slot = byte()
+        if (slot !in 0 until PlannerPages.SEMESTER_DATES) throw CorruptFileException("Planner date slot $slot")
+        val color = int()
+        val width = float()
+        val points = varint()
+        if (points !in 1..DateStroke.MAX_POINTS) throw CorruptFileException("Planner date stroke points: $points")
+        DateStroke(slot, color, width, List(points * 2) { float() })
+    }
+    return PageTemplate.Planner(page, setup, title, semesters, colors, ink)
 }
 
 internal fun ByteWriter.customLayout(layout: CustomLayout) {

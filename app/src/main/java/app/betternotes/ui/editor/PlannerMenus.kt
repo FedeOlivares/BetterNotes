@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -38,6 +40,7 @@ import app.betternotes.R
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
 import app.betternotes.core.planner.PlannerSetup
+import app.betternotes.ui.library.PlannerColorRow
 import app.betternotes.ui.theme.LocalEditorColors
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -78,8 +81,10 @@ internal fun PlannerMenus(state: EditorState, menu: PlannerMenu) {
             close()
             state.setPlannerTitle(text)
         }
-        PlannerMenu.Years -> YearsMenu(setup, close) { chosen ->
+        PlannerMenu.Years -> YearsMenu(setup, state.plannerColors, close) { chosen, colors ->
             close()
+            // The colors first: a change of years builds its pages with the colors the planner has.
+            state.setPlannerColors(colors)
             state.setPlannerSetup(chosen.copy(weekdayShift = 0), null)
         }
     }
@@ -95,6 +100,7 @@ private fun Panel(onDismiss: () -> Unit, content: @Composable () -> Unit) {
                 .shadow(24.dp, RoundedCornerShape(24.dp))
                 .clip(RoundedCornerShape(24.dp))
                 .background(colors.panel)
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
         ) { content() }
     }
@@ -131,10 +137,11 @@ private fun WeekdayMenu(setup: PlannerSetup, menu: PlannerMenu.Weekday, onDismis
  * follow the real calendar again for the new dates.
  */
 @Composable
-private fun YearsMenu(setup: PlannerSetup, onDismiss: () -> Unit, onPick: (PlannerSetup) -> Unit) {
+private fun YearsMenu(setup: PlannerSetup, planColors: List<Int>, onDismiss: () -> Unit, onPick: (PlannerSetup, List<Int>) -> Unit) {
     val colors = LocalEditorColors.current
     var full by remember { mutableStateOf(setup.isFullYear) }
     var year by remember { mutableIntStateOf(setup.startYear) }
+    var chosenColors by remember { mutableStateOf(planColors) }
     val chosen = PlannerSetup(year, if (full) 1 else 7)
     Panel(onDismiss) {
         Text(stringResource(R.string.planner_years_title), color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
@@ -155,6 +162,10 @@ private fun YearsMenu(setup: PlannerSetup, onDismiss: () -> Unit, onPick: (Plann
             Text(chosen.yearLabel, color = colors.title, fontSize = 26.sp, fontWeight = FontWeight.Medium)
             Step("+") { if (year < PlannerSetup.MAX_YEAR - 1) year++ }
         }
+        Spacer(Modifier.height(16.dp))
+        Text(stringResource(R.string.planner_colors_title), color = colors.title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(8.dp))
+        PlannerColorRow(chosenColors, compact = true, label = colors.label, border = colors.panelDivider) { chosenColors = it }
         Spacer(Modifier.height(20.dp))
         Box(
             contentAlignment = Alignment.Center,
@@ -163,7 +174,7 @@ private fun YearsMenu(setup: PlannerSetup, onDismiss: () -> Unit, onPick: (Plann
                 .height(52.dp)
                 .clip(CircleShape)
                 .background(BLUE)
-                .clickable { onPick(chosen) },
+                .clickable { onPick(chosen, chosenColors) },
         ) {
             Text(stringResource(R.string.planner_years_apply), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
         }

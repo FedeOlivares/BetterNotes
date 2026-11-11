@@ -62,7 +62,7 @@ sealed interface PlannerAction {
     data object EditTitle : PlannerAction
 
     /** On the index or the semester planning page: pick the start or [end] date of semester [semester] (from 0). */
-    data class PickDate(val semester: Int, val end: Boolean) : PlannerAction
+    data class PickDate(val semester: Int, val end: Boolean, val inkX: Float = 0f, val inkY: Float = 0f) : PlannerAction
 }
 
 /** A tab on the right edge of every page. [month] is the planner month for a month tab, else -1. */
