@@ -85,7 +85,7 @@ private const val BYTES_PER_MB = 1024.0 * 1024.0
 private const val CALIBRATION_LINE_CM = 8f
 private const val CM_PER_INCH = 2.54f
 
-private enum class SettingsPage { MAIN, SCROLL, SHORTCUTS, CALIBRATION, FONT }
+private enum class SettingsPage { MAIN, SCROLL, SHORTCUTS, CALIBRATION, FONT, PRIVACY }
 
 /**
  * The app's settings screen. Matches the owner's screenshot, without what depends on being online or
@@ -117,6 +117,7 @@ fun SettingsScreen(
             SettingsPage.SCROLL -> R.string.settings_scroll_layout
             SettingsPage.SHORTCUTS -> R.string.settings_shortcuts
             SettingsPage.CALIBRATION -> R.string.settings_calibration
+        SettingsPage.PRIVACY -> R.string.settings_privacy
             SettingsPage.FONT -> if (draft?.editing == null) R.string.settings_fonts_create else R.string.font_make_edit_title
         },
     )
@@ -130,6 +131,7 @@ fun SettingsScreen(
             SettingsPage.SCROLL -> ScrollPage(settings.scrollDirection) { value -> onChange { it.copy(scrollDirection = value) } }
             SettingsPage.SHORTCUTS -> ShortcutsPage(settings, onChange)
             SettingsPage.CALIBRATION -> CalibrationPage(settings, reportedDpi, onChange)
+            SettingsPage.PRIVACY -> PrivacyPage()
             SettingsPage.FONT -> draft?.let { HandFontEditor(it) { page = SettingsPage.MAIN } }
         }
     }
@@ -205,8 +207,31 @@ private fun MainPage(
     PomodoroCard(settings, onChange)
     HandwritingCard()
     StorageCard()
+    SettingsCard { LinkRow(stringResource(R.string.settings_privacy)) { open(SettingsPage.PRIVACY) } }
     Spacer(Modifier.height(12.dp))
 }
+
+/** Plain statements, each checked against the manifest and the code. */
+@Composable
+private fun PrivacyPage() {
+    val colors = LocalSettingsColors.current
+    SettingsCard {
+        val sections = listOf(
+            R.string.settings_privacy_offline_title to R.string.settings_privacy_offline,
+            R.string.settings_privacy_storage_title to R.string.settings_privacy_storage,
+            R.string.settings_privacy_permissions_title to R.string.settings_privacy_permissions,
+            R.string.settings_privacy_network_title to R.string.settings_privacy_network,
+            R.string.settings_privacy_contact_title to R.string.settings_privacy_contact,
+        )
+        sections.forEachIndexed { index, (title, body) ->
+            if (index > 0) Spacer(Modifier.height(18.dp))
+            Text(stringResource(title), color = colors.text, fontSize = 19.5.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(body), color = colors.secondary, fontSize = 17.sp)
+        }
+        Spacer(Modifier.height(12.dp))
+    }
+}
+
 
 /** No screenshot shows these, since Notewise's account screen held them. They share its cards' style. */
 @Composable

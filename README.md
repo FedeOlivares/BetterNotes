@@ -163,7 +163,7 @@ Work in two editor panes at once, side by side or stacked. A draggable divider s
 - Files are versioned: an older notebook always opens in a newer app, and a newer one is refused rather than damaged.
 
 ## Privacy
-Everything stays on the device. There is no account, analytics, cloud, sync or AI, and the app does not use the network: the handwriting models are inside it. An `offline` build type without the internet permission is also available. Notebooks live in the app's private storage, and files you export go where you choose.
+Everything stays on the device. There is no account, ads, analytics, tracking, cloud, sync or AI, and nothing is shared. The handwriting models are inside the app, so the internet is used only if you tap Download under Handwriting because the models are missing. The normal build keeps the internet permission through ML Kit; an `offline` build type without it is also available. Settings has a Privacy Notice page that says all this. Notebooks live in the app's private storage, and files you export go where you choose.
 
 ## Known limitations
 - Opening a `.bnote` file or a password-protected PDF from outside the app (Open with) has not been tried on a tablet; Home → + → File & Doc always works.

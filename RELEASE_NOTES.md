@@ -1,3 +1,15 @@
+# Better Notes 2.4.1 — Release Notes
+
+A privacy notice, and nothing else.
+
+- Settings has a new Privacy Notice page at the end, in English and Spanish. It says that the app works on your device without an account, with no ads, analytics, crash reporting or tracking, and shares no data with anyone; that notes, PDFs, images, recordings and settings stay in the app's private storage and are never uploaded or backed up; what the camera, microphone, notifications, exact alarm and photo access are used for; that the only use of the internet is the Download button under Handwriting, which fetches the handwriting models from Google through ML Kit and sends none of your notes; and a contact address for privacy questions.
+- The handwriting models already come inside the app (since 2.2.0), so that Download button is only needed if the models are missing from the device.
+- The normal build still holds the internet permission, through the ML Kit library. The `offline` build type does not.
+- This is the 2.4.0 build that was tested and approved, with only the privacy page added. Everything in the 2.4.0 notes below, including what was not hand-tested, still applies.
+- The privacy page was compiled (the release build passes) but not opened on a device. The existing lint error at PlannerMenus.kt line 112 is still there.
+
+---
+
 # Better Notes 2.4.0 — Release Notes
 
 Groups, layers, patterns, lists, planner recolor and a calmer way back to your tool.

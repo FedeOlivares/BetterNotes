@@ -314,4 +314,15 @@
     <string name="font_make_leave_text">Se perderán las letras que dibujaste.</string>
     <string name="font_make_leave">Salir</string>
     <string name="font_make_keep">Seguir dibujando</string>
+    <string name="settings_privacy">Aviso de privacidad</string>
+    <string name="settings_privacy_offline_title">Funciona sin conexión</string>
+    <string name="settings_privacy_offline">Better Notes funciona en tu dispositivo sin cuenta. No tiene anuncios, analíticas, informes de fallos ni rastreo, y no comparte ningún dato con nadie.</string>
+    <string name="settings_privacy_storage_title">Tus notas se quedan en tu dispositivo</string>
+    <string name="settings_privacy_storage">Las notas, los PDF, las imágenes, las grabaciones de audio y los ajustes se guardan solo en el almacenamiento privado de la app en este dispositivo. Better Notes no los sube ni los respalda en ningún lugar. Los archivos que exportes o compartas se envían solo adonde tú elijas.</string>
+    <string name="settings_privacy_permissions_title">Permisos</string>
+    <string name="settings_privacy_permissions">La cámara se usa cuando tomas una foto para una nota, y el micrófono cuando grabas audio. Las fotos y grabaciones se guardan solo en tus notas. Las notificaciones y una alarma exacta las usa el temporizador Pomodoro. El acceso a tus fotos se usa cuando eliges una imagen para agregar. Todo esto ocurre en el dispositivo.</string>
+    <string name="settings_privacy_network_title">La única descarga</string>
+    <string name="settings_privacy_network">Better Notes solo usa internet cuando tocas Descargar en Escritura a mano, que obtiene de Google los modelos de reconocimiento de escritura. Esa descarga la hace la biblioteca ML Kit de Google y se rige por los términos de Google. No se envía ninguna de tus notas. Cuando los modelos están en el dispositivo, la búsqueda de escritura a mano funciona en el dispositivo.</string>
+    <string name="settings_privacy_contact_title">Preguntas</string>
+    <string name="settings_privacy_contact">Si tienes dudas sobre privacidad, escribe a ramblaapps@gmail.com.</string>
 </resources>

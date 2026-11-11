@@ -314,4 +314,15 @@
     <string name="font_make_leave_text">The letters you drew will be lost.</string>
     <string name="font_make_leave">Leave</string>
     <string name="font_make_keep">Keep drawing</string>
+    <string name="settings_privacy">Privacy Notice</string>
+    <string name="settings_privacy_offline_title">Works offline</string>
+    <string name="settings_privacy_offline">Better Notes works on your device without an account. It has no ads, analytics, crash reporting or tracking, and it does not share any data with anyone.</string>
+    <string name="settings_privacy_storage_title">Your notes stay on your device</string>
+    <string name="settings_privacy_storage">Notes, PDFs, images, audio recordings and settings are stored only in the app\'s private storage on this device. Better Notes does not upload or back them up anywhere. Files you export or share are sent only where you choose.</string>
+    <string name="settings_privacy_permissions_title">Permissions</string>
+    <string name="settings_privacy_permissions">The camera is used when you take a photo for a note, and the microphone when you record audio. Photos and recordings are saved only in your notes. Notifications and an exact alarm are used by the Pomodoro timer. Access to your photos is used when you pick an image to add. All of this happens on the device.</string>
+    <string name="settings_privacy_network_title">The one download</string>
+    <string name="settings_privacy_network">The only time Better Notes uses the internet is when you tap Download under Handwriting, which fetches the handwriting recognition models from Google. That download is done by Google\'s ML Kit library and is covered by Google\'s terms. None of your notes are sent. Once the models are on the device, handwriting search runs on the device.</string>
+    <string name="settings_privacy_contact_title">Questions</string>
+    <string name="settings_privacy_contact">If you have concerns about privacy, write to ramblaapps@gmail.com.</string>
 </resources>
