@@ -1,3 +1,15 @@
+# Better Notes 2.5.1 — Release Notes
+
+Three fixes: the cover's background, a zoomed text box, and the lasso near post-its.
+
+- Cover background: scribbling to erase on a cover no longer deletes its background. Only what you scribbled over goes. The eraser and "clear page" also leave a cover's background alone, locked or not. Holding on the background is still the only way to select it.
+- Text box: zooming in near an open text box no longer shrinks or moves the box to keep it on screen. It keeps its place and size on the page, so the text stays where it was.
+- Lasso and post-its: a loop round the part of a post-it's item that hangs past its edge now selects that item even when the loop is loose, by the lasso's rules (any part, or whole items only when that is on). This also works over ink or items lying under the post-it, and with circle to lasso. Anything above the post-it that the loop catches still wins, because a selection is either on the page or inside one post-it.
+- Tested: the core unit tests (including new tests for these three fixes), lint, and the debug and release builds pass. The connected tests ran on an emulator (Pad 7 size): 155 of 167 pass, and the same 12 fail on 2.5.0, so none are new. Those 12 are calligraphy width, saved stroke mesh, hold to straighten, four library screen tests, a post-it thumbnail, the layout builder, a key reaching the canvas, and the search panel.
+- Not tested on the Pad 7: nothing in this release was run on the tablet, and none of the three fixes was tried by hand on the emulator either. The text box fix comes from reading the code: the box was being held to the size of the screen.
+
+---
+
 # Better Notes 2.5.0 — Release Notes
 
 Text colors, one color picker everywhere, steadier gestures around text and post-its, and a cleaned-up code base.

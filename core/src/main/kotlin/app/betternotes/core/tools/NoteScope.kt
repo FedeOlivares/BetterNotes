@@ -85,6 +85,24 @@ class NoteScope private constructor(
         }
 
         /**
+         * For a loop [polygon] on the page, not wholly in a post-it: the top open post-it above the item at [above] (the highest the loop caught
+         * on the page, or -1 for none) whose items it catches by [pick] (the lasso's own rules), with what it caught, or null. An item of a
+         * post-it that hangs past its edge lies outside the post-it, so a loop round that part, however loosely drawn, is on no post-it by
+         * [forLoop]; when nothing it caught on the page lies higher, it is the post-it's item it went round.
+         */
+        fun <T> catching(pageId: Long, page: PageContent, polygon: FloatArray, above: Int = -1, pick: (NoteScope) -> T?): Pair<NoteScope, T>? {
+            if (polygon.size < 2) return null
+            val reach = polygonBounds(polygon)
+            for (i in page.size - 1 downTo above + 1) {
+                val note = page[i] as? StickyNoteItem ?: continue
+                if (!note.isOpen || note.items.isEmpty() || !page.isEditable(note) || !page.isShown(note) || !note.paintBounds.intersects(reach)) continue
+                val scope = open(pageId, page, i) ?: continue
+                pick(scope)?.let { return scope to it }
+            }
+            return null
+        }
+
+        /**
          * The top open post-it of [page] that the loop [polygon] lies wholly inside, or -1. A loop that crosses the edge of the post-it, or lies
          * outside it, still belongs to it when it lies wholly inside an item of the post-it that hangs past its edge: the part that hangs out
          * is as much the post-it's as the rest, and a loop round only that part grabs the item.

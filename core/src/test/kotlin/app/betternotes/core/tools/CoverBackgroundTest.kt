@@ -45,4 +45,22 @@ class CoverBackgroundTest {
         assertTrue(selectWithLasso(pageId, page, everything, includeLocked = true).items.any { it.id == 1L })
         assertFalse(selectWithLasso(pageId, page, everything, includeLocked = false).items.any { it.id == 1L })
     }
+
+    @Test
+    fun `an eraser, a scribble or a clear never takes the background of a cover, locked or not, but takes what is on it`() {
+        val title = box(2, 100f, 100f, 80f, 30f)
+        for (locked in listOf(false, true)) {
+            val background = box(1, 0f, 0f, size.widthPt, size.heightPt, locked = locked)
+            page.splice(IntArray(page.size) { it }, IntArray(0), emptyList())
+            page.splice(IntArray(0), intArrayOf(0, 1), listOf(background, title))
+            val session = EraseSession(pageId, page, EraseMode.WHOLE, 500f, includeLocked = true, coverSize = size)
+            session.eraseTo(0f, 0f)
+            session.eraseTo(size.widthPt, size.heightPt)
+            session.finish()
+            assertTrue(page.toList().any { it.id == 1L })
+            assertFalse(page.toList().any { it.id == 2L })
+            // Clearing the page has nothing left to take, the background being the only item.
+            assertTrue(clearEdit(pageId, page, null, coverSize = size) == null)
+        }
+    }
 }

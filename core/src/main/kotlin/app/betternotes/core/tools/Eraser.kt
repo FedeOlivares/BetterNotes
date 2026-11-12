@@ -6,6 +6,7 @@ import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.geometry.Capsule
 import app.betternotes.core.geometry.ConvexClipper
+import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.geometry.RectClipper
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.PageContent
@@ -78,6 +79,8 @@ class EraseSession(
     private val kinds: Set<ItemKind> = DEFAULT_ERASABLE,
     /** Locked items are left alone unless this is set. */
     private val includeLocked: Boolean = false,
+    /** The size of the page when it is a cover, whose background is never erased, locked or not: only a hold picks it up. */
+    private val coverSize: PageSize? = null,
 ) : Erasing {
     private val steps = ArrayList<Edit>()
     private var lastX = Float.NaN
@@ -103,6 +106,7 @@ class EraseSession(
         val changes = ChangeList()
         content.forEachIntersecting(tip.bounds) { index, item ->
             if ((item.locked && !includeLocked) || !content.isEditable(item)) return@forEachIntersecting
+            if (coverSize != null && item.isCoverBackground(coverSize)) return@forEachIntersecting
             when (mode) {
                 EraseMode.PARTIAL -> if (item is StrokeItem && item.kind in kinds) {
                     cutStroke(item.points, tip, item.style.width / 2f)?.let { pieces ->
@@ -127,14 +131,15 @@ class EraseSession(
  * and other items crossing the edge stay, because only ink can be cut in two. Returns null if there
  * was nothing to clear.
  */
-fun clearEdit(pageId: Long, content: PageContent, region: Bounds?, ids: IdSource = IdSource.Random): ItemsEdit? {
+fun clearEdit(pageId: Long, content: PageContent, region: Bounds?, ids: IdSource = IdSource.Random, coverSize: PageSize? = null): ItemsEdit? {
     val changes = ChangeList()
+    fun keeps(item: PageItem) = item.locked || !content.isEditable(item) || coverSize != null && item.isCoverBackground(coverSize)
     if (region == null) {
-        for (i in 0 until content.size) if (!content[i].locked && content.isEditable(content[i])) changes.replace(i, content[i], emptyList())
+        for (i in 0 until content.size) if (!keeps(content[i])) changes.replace(i, content[i], emptyList())
     } else {
         val clipper = RectClipper(region)
         content.forEachIntersecting(region) { index, item ->
-            if (item.locked || !content.isEditable(item)) return@forEachIntersecting
+            if (keeps(item)) return@forEachIntersecting
             if (region.contains(item.bounds)) {
                 changes.replace(index, item, emptyList())
             } else if (item is StrokeItem) {

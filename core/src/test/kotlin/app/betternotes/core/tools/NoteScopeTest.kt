@@ -166,4 +166,30 @@ class NoteScopeTest {
         // A loop wholly in the post-it is as before.
         assertEquals(0, NoteScope.noteHolding(page, floatArrayOf(150f, 150f, 200f, 150f, 200f, 200f, 150f, 200f)))
     }
+
+    @Test
+    fun `a loose loop round only the part of a post-it's item that hangs past its edge takes that item, in part or whole by the settings`() {
+        // The box runs from 290 to 310 across the post-it's right edge at 300.
+        val hanging = note().let { it.copy(items = it.items + box(12, 190f, 50f)) }
+        page.splice(IntArray(0), intArrayOf(0), listOf(hanging))
+        val loop = floatArrayOf(302f, 120f, 340f, 120f, 340f, 200f, 302f, 200f)
+        assertEquals(-1, NoteScope.noteHolding(page, loop))
+        assertTrue(selectWithLasso(pageId, page, loop).isEmpty)
+        val (scope, caught) = NoteScope.catching(pageId, page, loop) { selectWithLasso(pageId, it.content, loop, anyPortion = true).takeIf { s -> !s.isEmpty } }!!
+        assertEquals(1L, scope.noteId)
+        assertEquals(listOf(12L), caught.items.map { it.id })
+        // With whole items only, a loop round part of it takes nothing.
+        assertNull(NoteScope.catching(pageId, page, loop) { selectWithLasso(pageId, it.content, loop, fullOnly = true).takeIf { s -> !s.isEmpty } })
+    }
+
+    @Test
+    fun `a loop round a hanging item takes it over what lies under the post-it, but not over what lies above it`() {
+        val hanging = note().let { it.copy(items = it.items + box(12, 190f, 50f)) }
+        val loop = floatArrayOf(302f, 120f, 340f, 120f, 340f, 200f, 302f, 200f)
+        val pick = { scope: NoteScope -> selectWithLasso(pageId, scope.content, loop, anyPortion = true).takeIf { !it.isEmpty } }
+        // Ink under the post-it (index 0) does not hide its item; ink above it (index 2) does.
+        page.splice(IntArray(0), intArrayOf(0, 1, 2), listOf(box(20, 305f, 130f), hanging, box(21, 305f, 170f)))
+        assertEquals(12L, NoteScope.catching(pageId, page, loop, above = 0, pick = pick)!!.second.items.single().id)
+        assertNull(NoteScope.catching(pageId, page, loop, above = 2, pick = pick))
+    }
 }

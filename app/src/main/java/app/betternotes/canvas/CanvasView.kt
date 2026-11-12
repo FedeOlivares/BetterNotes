@@ -1283,7 +1283,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         endTextEdit()
         lasso.clear()
-        clearEdit(page.id, editor.content(page.id), region)?.let { editor.perform(it) }
+        clearEdit(page.id, editor.content(page.id), region, coverSize = coverSizeOf(page.id))?.let { editor.perform(it) }
         syncChanges()
     }
 
@@ -2510,7 +2510,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             erase = if (onNote != null) {
                 NoteEraseSession(page.id, editor.content(page.id), onNote.first, eraser.mode, eraser.radiusPt, eraser.kinds, eraser.lockedToo)
             } else {
-                EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt, kinds = eraser.kinds, includeLocked = eraser.lockedToo)
+                EraseSession(page.id, editor.content(page.id), eraser.mode, eraser.radiusPt, kinds = eraser.kinds, includeLocked = eraser.lockedToo, coverSize = coverSizeOf(page.id))
             }
             eraseAt(x, y)
         } else if (tool is CanvasTool.Lasso) {
@@ -4780,6 +4780,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             EraseMode.WHOLE,
             scribble.style.width / 2f + SCRIBBLE_REACH_PT,
             kinds = DEFAULT_ERASABLE,
+            coverSize = if (inside == null) coverSizeOf(pageId) else null,
         )
         for (i in 0 until points.size) session.eraseTo(points.x(i), points.y(i))
         session.finish()?.let { recordOn(editor, pageId, inside, it) }
@@ -4853,7 +4854,27 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
         val content = inside?.content ?: editor.content(pageId)
         val own = if (ownId == null) -1 else (0 until content.size).firstOrNull { content[it].id == ownId } ?: return false
-        val found = loopSelection(pageIndex, pageId, content, polygon, inside)
+        var found = loopSelection(pageIndex, pageId, content, polygon, inside)
+        // A circle round the part of a post-it's item that hangs past its edge takes that item, when nothing else it caught on the page lies
+        // above the post-it.
+        if (inside == null) {
+            val hanging = NoteScope.catching(pageId, content, polygon, found.indices.filter { it != own }.maxOrNull() ?: -1) { note -> loopSelection(pageIndex, pageId, note.content, polygon, note).takeIf { !it.isEmpty } }
+            if (hanging != null) {
+                if (own >= 0) {
+                    editor.perform(ItemsEdit.remove(pageId, content, intArrayOf(own)))
+                    redrawChanges(pageIndex)
+                }
+                val (note, caught) = hanging
+                // Taking the circle off the page moved the post-it; its items are found again in it as it is now.
+                val now = noteScope(editor, pageId, note.noteId) ?: return false
+                val again = loopSelection(pageIndex, pageId, now.content, polygon, now).takeIf { !it.isEmpty } ?: caught
+                lasso.selectAfterAnts(pageIndex, polygon, again, now) {
+                    onLassoRequested()
+                    syncChanges()
+                }
+                return true
+            }
+        }
         val picked = found.indices.indices.filter { found.indices[it] != own }
         if (picked.isEmpty()) {
             // Nothing of the owner's is inside: on a planner page the circle picks the page's generated elements, as the lasso does.

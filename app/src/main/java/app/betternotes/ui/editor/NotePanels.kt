@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
@@ -681,6 +683,9 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
             override val handwritingSlop: Float get() = Float.MAX_VALUE
         }
     }
+    // The box keeps its place and size on the page when zoomed in past the screen: its parent would hold it to the screen's size, so the
+    // box is measured without that limit, from the top left, and only then moved to its place.
+    Box(Modifier.fillMaxSize().wrapContentSize(Alignment.TopStart, unbounded = true)) {
     Box(
         modifier = Modifier
             .offset { IntOffset(request.left.roundToInt(), request.top.roundToInt()) }
@@ -765,6 +770,7 @@ internal fun TextEditOverlay(request: TextEditRequest, onDone: (String) -> Unit)
                 }
             },
     )
+    }
     }
     }
 }

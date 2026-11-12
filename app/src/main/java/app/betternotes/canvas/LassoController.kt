@@ -665,8 +665,16 @@ internal class LassoController(
         // When it holds nothing there, the loop is on the page, for a sticker put on the post-it.
         val inside = NoteScope.forLoop(pageId, page, points)
         val inNote = inside?.let { find(pageIndex, it.content, points, it) }
-        val found = inNote?.takeIf { !it.isEmpty } ?: find(pageIndex, page, points, null)
+        var found = inNote?.takeIf { !it.isEmpty } ?: find(pageIndex, page, points, null)
         if (inNote != null && found === inNote) scope = inside
+        // A loop round the part of a post-it's item that hangs past its edge takes that item, in the post-it, when nothing it caught on the
+        // page lies above the post-it.
+        if (inside == null) {
+            NoteScope.catching(pageId, page, points, found.indices.maxOrNull() ?: -1) { note -> find(pageIndex, note.content, points, note).takeIf { !it.isEmpty } }?.let { (note, caught) ->
+                scope = note
+                found = caught
+            }
+        }
         selection = if (found.isEmpty) null else found
         // A touch outside the old selection that picks up nothing leaves no selection at all, unless the loop surrounds elements of a planner page.
         if (found.isEmpty && !onNoItems(pageIndex, points)) onSelectionDropped()

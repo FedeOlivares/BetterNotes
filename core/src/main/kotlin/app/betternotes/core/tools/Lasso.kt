@@ -128,7 +128,7 @@ fun polygonWithin(polygon: FloatArray, frame: Frame): Boolean {
 
 private const val MIN_POLYGON_FLOATS = 6
 
-private fun polygonBounds(polygon: FloatArray): Bounds {
+internal fun polygonBounds(polygon: FloatArray): Bounds {
     var left = polygon[0]
     var top = polygon[1]
     var right = left
