@@ -4793,7 +4793,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             content,
             EraseMode.WHOLE,
             scribble.style.width / 2f + SCRIBBLE_REACH_PT,
-            kinds = DEFAULT_ERASABLE,
+            // A text box that is not being edited goes whole too, when the scribble crosses it.
+            kinds = DEFAULT_ERASABLE + ItemKind.TEXT,
             coverSize = if (inside == null) coverSizeOf(pageId) else null,
         )
         for (i in 0 until points.size) session.eraseTo(points.x(i), points.y(i))
