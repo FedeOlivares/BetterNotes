@@ -2,10 +2,11 @@
 
 Bug fixes for the text box.
 
+- Scribble to erase: a scribble that crosses a text box that is not selected and not being edited now rubs out the whole box, as it does a stroke or a shape. It is one undo step. A box open for editing still loses only the letters you scribble over.
 - Moving and zooming over an open text box: with a finger in scroll mode, a finger that lands on the box being edited now moves and zooms the page, as it does anywhere else. Before, the text field took it and put the cursor there. The box stays where it was laid on the page.
 - Words waiting to become text: tapping away from the box while words are still waiting only lets them turn into text. The box stays open. With nothing waiting, tapping away closes it as before.
 - A selected text box: a touch outside it only lets the selection go, and nothing is written there. The tool in use before comes back, unless the text tool's return setting is off.
-- Tested: the core unit tests and the release build pass. The owner tried this build on the Pad 7 and was happy with it. I did not run lint or the connected tests for this release, and I did not repeat the hand checks of the 2.5.0 and 2.5.1 notes below.
+- Tested: the core unit tests (including new ones for the scribble) and the release build pass. The owner tried the text box changes of this release on the Pad 7 and was happy with them. The scribble to erase a text box was not tried on the tablet. I did not run lint or the connected tests for this release, and I did not repeat the hand checks of the 2.5.0 and 2.5.1 notes below.
 - A small follow-up is not in this release: a finger tap on the open box does nothing (it could close the edit). It is on the branch text-rules-252 and was not tried on the tablet.
 
 ---
