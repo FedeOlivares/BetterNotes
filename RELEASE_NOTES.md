@@ -1,3 +1,12 @@
+# Better Notes 2.5.3 — Release Notes
+
+Bug fix for the finger mode button.
+
+- Finger mode on open: when a note opened with a finger set to draw, the toolbar showed finger scroll while a finger still drew, until the button was tapped twice. The button now shows what the finger really does, on open and after any change.
+- Tested: the core unit tests and the release build pass. Not tried on the tablet when this was written, and lint and the connected tests were not run.
+
+---
+
 # Better Notes 2.5.2 — Release Notes
 
 Bug fixes for the text box.
