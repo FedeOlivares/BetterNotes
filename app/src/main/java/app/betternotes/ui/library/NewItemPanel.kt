@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,10 +27,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LetterSpacing
 import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.opensFrom
 import app.betternotes.ui.theme.isCompactScreen
 
@@ -49,9 +50,7 @@ internal class NewItemActions(
     val folder: () -> Unit,
 )
 
-private val PanelShape = RoundedCornerShape(28.dp)
-private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-private val TileShape = RoundedCornerShape(22.dp)
+private val SheetShape = AppShapes.TopRounded28
 private val PanelWidth = 550.dp
 private val PanelSide = 22.dp
 
@@ -72,7 +71,7 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
     )
     // A phone's panel is a sheet across the bottom of the screen.
     val compact = isCompactScreen()
-    val shape = if (compact) SheetShape else PanelShape
+    val shape = if (compact) SheetShape else AppShapes.NewItemPanel
     Column(
         modifier
             .opensFrom(if (compact) OpenFrom.Bottom else OpenFrom.BottomEnd)
@@ -87,9 +86,9 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
             Text(
                 stringResource(R.string.library_new_title),
                 color = colors.title,
-                fontSize = 23.sp,
+                fontSize = TextSize.S23,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.align(Alignment.Center).padding(top = 1.dp),
+                modifier = Modifier.align(Alignment.Center).padding(top = Spacing.S1),
             )
             Box(
                 contentAlignment = Alignment.Center,
@@ -97,8 +96,8 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
                     .align(Alignment.CenterEnd)
                     .padding(end = PanelSide)
                     .size(60.dp)
-                    .clip(CircleShape)
-                    .border(1.5.dp, colors.border, CircleShape)
+                    .clip(AppShapes.Circle)
+                    .border(1.5.dp, colors.border, AppShapes.Circle)
                     .clickable(onClick = onDismiss),
             ) {
                 Icon(
@@ -113,13 +112,13 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
         Row(Modifier.padding(horizontal = PanelSide)) {
             StartTile(LibraryIcons.Notebook, R.string.library_new_notebook, null, Modifier.weight(1f), choose(actions.notebook))
         }
-        Spacer(Modifier.height(17.dp))
-        Row(Modifier.padding(horizontal = PanelSide), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Spacer(Modifier.height(Spacing.S17))
+        Row(Modifier.padding(horizontal = PanelSide), horizontalArrangement = Arrangement.spacedBy(Spacing.S18)) {
             StartTile(LibraryIcons.TextCursor, R.string.library_new_text, null, Modifier.weight(1f), choose(actions.text))
             StartTile(LibraryIcons.Canvas, R.string.library_new_canvas, null, Modifier.weight(1f), choose(actions.canvas))
         }
-        Spacer(Modifier.height(17.dp))
-        Row(Modifier.padding(horizontal = PanelSide), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        Spacer(Modifier.height(Spacing.S17))
+        Row(Modifier.padding(horizontal = PanelSide), horizontalArrangement = Arrangement.spacedBy(Spacing.S18)) {
             StartTile(LibraryIcons.Microphone, R.string.library_new_audio, null, Modifier.weight(1f), choose(actions.audio))
             StartTile(
                 LibraryIcons.Document,
@@ -129,11 +128,11 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
                 choose(actions.fileOrDoc),
             )
         }
-        Spacer(Modifier.height(15.dp))
+        Spacer(Modifier.height(Spacing.S15))
         StartRow(LibraryIcons.Camera, R.string.library_new_photo, R.string.library_new_photo_hint, choose(actions.takePhoto))
         StartRow(LibraryIcons.Scan, R.string.library_new_scan, R.string.library_new_scan_hint, choose(actions.scan))
         StartRow(LibraryIcons.Photos, R.string.library_new_photos, R.string.library_new_photos_hint, choose(actions.photos))
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.S16))
         Box(
             Modifier
                 .padding(horizontal = PanelSide)
@@ -141,9 +140,9 @@ internal fun NewItemPanel(actions: NewItemActions, onDismiss: () -> Unit, modifi
                 .height(1.5.dp)
                 .background(colors.border),
         )
-        Spacer(Modifier.height(17.dp))
+        Spacer(Modifier.height(Spacing.S17))
         StartRow(LibraryIcons.Folder, R.string.library_new_folder_row, null, choose(actions.folder))
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(Spacing.S32))
     }
 }
 
@@ -155,15 +154,15 @@ private fun StartTile(icon: ImageVector, label: Int, detail: Int?, modifier: Mod
         verticalArrangement = Arrangement.Center,
         modifier = modifier
             .height(137.dp)
-            .clip(TileShape)
+            .clip(AppShapes.NewItemTile)
             .background(colors.raisedSurface)
             .clickable(onClick = onClick),
     ) {
         Icon(icon, null, tint = colors.onRaisedAccent, modifier = Modifier.size(36.dp))
         Spacer(Modifier.height(if (detail == null) 12.dp else 8.dp))
-        Text(stringResource(label), color = colors.onRaisedAccent, fontSize = 22.sp, lineHeight = 26.sp)
+        Text(stringResource(label), color = colors.onRaisedAccent, fontSize = TextSize.S22, lineHeight = TextSize.S26)
         if (detail != null) {
-            Text(stringResource(detail), color = colors.subtitle, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(stringResource(detail), color = colors.subtitle, fontSize = TextSize.S13, lineHeight = TextSize.S18)
         }
     }
 }
@@ -183,12 +182,12 @@ private fun StartRow(icon: ImageVector, label: Int, hint: Int?, onClick: () -> U
         Text(
             stringResource(label),
             color = colors.title,
-            fontSize = 22.sp,
-            letterSpacing = 0.5.sp,
-            modifier = Modifier.padding(start = 24.dp).weight(1f),
+            fontSize = TextSize.S22,
+            letterSpacing = LetterSpacing.Hint,
+            modifier = Modifier.padding(start = Spacing.S24).weight(1f),
         )
         if (hint != null) {
-            Text(stringResource(hint), color = colors.secondaryText, fontSize = 20.sp, letterSpacing = 0.5.sp, maxLines = 1)
+            Text(stringResource(hint), color = colors.secondaryText, fontSize = TextSize.S20, letterSpacing = LetterSpacing.Hint, maxLines = 1)
         }
     }
 }

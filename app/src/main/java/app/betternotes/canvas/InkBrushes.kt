@@ -29,6 +29,9 @@ import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.PenType
 import app.betternotes.core.model.TipShape
+import app.betternotes.ui.theme.ALPHA_SHIFT
+import app.betternotes.ui.theme.OPAQUE_ALPHA
+import app.betternotes.ui.theme.RGB_MASK
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -409,7 +412,6 @@ internal object InkBrushes {
     fun layerAlpha(style: InkStyle): Int =
         if (style.noOverlap && style.tool == InkTool.HIGHLIGHTER) colorOf(style) ushr ALPHA_SHIFT else -1
 
-    private const val OPAQUE_ALPHA = 0xFF000000.toInt()
     private const val ALPHA_SHIFT = 24
 
     private fun family(style: InkStyle): BrushFamily {
@@ -503,6 +505,6 @@ internal object InkBrushes {
 
     private fun colorOf(style: InkStyle): Int {
         val alpha = ((style.color ushr 24) * style.opacity + 0.5f).toInt().coerceIn(0, 255)
-        return (alpha shl 24) or (style.color and 0xFFFFFF)
+        return (alpha shl ALPHA_SHIFT) or (style.color and RGB_MASK)
     }
 }

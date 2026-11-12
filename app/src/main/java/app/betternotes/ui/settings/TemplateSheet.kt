@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -52,7 +50,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import app.betternotes.ui.theme.opensFrom
@@ -80,6 +77,12 @@ import app.betternotes.core.template.lineWeightLevel
 import app.betternotes.core.template.newTemplate
 import app.betternotes.core.template.withDensityLevel
 import app.betternotes.core.template.withLineWeightLevel
+import app.betternotes.ui.common.AddCustomColor
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import kotlin.math.roundToInt
 
 /** Which pages an apply reaches. */
@@ -131,29 +134,29 @@ fun TemplateSheet(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     ChoiceChip(stringResource(R.string.template_built_in), !customTab) { customTab = false }
-                    Spacer(Modifier.width(11.dp))
+                    Spacer(Modifier.width(Spacing.S11))
                     ChoiceChip(stringResource(R.string.template_custom), customTab) { customTab = true }
                     if (pageSize != null || canResize) {
-                        Spacer(Modifier.width(30.dp))
+                        Spacer(Modifier.width(Spacing.S30))
                         SizeChooser(size, enabled = canResize, canBeInfinite = canBeInfinite) {
                             size = it
                             if (it == null && !template.tiles) template = TemplateKind.BLANK.newTemplate()
                         }
                     }
                 }
-                Spacer(Modifier.height(30.dp))
+                Spacer(Modifier.height(Spacing.S30))
                 PaperRow(paper) { paper = it }
                 Spacer(Modifier.height(45.dp))
                 LevelRow(
                     stringResource(R.string.template_density),
                     template.densityLevel,
                 ) { template = template.withDensityLevel(it) }
-                Spacer(Modifier.height(30.dp))
+                Spacer(Modifier.height(Spacing.S30))
                 LevelRow(
                     stringResource(R.string.template_line_width),
                     template.lineWeightLevel,
                 ) { template = template.withLineWeightLevel(it) }
-                Spacer(Modifier.height(18.dp))
+                Spacer(Modifier.height(Spacing.S18))
 
                 if (customTab) {
                     CustomLayouts(customLayouts, template, paper, onSelect = {
@@ -181,14 +184,14 @@ fun TemplateSheet(
                 Text(
                     stringResource(R.string.layout_delete),
                     color = colors.danger,
-                    fontSize = 22.sp,
+                    fontSize = TextSize.S22,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 15.dp, bottom = 14.dp)
-                        .clip(CircleShape)
+                        .padding(start = Spacing.S15, bottom = Spacing.S14)
+                        .clip(AppShapes.Circle)
                         .background(colors.chipIdle)
                         .clickable(role = Role.Button) { deleteStep = 1 }
-                        .padding(horizontal = 32.dp, vertical = 18.dp),
+                        .padding(horizontal = Spacing.S32, vertical = Spacing.S18),
                 )
                 if (deleteStep > 0) {
                     DeleteWarning(name, deleteStep, onBack = { deleteStep = 0 }, onNext = { deleteStep = 2 }) {
@@ -201,7 +204,7 @@ fun TemplateSheet(
             }
             ApplyButton(
                 enabled = template !is PageTemplate.Custom || size != null,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 15.dp, bottom = 14.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = Spacing.S15, bottom = Spacing.S14),
             ) { scope ->
                 val layout = (template as? PageTemplate.Custom)?.layout
                 val sizeToApply = layout?.size ?: size.takeIf { it != pageSize }
@@ -268,17 +271,17 @@ private fun SizeChooser(size: PageSize?, enabled: Boolean, canBeInfinite: Boolea
                     stringResource(R.string.template_size, size.widthPt.roundToInt(), size.heightPt.roundToInt())
                 },
                 color = if (enabled) colors.title else colors.secondary,
-                fontSize = 19.5.sp,
+                fontSize = TextSize.S19_5,
             )
             if (enabled) {
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(Spacing.S8))
                 Icon(SettingsIcons.Down, null, tint = colors.title, modifier = Modifier.size(20.dp))
             }
         }
         DropdownMenu(open, { open = false }) {
             for (option in PAGE_SIZES) {
                 DropdownMenuItem(
-                    text = { Text(sizeName(option), fontSize = 20.sp) },
+                    text = { Text(sizeName(option), fontSize = TextSize.S20) },
                     onClick = {
                         open = false
                         onChange(option)
@@ -287,7 +290,7 @@ private fun SizeChooser(size: PageSize?, enabled: Boolean, canBeInfinite: Boolea
             }
             if (canBeInfinite) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.size_infinite), fontSize = 20.sp) },
+                    text = { Text(stringResource(R.string.size_infinite), fontSize = TextSize.S20) },
                     onClick = {
                         open = false
                         onChange(null)
@@ -309,17 +312,18 @@ private fun sizeName(size: PageSize) = when (size) {
 @Composable
 private fun PaperRow(selected: Int, onSelect: (Int) -> Unit) {
     val colors = LocalSettingsColors.current
-    Row(horizontalArrangement = Arrangement.spacedBy(11.dp, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S11, Alignment.CenterHorizontally), modifier = Modifier.fillMaxWidth()) {
         for (paper in PAPER_COLORS) {
             Box(
                 Modifier
                     .size(60.dp)
-                    .clip(CircleShape)
+                    .clip(AppShapes.Circle)
                     .background(Color(paper))
-                    .then(if (paper == selected) Modifier.border(3.dp, colors.accent, CircleShape) else Modifier)
+                    .then(if (paper == selected) Modifier.border(3.dp, colors.accent, AppShapes.Circle) else Modifier)
                     .clickable(role = Role.RadioButton) { onSelect(paper) },
             )
         }
+        AddCustomColor(selected, colors.title, onSelect, 60.dp)
     }
 }
 
@@ -331,11 +335,11 @@ private fun LevelRow(label: String, level: Int?, onChange: (Int) -> Unit) {
         horizontalArrangement = Arrangement.Center,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Text(label, color = if (level != null) colors.title else colors.secondary, fontSize = 19.5.sp)
-        Spacer(Modifier.width(30.dp))
+        Text(label, color = if (level != null) colors.title else colors.secondary, fontSize = TextSize.S19_5)
+        Spacer(Modifier.width(Spacing.S30))
         StepSlider(level ?: 1, TEMPLATE_LEVELS.last, onChange, enabled = level != null)
-        Spacer(Modifier.width(30.dp))
-        Text(level?.toString() ?: "-", color = colors.title, fontSize = 19.5.sp, modifier = Modifier.width(24.dp))
+        Spacer(Modifier.width(Spacing.S30))
+        Text(level?.toString() ?: "-", color = colors.title, fontSize = TextSize.S19_5, modifier = Modifier.width(24.dp))
     }
 }
 
@@ -350,10 +354,10 @@ private fun GroupHeader(group: TemplateGroup, selected: Boolean, collapsed: Bool
             .clickable(onClick = onToggle)
             .padding(horizontal = 48.dp),
     ) {
-        Text(stringResource(group.title), color = colors.title, fontSize = 22.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(group.title), color = colors.title, fontSize = TextSize.S22, fontWeight = FontWeight.Medium)
         if (selected) {
-            Spacer(Modifier.width(14.dp))
-            Box(Modifier.size(9.dp).background(colors.accent, CircleShape))
+            Spacer(Modifier.width(Spacing.S14))
+            Box(Modifier.size(9.dp).background(colors.accent, AppShapes.Circle))
         }
         Spacer(Modifier.weight(1f))
         Icon(if (collapsed) SettingsIcons.Down else SettingsIcons.Up, null, tint = colors.title, modifier = Modifier.size(26.dp))
@@ -363,11 +367,11 @@ private fun GroupHeader(group: TemplateGroup, selected: Boolean, collapsed: Bool
 @Composable
 private fun ThumbnailRow(group: TemplateGroup, selected: PageTemplate, paper: Int, onCanvas: Boolean, onSelect: (TemplateKind) -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(34.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S34),
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(start = 35.dp, end = 35.dp, top = 48.dp, bottom = 12.dp),
+            .padding(start = Spacing.S35, end = Spacing.S35, top = 48.dp, bottom = Spacing.S12),
     ) {
         for (kind in group.kinds) {
             val template = if (selected.kind == kind) selected else kind.newTemplate().keepingLevelsOf(selected)
@@ -380,7 +384,7 @@ private fun ThumbnailRow(group: TemplateGroup, selected: PageTemplate, paper: In
 @Composable
 private fun Thumbnail(name: String, template: PageTemplate, paper: Int, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(9.dp)
+    val shape = AppShapes.Rounded9
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(138.dp).clickable(enabled = enabled, role = Role.RadioButton, onClick = onClick),
@@ -402,7 +406,7 @@ private fun Thumbnail(name: String, template: PageTemplate, paper: Int, selected
                 enabled -> colors.title
                 else -> colors.secondary
             },
-            fontSize = 17.sp,
+            fontSize = TextSize.S17,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -465,10 +469,10 @@ private fun ColumnScope.CustomLayouts(
     onLongPress: (CustomLayout) -> Unit,
 ) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(9.dp)
+    val shape = AppShapes.Rounded9
     Row(
-        horizontalArrangement = Arrangement.spacedBy(34.dp),
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 34.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S34),
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = Spacing.S34, vertical = Spacing.S14),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -480,8 +484,8 @@ private fun ColumnScope.CustomLayouts(
             ) {
                 Icon(SettingsIcons.Plus, null, tint = colors.title, modifier = Modifier.size(40.dp))
             }
-            Spacer(Modifier.height(26.dp))
-            Text(stringResource(R.string.layout_new), color = colors.title, fontSize = 17.sp)
+            Spacer(Modifier.height(Spacing.S26))
+            Text(stringResource(R.string.layout_new), color = colors.title, fontSize = TextSize.S17)
         }
         for (layout in layouts) {
             val isSelected = (selected as? PageTemplate.Custom)?.layout?.name == layout.name
@@ -496,19 +500,19 @@ private fun ColumnScope.CustomLayouts(
                 ) {
                     TemplatePreview(PageTemplate.Custom(layout), layout.paper, layout.size, Modifier.fillMaxSize())
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(Spacing.S16))
                 Text(
                     layout.name,
                     color = if (isSelected) colors.accent else colors.title,
-                    fontSize = 17.sp,
+                    fontSize = TextSize.S17,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     stringResource(R.string.layout_edit),
                     color = colors.accent,
-                    fontSize = 16.sp,
-                    modifier = Modifier.clickable { onEdit(layout) }.padding(4.dp),
+                    fontSize = TextSize.S16,
+                    modifier = Modifier.clickable { onEdit(layout) }.padding(Spacing.S4),
                 )
             }
         }
@@ -542,18 +546,18 @@ private fun ApplyButton(enabled: Boolean, modifier: Modifier = Modifier, onApply
         modifier
             .animateContentSize()
             .width(IntrinsicSize.Max)
-            .clip(RoundedCornerShape(33.dp))
+            .clip(AppShapes.Rounded33)
             .background(if (enabled) colors.accent else colors.sliderIdle),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(66.dp)) {
-            ApplyLabel(first, enabled, Modifier.weight(1f).padding(start = 32.dp, end = 21.dp)) { choose(first) }
+            ApplyLabel(first, enabled, Modifier.weight(1f).padding(start = Spacing.S32, end = Spacing.S21)) { choose(first) }
             Box(Modifier.size(2.dp, 41.dp).background(colors.divider))
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .height(66.dp)
                     .clickable(enabled = enabled, role = Role.Button) { open = !open }
-                    .padding(start = 24.dp, end = 28.dp),
+                    .padding(start = Spacing.S24, end = Spacing.S28),
             ) {
                 Icon(
                     if (open) SettingsIcons.Down else SettingsIcons.Up,
@@ -565,7 +569,7 @@ private fun ApplyButton(enabled: Boolean, modifier: Modifier = Modifier, onApply
         }
         if (open) {
             Box(Modifier.fillMaxWidth().height(2.dp).background(colors.divider))
-            ApplyLabel(second, enabled, Modifier.fillMaxWidth().padding(horizontal = 32.dp)) { choose(second) }
+            ApplyLabel(second, enabled, Modifier.fillMaxWidth().padding(horizontal = Spacing.S32)) { choose(second) }
         }
     }
 }
@@ -580,7 +584,7 @@ private fun ApplyLabel(scope: ApplyScope, enabled: Boolean, modifier: Modifier, 
         ShrinkText(
             stringResource(if (scope == ApplyScope.CURRENT_PAGE) R.string.template_apply_current else R.string.template_apply_all),
             colors.onAccent,
-            19.5.sp,
+            TextSize.S19_5,
         )
     }
 }
@@ -590,34 +594,34 @@ private fun ApplyLabel(scope: ApplyScope, enabled: Boolean, modifier: Modifier, 
 private fun DeleteWarning(name: String, step: Int, onBack: () -> Unit, onNext: () -> Unit, onDelete: () -> Unit) {
     val colors = LocalSettingsColors.current
     Box(
-        Modifier.fillMaxSize().background(Color(0x99000000)).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        Modifier.fillMaxSize().background(UiColors.ScrimStrong).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.opensFrom(OpenFrom.Center).width(460.dp).clip(RoundedCornerShape(24.dp)).background(colors.card).padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.S18),
+            modifier = Modifier.opensFrom(OpenFrom.Center).width(460.dp).clip(AppShapes.Rounded24).background(colors.card).padding(Spacing.S28),
         ) {
             val first = step == 1
             Text(
                 if (first) stringResource(R.string.layout_delete_title) else stringResource(R.string.layout_delete_final_title, name),
                 color = colors.text,
-                fontSize = 22.sp,
+                fontSize = TextSize.S22,
             )
             Text(
                 stringResource(if (first) R.string.layout_delete_message else R.string.layout_delete_final_message),
                 color = colors.text,
-                fontSize = 19.5.sp,
+                fontSize = TextSize.S19_5,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S11), verticalAlignment = Alignment.CenterVertically) {
                 ChoiceChip(stringResource(R.string.layout_cancel), true, onBack)
                 Text(
                     stringResource(if (first) R.string.layout_delete_continue else R.string.layout_delete_forever),
                     color = colors.danger,
-                    fontSize = 19.5.sp,
+                    fontSize = TextSize.S19_5,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(AppShapes.Rounded10)
                         .clickable(role = Role.Button, onClick = if (first) onNext else onDelete)
-                        .padding(horizontal = 22.dp, vertical = 10.dp),
+                        .padding(horizontal = Spacing.S22, vertical = Spacing.S10),
                 )
             }
         }

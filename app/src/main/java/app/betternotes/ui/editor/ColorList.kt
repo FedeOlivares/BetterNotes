@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -30,19 +28,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.RGB_MASK
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 
 /**
@@ -57,7 +58,7 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(SCRIM))
+            .background(UiColors.Scrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 state.colorListOpen = false
             },
@@ -68,18 +69,18 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
                 .opensFrom(OpenFrom.Center)
                 .width(SHEET_WIDTH)
                 .height(SHEET_HEIGHT)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(AppShapes.Rounded28)
                 .background(colors.panel)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(vertical = 16.dp),
+                .padding(vertical = Spacing.S16),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 18.dp)) {
+            Box(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = Spacing.S18)) {
                 Row(Modifier.align(Alignment.Center), verticalAlignment = Alignment.CenterVertically) {
-                    Text(stringResource(R.string.panel_color), color = colors.title, fontSize = 22.sp)
-                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.panel_color), color = colors.title, fontSize = TextSize.S22)
+                    Spacer(Modifier.width(Spacing.S8))
                     Box(
-                        Modifier.size(30.dp).clip(CircleShape).clickable { notices.say(R.string.info_color_list) },
+                        Modifier.size(30.dp).clip(AppShapes.Circle).clickable { notices.say(R.string.info_color_list) },
                         contentAlignment = Alignment.Center,
                     ) { Icon(EditorIcons.Info, null, tint = colors.label, modifier = Modifier.size(22.dp)) }
                 }
@@ -87,17 +88,17 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
                     Modifier
                         .align(Alignment.CenterEnd)
                         .size(40.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(colors.closeButton)
                         .clickable(role = Role.Button) { state.colorListOpen = false },
                     contentAlignment = Alignment.Center,
                 ) { Icon(EditorIcons.Close, stringResource(R.string.panel_close), tint = colors.label, modifier = Modifier.size(20.dp)) }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(Spacing.S10))
             Box(
                 Modifier
                     .size(54.dp)
-                    .clip(CircleShape)
+                    .clip(AppShapes.Circle)
                     .background(colors.toolSelected)
                     .clickable(role = Role.Button) {
                         state.colorListOpen = false
@@ -105,10 +106,10 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
                     },
                 contentAlignment = Alignment.Center,
             ) { Icon(EditorIcons.Plus, stringResource(R.string.panel_add_swatch), tint = colors.toolSelectedIcon, modifier = Modifier.size(28.dp)) }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(Spacing.S18))
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(ROW_GAP),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 36.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.S36),
             ) {
                 itemsIndexed(preset.palette, key = { _, color -> color }) { index, color ->
                     var dragged by remember { mutableFloatStateOf(0f) }
@@ -117,20 +118,20 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(ROW_HEIGHT)
-                            .clip(RoundedCornerShape(16.dp))
+                            .clip(AppShapes.Rounded16)
                             .background(colors.field)
                             .clickable {
                                 state.update { it.pickColor(color) }
                                 state.colorListOpen = false
                             }
-                            .padding(horizontal = 16.dp),
+                            .padding(horizontal = Spacing.S16),
                     ) {
                         ColorDot(color, diameter = 32.dp)
-                        Spacer(Modifier.width(18.dp))
+                        Spacer(Modifier.width(Spacing.S18))
                         Text(
-                            "#%06X".format(color and 0xFFFFFF),
+                            "#%06X".format(color and RGB_MASK),
                             color = colors.title,
-                            fontSize = 20.sp,
+                            fontSize = TextSize.S20,
                             fontWeight = FontWeight.Normal,
                             modifier = Modifier.weight(1f),
                         )
@@ -164,7 +165,6 @@ internal fun ColorListSheet(state: EditorState, preset: InkPreset, notices: Noti
     }
 }
 
-private const val SCRIM = 0x66000000
 private val SHEET_WIDTH = 560.dp
 private val SHEET_HEIGHT = 620.dp
 private val ROW_HEIGHT = 58.dp

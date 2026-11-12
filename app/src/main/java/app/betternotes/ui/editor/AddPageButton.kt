@@ -7,13 +7,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,7 +21,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.res.stringResource
@@ -31,14 +28,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import kotlin.math.roundToInt
 
 /** How long the button takes to fade in and out. */
 private const val FADE_MS = 200
 private const val SLIDE_MS = 280
-
-/** The button's own look: a blue disc with a white plus. */
-private val ADD_BLUE = Color(0xFF2F6FE0)
 
 /**
  * The standard blue "Add cover" button, in the room before the first page of a notebook with no cover. It opens the cover list.
@@ -63,14 +61,14 @@ internal fun AddCoverButton(state: EditorState) {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .height(52.dp)
-                    .shadow(6.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(ADD_BLUE)
+                    .shadow(6.dp, AppShapes.Circle)
+                    .clip(AppShapes.Circle)
+                    .background(UiColors.ActionBlue)
                     .masksInk(state, "addCover")
                     .clickable(enabled = spot != null && slide > 0.9f, role = Role.Button) { state.coverOpen = true }
-                    .padding(horizontal = 28.dp),
+                    .padding(horizontal = Spacing.S28),
             ) {
-                Text(stringResource(R.string.menu_add_cover), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.menu_add_cover), color = UiColors.OnFilled, fontSize = TextSize.S17, fontWeight = FontWeight.Medium)
             }
         },
     ) { measurables, constraints ->
@@ -104,15 +102,15 @@ internal fun AddPageButton(state: EditorState) {
                 modifier = Modifier
                     .graphicsLayer { this.alpha = alpha }
                     .size(56.dp)
-                    .shadow(6.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(ADD_BLUE)
+                    .shadow(6.dp, AppShapes.Circle)
+                    .clip(AppShapes.Circle)
+                    .background(UiColors.ActionBlue)
                     .masksInk(state, "addPage")
                     .clickable(enabled = spot != null, role = Role.Button, onClickLabel = stringResource(R.string.add_page)) {
                         state.addPageAtEnd()
                     },
             ) {
-                Icon(EditorIcons.Plus, stringResource(R.string.add_page), tint = Color.White, modifier = Modifier.size(30.dp))
+                Icon(EditorIcons.Plus, stringResource(R.string.add_page), tint = UiColors.OnFilled, modifier = Modifier.size(30.dp))
             }
         },
     ) { measurables, constraints ->

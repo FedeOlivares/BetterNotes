@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,19 +27,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import app.betternotes.R
 import app.betternotes.core.planner.PlannerPage
 import app.betternotes.core.planner.PlannerPages
 import app.betternotes.core.planner.PlannerSetup
 import app.betternotes.ui.library.PlannerColorRow
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -61,7 +61,7 @@ internal sealed interface PlannerMenu {
     data class Date(val semester: Int, val end: Boolean) : PlannerMenu
 }
 
-private val BLUE = Color(0xFF0A84FF)
+private val BLUE = UiColors.SystemBlue
 
 /** The two small panels a planner opens: the weekday list, and the years chooser on the cover. */
 @Composable
@@ -97,11 +97,11 @@ private fun Panel(onDismiss: () -> Unit, content: @Composable () -> Unit) {
         Column(
             Modifier
                 .width(340.dp)
-                .shadow(24.dp, RoundedCornerShape(24.dp))
-                .clip(RoundedCornerShape(24.dp))
+                .shadow(24.dp, AppShapes.Rounded24)
+                .clip(AppShapes.Rounded24)
                 .background(colors.panel)
                 .verticalScroll(rememberScrollState())
-                .padding(20.dp),
+                .padding(Spacing.S20),
         ) { content() }
     }
 }
@@ -113,20 +113,20 @@ private fun WeekdayMenu(setup: PlannerSetup, menu: PlannerMenu.Weekday, onDismis
     val current = setup.weekday(setup.day(menu.dayIndex))
     val locale = LocalLocale.current.platformLocale
     Panel(onDismiss) {
-        Text(stringResource(R.string.planner_weekday_title), color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(12.dp))
+        Text(stringResource(R.string.planner_weekday_title), color = colors.title, fontSize = TextSize.S20, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Spacing.S12))
         for (day in 0 until 7) {
             val name = DayOfWeek.of(day + 1).getDisplayName(TextStyle.FULL, locale).replaceFirstChar { it.uppercase() }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .then(if (day == current) Modifier.background(BLUE.copy(alpha = 0.16f)) else Modifier)
+                    .clip(AppShapes.Rounded12)
+                    .then(if (day == current) Modifier.background(BLUE.copy(alpha = UiColors.SYSTEM_BLUE_TINT_ALPHA)) else Modifier)
                     .clickable { onPick(day) }
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = Spacing.S14, vertical = Spacing.S12),
             ) {
-                Text(name, color = if (day == current) BLUE else colors.title, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                Text(name, color = if (day == current) BLUE else colors.title, fontSize = TextSize.S18, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -144,39 +144,39 @@ private fun YearsMenu(setup: PlannerSetup, planColors: List<Int>, onDismiss: () 
     var chosenColors by remember { mutableStateOf(planColors) }
     val chosen = PlannerSetup(year, if (full) 1 else 7)
     Panel(onDismiss) {
-        Text(stringResource(R.string.planner_years_title), color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        Text(stringResource(R.string.planner_years_title), color = colors.title, fontSize = TextSize.S20, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Spacing.S14))
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S10), modifier = Modifier.fillMaxWidth()) {
             Choice(stringResource(R.string.planner_years_mid), !full, Modifier.weight(1f)) { full = false }
             Choice(stringResource(R.string.planner_years_full), full, Modifier.weight(1f)) { full = true }
         }
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(Spacing.S6))
         Text(
             stringResource(if (full) R.string.planner_years_full_detail else R.string.planner_years_mid_detail),
             color = colors.label,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.S16))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Step("-") { if (year > PlannerSetup.MIN_YEAR) year-- }
-            Text(chosen.yearLabel, color = colors.title, fontSize = 26.sp, fontWeight = FontWeight.Medium)
+            Text(chosen.yearLabel, color = colors.title, fontSize = TextSize.S26, fontWeight = FontWeight.Medium)
             Step("+") { if (year < PlannerSetup.MAX_YEAR - 1) year++ }
         }
-        Spacer(Modifier.height(16.dp))
-        Text(stringResource(R.string.planner_colors_title), color = colors.title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.S16))
+        Text(stringResource(R.string.planner_colors_title), color = colors.title, fontSize = TextSize.S16, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Spacing.S8))
         PlannerColorRow(chosenColors, compact = true, label = colors.label, border = colors.panelDivider) { chosenColors = it }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(Spacing.S20))
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .clip(CircleShape)
+                .clip(AppShapes.Circle)
                 .background(BLUE)
                 .clickable { onPick(chosen, chosenColors) },
         ) {
-            Text(stringResource(R.string.planner_years_apply), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.planner_years_apply), color = UiColors.OnFilled, fontSize = TextSize.S18, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -214,36 +214,36 @@ private fun TitleMenu(current: String, onDismiss: () -> Unit, onApply: (String) 
     var text by remember { mutableStateOf(current) }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     Panel(onDismiss) {
-        Text(stringResource(R.string.planner_title_title), color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.height(14.dp))
+        Text(stringResource(R.string.planner_title_title), color = colors.title, fontSize = TextSize.S20, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Spacing.S14))
         Box(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(AppShapes.Rounded12)
                 .background(colors.field)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = Spacing.S16, vertical = Spacing.S14),
         ) {
             androidx.compose.foundation.text.BasicTextField(
                 text,
                 { text = it.take(PlannerPages.MAX_TITLE) },
                 singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = colors.title, fontSize = 20.sp),
+                textStyle = androidx.compose.ui.text.TextStyle(color = colors.title, fontSize = TextSize.S20),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(colors.accent),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
         }
         androidx.compose.runtime.LaunchedEffect(Unit) { focus.requestFocus() }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(Spacing.S18))
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
-                .clip(CircleShape)
+                .clip(AppShapes.Circle)
                 .background(BLUE)
                 .clickable { onApply(text) },
         ) {
-            Text(stringResource(R.string.planner_years_apply), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.planner_years_apply), color = UiColors.OnFilled, fontSize = TextSize.S18, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -255,12 +255,12 @@ private fun Choice(label: String, selected: Boolean, modifier: Modifier, onClick
         contentAlignment = Alignment.Center,
         modifier = modifier
             .height(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .then(if (selected) Modifier.background(BLUE.copy(alpha = 0.16f)) else Modifier)
-            .border(if (selected) 2.dp else 1.5.dp, if (selected) BLUE else colors.pillBorder, RoundedCornerShape(14.dp))
+            .clip(AppShapes.Rounded14)
+            .then(if (selected) Modifier.background(BLUE.copy(alpha = UiColors.SYSTEM_BLUE_TINT_ALPHA)) else Modifier)
+            .border(if (selected) 2.dp else 1.5.dp, if (selected) BLUE else colors.pillBorder, AppShapes.Rounded14)
             .clickable(onClick = onClick),
     ) {
-        Text(label, color = if (selected) BLUE else colors.title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = if (selected) BLUE else colors.title, fontSize = TextSize.S16, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -271,10 +271,10 @@ private fun Step(label: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(48.dp)
-            .clip(CircleShape)
-            .border(1.5.dp, colors.pillBorder, CircleShape)
+            .clip(AppShapes.Circle)
+            .border(1.5.dp, colors.pillBorder, AppShapes.Circle)
             .clickable(onClick = onClick),
     ) {
-        Text(label, color = colors.title, fontSize = 24.sp)
+        Text(label, color = colors.title, fontSize = TextSize.S24)
     }
 }

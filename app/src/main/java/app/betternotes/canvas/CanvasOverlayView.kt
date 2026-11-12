@@ -10,6 +10,7 @@ import androidx.core.graphics.withRotation
 import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.tools.FadingTrail
 import app.betternotes.core.tools.Ruler
+import app.betternotes.ui.theme.CanvasColors
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -66,9 +67,9 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         color = LASER_COLOR
     }
     private val tipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = LASER_COLOR }
-    private val coreFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+    private val coreFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CanvasColors.LASER_CORE }
     private val coreLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt()
+        color = CanvasColors.LASER_CORE
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
@@ -217,7 +218,7 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         const val LASER_LIFETIME_MS = 700L
         const val DOT_LIFETIME_MS = 250L
         const val DEFAULT_LASER_LENGTH = 2
-        const val LASER_COLOR = 0xFFFF1A1A.toInt()
+        const val LASER_COLOR = CanvasColors.LASER
         const val LASER_WIDTH_DP = 7f
         const val LASER_ALPHA = 200f
         const val LASER_GLOW_ALPHA = 90f
@@ -226,9 +227,8 @@ internal class CanvasOverlayView(context: Context, private val viewport: Viewpor
         const val LASER_TIP_RATIO = 0.6f
         const val OPAQUE = 255f
 
-        /** Measured from the screenshot, where the band lies over both the cream page and a blue note. */
-        const val RULER_BODY = 0x8F5B5B5B.toInt()
-        const val RULER_MARK = 0xCCFFFFFF.toInt()
+        const val RULER_BODY = CanvasColors.RULER_BODY
+        const val RULER_MARK = CanvasColors.RULER_MARK
         const val RULER_TEXT_DP = 13f
         const val POINTS_PER_MM = 72f / 25.4f
         const val MM_PER_CM = 10

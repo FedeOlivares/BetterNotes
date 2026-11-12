@@ -14,7 +14,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.unit.sp
 import app.betternotes.ui.theme.LocalEditorColors
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.padding
@@ -25,6 +24,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
 
 /** The paint bucket's row: its color bar as the pen's is kept, a way to sample a color from the page, and how see-through the fill is. */
 @Composable
@@ -49,7 +51,7 @@ internal fun FillRow(state: EditorState, modifier: Modifier) {
                 ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) { state.moreColorsOpen = true }
                 if (state.moreColorsOpen) {
                     FavoriteColors(
-                        favorites = (state.fillColors + MORE_FAVORITES).distinct(),
+                        favorites = (state.fillColors + Swatches.MoreFavorites).distinct(),
                         onBar = state.fillColors,
                         onPick = state::addFillColor,
                         onWheel = { state.colorTarget = ColorTarget.FILL },
@@ -89,7 +91,7 @@ internal fun FillPanel(state: EditorState, modifier: Modifier) {
                 }
                 .padding(horizontal = PanelPadding),
         ) {
-            Text(stringResource(R.string.fill_pick_color), color = colors.title, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text(stringResource(R.string.fill_pick_color), color = colors.title, fontSize = TextSize.S15, modifier = Modifier.weight(1f))
             Icon(EditorIcons.Eyedropper, null, tint = if (state.pickingColor) colors.accent else colors.label, modifier = Modifier.size(22.dp))
         }
         ReturnRows(state.fillReturn, state.fillReturnDelay, state::chooseFillReturn, state::chooseFillReturnDelay)
@@ -114,9 +116,9 @@ internal fun ReturnRows(on: Boolean, delayTenths: Int, onChoose: (Boolean) -> Un
             .clickable(role = Role.Button) { delayOpen = !delayOpen }
             .padding(horizontal = PanelPadding),
     ) {
-        Text(stringResource(R.string.fill_return_delay), color = colors.title, fontSize = 15.sp, modifier = Modifier.weight(1f))
-        Text("%.1f s".format(delayTenths / 10f), color = colors.label, fontSize = 15.sp)
-        Icon(if (delayOpen) EditorIcons.ChevronUp else EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.padding(start = 8.dp).size(20.dp))
+        Text(stringResource(R.string.fill_return_delay), color = colors.title, fontSize = TextSize.S15, modifier = Modifier.weight(1f))
+        Text("%.1f s".format(delayTenths / 10f), color = colors.label, fontSize = TextSize.S15)
+        Icon(if (delayOpen) EditorIcons.ChevronUp else EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.padding(start = Spacing.S8).size(20.dp))
     }
     if (delayOpen) {
         StepperSlider(

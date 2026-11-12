@@ -1,5 +1,7 @@
 package app.betternotes.core.template
 
+import app.betternotes.core.geometry.Bounds
+import app.betternotes.core.geometry.PageSize
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -19,9 +21,9 @@ class CoverDesign(val id: String, val group: CoverGroup, val name: String, inter
         draw(if (recolor.isEmpty()) sink else RecolorSink(sink, recolor), width, height)
 
     /** Draws the cover of a page whose paper pattern is [pattern]: a planner's cover has its title and years printed over the design. */
-    fun draw(sink: TemplateSink, size: app.betternotes.core.geometry.PageSize, pattern: PageTemplate) {
+    fun draw(sink: TemplateSink, size: PageSize, pattern: PageTemplate) {
         draw(sink, size.widthPt, size.heightPt, if (pattern is PageTemplate.Planner) app.betternotes.core.planner.PlannerColors.coverRecolor(pattern.colors) else emptyMap())
-        if (pattern is PageTemplate.Planner) pattern.draw(size, app.betternotes.core.geometry.Bounds(0f, 0f, size.widthPt, size.heightPt), sink)
+        if (pattern is PageTemplate.Planner) pattern.draw(size, Bounds(0f, 0f, size.widthPt, size.heightPt), sink)
     }
 
     companion object {

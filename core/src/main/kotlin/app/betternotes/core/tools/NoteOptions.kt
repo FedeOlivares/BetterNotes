@@ -13,6 +13,8 @@ data class NoteOptions(
     val selectedColor: Int = 1,
     val textSize: Int = 9,
     val style: TextStyle = TextStyle(),
+    /** The color new text is written in, as ARGB. */
+    val textColor: Int = TEXT_COLOR,
     /** New sticky notes stay open when the page is tapped elsewhere. */
     val keepOpen: Boolean = false,
     /**
@@ -157,7 +159,8 @@ fun StickyNoteItem.withText(value: String, size: Float, style: TextStyle, ids: I
         text = value,
         textSize = size,
         color = NoteOptions.TEXT_COLOR,
-        style = style,
+        // The background belongs to the text tool; a post-it keeps its text plain.
+        style = style.copy(backgroundColor = 0),
     )
     return copy(items = listOf(updated) + items.filter { it !is TextItem })
 }

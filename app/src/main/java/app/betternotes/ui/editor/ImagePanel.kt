@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,7 +54,9 @@ import app.betternotes.R
 import app.betternotes.core.model.ImageShape
 import app.betternotes.core.tools.ImageOptions
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -226,7 +226,7 @@ internal fun ImageRow(state: EditorState, options: ImageOptions, sources: ImageS
         for (uri in recents) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(38.dp).clip(RoundedCornerShape(6.dp)).clickable { state.importImage(uri) },
+                modifier = Modifier.size(38.dp).clip(AppShapes.Rounded6).clickable { state.importImage(uri) },
             ) {
                 ImageThumbnail(uri)
             }
@@ -249,26 +249,26 @@ internal fun ImagePanel(state: EditorState, sources: ImageSources, notices: Noti
     val recents = rememberRecentImages(RECENTS_IN_PANEL, permitted)
     PanelSheet(stringResource(R.string.tool_image), onClose = { state.panelOpen = false }, modifier = modifier) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterHorizontally),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S14, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.S8),
         ) {
             SourceButton(EditorIcons.Camera, R.string.tool_camera, sources.takePhoto)
             SourceButton(EditorIcons.AddImage, R.string.panel_add_image, sources.pickPhoto)
             SourceButton(EditorIcons.Folder, R.string.panel_from_files, sources.pickFile)
             SourceButton(EditorIcons.Scan, R.string.panel_scan, sources.scan)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.S8))
         for (row in recents.chunked(RECENTS_PER_ROW)) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth().padding(start = PanelPadding, end = PanelPadding, bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S10),
+                modifier = Modifier.fillMaxWidth().padding(start = PanelPadding, end = PanelPadding, bottom = Spacing.S10),
             ) {
                 for (uri in row) {
                     Box(
                         Modifier
                             .weight(1f)
                             .aspectRatio(1f)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(AppShapes.Rounded14)
                             .clickable(role = Role.Button) { state.importImage(uri) },
                     ) {
                         ImageThumbnail(uri)
@@ -278,7 +278,7 @@ internal fun ImagePanel(state: EditorState, sources: ImageSources, notices: Noti
             }
         }
         CreateReturnRows(state)
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(Spacing.S8))
     }
 }
 
@@ -289,7 +289,7 @@ private fun SourceButton(icon: ImageVector, label: Int, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(44.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(colors.toolSelected)
             .clickable(role = Role.Button, onClick = onClick),
     ) {

@@ -5,7 +5,6 @@ import androidx.core.graphics.withMatrix
 import android.graphics.Matrix
 import androidx.core.graphics.withScale
 import androidx.core.graphics.withTranslation
-import app.betternotes.core.geometry.Viewport
 import app.betternotes.core.model.IdSource
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
@@ -20,7 +19,6 @@ import kotlin.math.hypot
 
 /** Dragging out a new shape. Until the pen lifts it floats over the page, drawn by the same painter. */
 internal class ShapeController(
-    private val viewport: Viewport,
     /** Fills the matrix that takes a point of a page to the screen, which turns and scales it as the page is. */
     private val pageToScreenOf: (pageIndex: Int, into: Matrix) -> Unit,
     private val redraw: () -> Unit,

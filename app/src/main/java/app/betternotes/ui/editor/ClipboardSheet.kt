@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,13 +26,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.clipboard.ClipEntry
 import app.betternotes.core.clipboard.ImageClip
 import app.betternotes.core.clipboard.ItemsClip
 import app.betternotes.core.clipboard.TextClip
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -50,7 +51,7 @@ internal fun ClipboardSheet(state: EditorState, modifier: Modifier = Modifier) {
             Text(
                 stringResource(R.string.clipboard_empty),
                 color = colors.label,
-                fontSize = 14.sp,
+                fontSize = TextSize.S14,
                 modifier = Modifier.padding(PanelPadding),
             )
         }
@@ -66,7 +67,7 @@ internal fun ClipboardSheet(state: EditorState, modifier: Modifier = Modifier) {
                         state.clipboardOpen = false
                     },
             ) {
-                Text(stringResource(R.string.clipboard_clear), color = colors.accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.clipboard_clear), color = colors.accent, fontSize = TextSize.S14, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -80,33 +81,33 @@ private fun ClipRow(entry: ClipEntry, onPaste: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onPaste)
-            .padding(horizontal = PanelPadding, vertical = 8.dp),
+            .padding(horizontal = PanelPadding, vertical = Spacing.S8),
     ) {
         when (entry) {
             is TextClip -> Text(
                 entry.text,
                 color = colors.title,
-                fontSize = 14.sp,
+                fontSize = TextSize.S14,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             is ImageClip -> {
                 val thumb by produceState<Bitmap?>(null, entry.path) { value = withContext(Dispatchers.IO) { decodeThumb(entry.path) } }
-                Box(Modifier.size(ThumbSize).clip(RoundedCornerShape(8.dp)).background(colors.field)) {
+                Box(Modifier.size(ThumbSize).clip(AppShapes.Rounded8).background(colors.field)) {
                     thumb?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.size(ThumbSize)) }
                 }
                 Text(
                     stringResource(R.string.clipboard_picture),
                     color = colors.label,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(start = 12.dp).weight(1f),
+                    fontSize = TextSize.S14,
+                    modifier = Modifier.padding(start = Spacing.S12).weight(1f),
                 )
             }
             is ItemsClip -> Text(
                 pluralStringResource(R.plurals.clipboard_items, entry.count, entry.count),
                 color = colors.title,
-                fontSize = 14.sp,
+                fontSize = TextSize.S14,
                 modifier = Modifier.weight(1f),
             )
         }

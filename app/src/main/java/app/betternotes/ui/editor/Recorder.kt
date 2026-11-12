@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -55,7 +53,6 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -68,15 +65,18 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import app.betternotes.R
 import app.betternotes.canvas.AudioPlayback
 import app.betternotes.canvas.CanvasView
 import app.betternotes.core.model.AudioItem
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.delay
 import java.io.File
@@ -287,7 +287,7 @@ internal fun RecorderMenu(state: EditorState, recorder: RecorderState, modifier:
             .background(colors.panel)
             .alpha(if (recorder.dragging != null) 0.25f else 1f)
             .verticalScroll(rememberScrollState())
-            .padding(vertical = 8.dp),
+            .padding(vertical = Spacing.S8),
     ) {
         MenuRow(EditorIcons.Plus, R.string.recorder_new) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -299,9 +299,9 @@ internal fun RecorderMenu(state: EditorState, recorder: RecorderState, modifier:
         MenuRow(EditorIcons.Download, R.string.recorder_import) { importer.launch("audio/*") }
         MenuRow(EditorIcons.PlayCircle, R.string.recorder_play_all) { recorder.playAll(recordings) }
         if (recordings.isNotEmpty()) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.S4))
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.panelDivider))
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.S4))
         }
         recordings.forEachIndexed { index, item ->
             RecordingRow(state, recorder, item, index + 1)
@@ -321,17 +321,17 @@ private fun DraggedRecording(x: Float, y: Float) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .shadow(8.dp, CircleShape)
-                .clip(CircleShape)
-                .background(Color.White)
-                .padding(4.dp),
+                .shadow(8.dp, AppShapes.Circle)
+                .clip(AppShapes.Circle)
+                .background(UiColors.White)
+                .padding(Spacing.S4),
         ) {
-            Box(Modifier.size(28.dp).clip(CircleShape).background(Color(0xFF3B6FF5)), contentAlignment = Alignment.Center) {
-                Icon(EditorIcons.Play, null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Box(Modifier.size(28.dp).clip(AppShapes.Circle).background(UiColors.RecorderPlay), contentAlignment = Alignment.Center) {
+                Icon(EditorIcons.Play, null, tint = UiColors.OnFilled, modifier = Modifier.size(16.dp))
             }
-            Spacer(Modifier.width(8.dp))
-            Box(Modifier.width(90.dp).height(3.dp).clip(CircleShape).background(colors.label))
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(Spacing.S8))
+            Box(Modifier.width(90.dp).height(3.dp).clip(AppShapes.Circle).background(colors.label))
+            Spacer(Modifier.width(Spacing.S10))
         }
     }
 }
@@ -344,11 +344,11 @@ private fun MenuRow(icon: ImageVector, label: Int, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.S16, vertical = Spacing.S12),
     ) {
         Icon(icon, null, tint = colors.icon, modifier = Modifier.size(20.dp))
-        Spacer(Modifier.width(14.dp))
-        Text(stringResource(label), color = colors.title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.width(Spacing.S14))
+        Text(stringResource(label), color = colors.title, fontSize = TextSize.S15, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -384,7 +384,7 @@ private fun RecordingRow(state: EditorState, recorder: RecorderState, item: Audi
                     if (finished) recorder.drop(item) else recorder.cancelDrag()
                 }
             }
-            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = Spacing.S16, top = Spacing.S8, bottom = Spacing.S8),
     ) {
         Icon(
             if (recorder.playingId == item.id) EditorIcons.Pause else EditorIcons.Play,
@@ -392,16 +392,16 @@ private fun RecordingRow(state: EditorState, recorder: RecorderState, item: Audi
             tint = colors.icon,
             modifier = Modifier.size(20.dp),
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(Spacing.S14))
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.recorder_item, number), color = colors.title, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text("${clockText(item.durationMs)}  |  $date", color = colors.label, fontSize = 12.sp)
+            Text(stringResource(R.string.recorder_item, number), color = colors.title, fontSize = TextSize.S14, fontWeight = FontWeight.Medium)
+            Text("${clockText(item.durationMs)}  |  $date", color = colors.label, fontSize = TextSize.S12)
         }
         Box {
             ToolbarIcon(EditorIcons.More, stringResource(R.string.editor_more), onClick = { menu = true })
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.recorder_delete), fontSize = 14.sp) },
+                    text = { Text(stringResource(R.string.recorder_delete), fontSize = TextSize.S14) },
                     onClick = {
                         menu = false
                         recorder.stopPlaying()
@@ -428,26 +428,26 @@ internal fun RecordingControls(state: EditorState, recorder: RecorderState, modi
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(PillHeight)
-                .shadow(4.dp, CircleShape, clip = false)
-                .clip(CircleShape)
+                .shadow(4.dp, AppShapes.Circle, clip = false)
+                .clip(AppShapes.Circle)
                 .background(colors.pill)
                 .clickable(role = Role.Button) { state.select(ActiveTool.PEN) },
         ) {
             Icon(EditorIcons.Pen, stringResource(R.string.tool_pen), tint = colors.icon, modifier = Modifier.size(24.dp))
         }
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(Spacing.S10))
         Pill {
             Text(
                 clockText(recorder.elapsedMs),
-                color = RECORDING_COLOR,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(horizontal = 10.dp),
+                color = UiColors.RecorderRecording,
+                fontSize = TextSize.S14,
+                modifier = Modifier.padding(horizontal = Spacing.S10),
             )
-            ToolbarIcon(EditorIcons.StopCircle, stringResource(R.string.recorder_stop), tintOverride = RECORDING_COLOR, onClick = recorder::stop)
+            ToolbarIcon(EditorIcons.StopCircle, stringResource(R.string.recorder_stop), tintOverride = UiColors.RecorderRecording, onClick = recorder::stop)
             ToolbarIcon(
                 if (recorder.paused) EditorIcons.Play else EditorIcons.Pause,
                 stringResource(R.string.recorder_pause),
-                tintOverride = RECORDING_COLOR,
+                tintOverride = UiColors.RecorderRecording,
                 onClick = recorder::togglePause,
             )
         }
@@ -461,15 +461,15 @@ internal fun StopRecordingButton(recorder: RecorderState) {
         contentAlignment = Alignment.Center,
         modifier = Modifier.size(ToolbarCell, PillHeight).tappable(radius = 20.dp, onClick = recorder::stop),
     ) {
-        Box(Modifier.size(32.dp).background(RECORDING_COLOR, CircleShape))
-        Box(Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF25282D)))
+        Box(Modifier.size(32.dp).background(UiColors.RecorderRecording, AppShapes.Circle))
+        Box(Modifier.size(12.dp).clip(AppShapes.Rounded2).background(UiColors.RecorderStop))
     }
 }
 
 /** The dot on the right pill that says the microphone is on. */
 @Composable
 internal fun RecordingDot(modifier: Modifier = Modifier) {
-    Box(modifier.offset(x = (-6).dp, y = 8.dp).size(7.dp).background(Color(0xFF1DD05D), CircleShape))
+    Box(modifier.offset(x = (-6).dp, y = 8.dp).size(7.dp).background(UiColors.MicrophoneOn, AppShapes.Circle))
 }
 
 private fun clockText(ms: Long): String {
@@ -477,7 +477,6 @@ private fun clockText(ms: Long): String {
     return "%02d:%02d".format(seconds / 60L, seconds % 60L)
 }
 
-private val RECORDING_COLOR = Color(0xFFFFB0A6)
 private val MENU_WIDTH = 340.dp
 private val MENU_MAX_HEIGHT = 540.dp
 private const val CLOCK_STEP_MS = 500L

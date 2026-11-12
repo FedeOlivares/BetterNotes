@@ -14,10 +14,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.fonts.FontLibrary
 import app.betternotes.fonts.rememberFontPicker
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 
 /**
  * The fonts that were added, each written in itself, and the button that adds one from a .ttf or .otf file, and the one that draws a font.
@@ -33,9 +35,9 @@ internal fun FontsCard(drawFont: (String?) -> Unit) {
             Text(
                 stringResource(R.string.settings_fonts_choose),
                 color = colors.accent,
-                fontSize = 19.5.sp,
+                fontSize = TextSize.S19_5,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(8.dp),
+                modifier = Modifier.padding(Spacing.S8),
             )
         }
         SettingRow(
@@ -46,19 +48,19 @@ internal fun FontsCard(drawFont: (String?) -> Unit) {
             Text(
                 stringResource(R.string.settings_fonts_draw),
                 color = colors.accent,
-                fontSize = 19.5.sp,
+                fontSize = TextSize.S19_5,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(8.dp),
+                modifier = Modifier.padding(Spacing.S8),
             )
         }
-        Text(stringResource(R.string.settings_fonts_included), color = colors.secondary, fontSize = 15.sp, modifier = Modifier.padding(bottom = 10.dp))
+        Text(stringResource(R.string.settings_fonts_included), color = colors.secondary, fontSize = TextSize.S15, modifier = Modifier.padding(bottom = Spacing.S10))
         val names = FontLibrary.names.filter { !FontLibrary.isBuiltIn(it) }
         if (names.isEmpty()) {
             Text(
                 stringResource(R.string.settings_fonts_none),
                 color = colors.secondary,
-                fontSize = 15.sp,
-                modifier = Modifier.padding(bottom = 14.dp),
+                fontSize = TextSize.S15,
+                modifier = Modifier.padding(bottom = Spacing.S14),
             )
         }
         for (name in names) {
@@ -66,7 +68,7 @@ internal fun FontsCard(drawFont: (String?) -> Unit) {
                 Text(
                     name,
                     color = colors.text,
-                    fontSize = 21.sp,
+                    fontSize = TextSize.S21,
                     fontFamily = FontLibrary.family(name, bold = false, italic = false) ?: FontFamily.Default,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -76,17 +78,17 @@ internal fun FontsCard(drawFont: (String?) -> Unit) {
                     Text(
                         stringResource(R.string.settings_fonts_edit),
                         color = colors.accent,
-                        fontSize = 19.5.sp,
+                        fontSize = TextSize.S19_5,
                         fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable { drawFont(name) }.padding(8.dp),
+                        modifier = Modifier.clickable { drawFont(name) }.padding(Spacing.S8),
                     )
                 }
                 Text(
                     stringResource(R.string.settings_fonts_remove),
                     color = colors.accent,
-                    fontSize = 19.5.sp,
+                    fontSize = TextSize.S19_5,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { FontLibrary.remove(name) }.padding(8.dp),
+                    modifier = Modifier.clickable { FontLibrary.remove(name) }.padding(Spacing.S8),
                 )
             }
         }

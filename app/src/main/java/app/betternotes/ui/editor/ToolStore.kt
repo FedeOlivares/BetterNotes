@@ -29,6 +29,7 @@ import app.betternotes.core.tools.TableOptions
 import app.betternotes.core.model.TapePattern
 import app.betternotes.core.tools.TapeLineMode
 import app.betternotes.core.tools.TapeOptions
+import app.betternotes.ui.theme.Swatches
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -209,10 +210,10 @@ internal class ToolStore(context: Context) {
         }
     }
 
-    /** The same for the highlighter, eraser, lasso, text and sticker tools, each on its own. Untouched, it is on and immediate, except the highlighter and the eraser, which are off. */
+    /** The same for the highlighter, eraser, lasso, text, tape and sticker tools, each on its own. Untouched, it is on and immediate, except the highlighter and the eraser, which are off, and the tape, which waits a second. */
     fun toolReturn(tool: ActiveTool) = ToolReturn(
         prefs.getBoolean("return_${tool.name}", tool != ActiveTool.HIGHLIGHTER && tool != ActiveTool.ERASER),
-        prefs.getInt("return_delay_${tool.name}", 0),
+        prefs.getInt("return_delay_${tool.name}", if (tool == ActiveTool.TAPE) TAPE_RETURN_TENTHS else 0),
     )
 
     fun saveToolReturn(tool: ActiveTool, choice: ToolReturn) {
@@ -326,6 +327,7 @@ internal class ToolStore(context: Context) {
                 strikethrough = json.getBoolean("strike"),
                 align = HorizontalAlign.valueOf(json.getString("align")),
                 verticalAlign = VerticalAlign.valueOf(json.getString("verticalAlign")),
+                backgroundColor = json.optInt("backgroundColor", 0),
                 list = json.optJSONObject("list")?.let { list ->
                     ListStyle(
                         kind = runCatching { ListKind.valueOf(list.getString("kind")) }.getOrDefault(ListKind.BULLET),
@@ -335,6 +337,7 @@ internal class ToolStore(context: Context) {
                     ).clamped()
                 },
             ),
+            textColor = json.optInt("textColor", NoteOptions.TEXT_COLOR),
             keepOpen = json.optBoolean("keepOpen", false),
             colorOpacity = json.optJSONArray("colorOpacity")?.let { pairs ->
                 (0 until pairs.length()).associate { pairs.getJSONArray(it).let { pair -> pair.getInt(0) to pair.getDouble(1).toFloat() } }
@@ -354,6 +357,8 @@ internal class ToolStore(context: Context) {
             put("align", options.style.align.name)
             put("verticalAlign", options.style.verticalAlign.name)
             put("keepOpen", options.keepOpen)
+            put("textColor", options.textColor)
+            put("backgroundColor", options.style.backgroundColor)
             options.style.list?.let { list ->
                 put(
                     "list",
@@ -510,6 +515,9 @@ internal class ToolStore(context: Context) {
     private fun JSONArray.kinds() = List(length()) { ItemKind.valueOf(getString(it)) }.toSet()
 
     private companion object {
+        /** The tape waits a second, in tenths, before the tool in use before comes back. */
+        const val TAPE_RETURN_TENTHS = 10
+
         const val KEY_ERASER = "eraser"
         const val KEY_LASSO = "lasso"
         const val KEY_SHAPE = "shape"
@@ -528,18 +536,9 @@ internal class ToolStore(context: Context) {
         const val KEY_PATTERN_COLOR = "fill_pattern_color"
         const val KEY_PATTERN_SPACING = "fill_pattern_spacing"
         const val KEY_PATTERN_WEIGHT = "fill_pattern_weight"
-        val DEFAULT_PATTERN_COLOR = 0xFF000000.toInt()
-        val DEFAULT_FILL_COLOR = 0xFFFFD54F.toInt()
-        val DEFAULT_FILL_COLORS = listOf(
-            0xFFE57373.toInt(),
-            0xFFFFB74D.toInt(),
-            0xFFFFD54F.toInt(),
-            0xFF81C784.toInt(),
-            0xFF64B5F6.toInt(),
-            0xFFBA68C8.toInt(),
-            0xFF90A4AE.toInt(),
-            0xFF25282D.toInt(),
-        )
+        val DEFAULT_PATTERN_COLOR = Swatches.PATTERN_DEFAULT
+        val DEFAULT_FILL_COLOR = Swatches.FILL_DEFAULT
+        val DEFAULT_FILL_COLORS = Swatches.Fill
         const val KEY_TOOLBAR_EDGE = "toolbar_edge"
         const val KEY_FILL_RETURN = "fill_return"
         const val KEY_FILL_RETURN_DELAY = "fill_return_delay"

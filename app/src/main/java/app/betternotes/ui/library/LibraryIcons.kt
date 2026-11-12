@@ -1,12 +1,12 @@
 package app.betternotes.ui.library
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
+import app.betternotes.ui.theme.UiColors
 
 private const val STROKE = 1.5f
 private const val STAR = "M12 3.4l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6-4.4-4.2 6-.8z"
@@ -17,13 +17,13 @@ private fun icon(name: String, outline: String? = null, filled: String? = null) 
         if (outline != null) {
             addPath(
                 pathData = addPathNodes(outline),
-                stroke = SolidColor(Color.Black),
+                stroke = SolidColor(UiColors.IconMask),
                 strokeLineWidth = STROKE,
                 strokeLineCap = StrokeCap.Round,
                 strokeLineJoin = StrokeJoin.Round,
             )
         }
-        if (filled != null) addPath(pathData = addPathNodes(filled), fill = SolidColor(Color.Black))
+        if (filled != null) addPath(pathData = addPathNodes(filled), fill = SolidColor(UiColors.IconMask))
     }.build()
 
 private fun dot(x: Float, y: Float, radius: Float) =

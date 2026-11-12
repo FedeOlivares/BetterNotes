@@ -284,7 +284,11 @@ data class TextStyle(
     val font: String = "",
     /** Null is a text that is not a list. */
     val list: ListStyle? = null,
-)
+    /** The fill behind the text box, as ARGB; an alpha of 0 is no fill. */
+    val backgroundColor: Int = 0,
+) {
+    val hasBackground get() = backgroundColor ushr 24 != 0
+}
 
 /**
  * How a part of a text differs from the text as a whole: a field left null keeps what the text box itself says.
@@ -298,8 +302,10 @@ data class SpanLook(
     val size: Float? = null,
     /** An added font by name, or empty for the app's own font; null keeps the text's. */
     val font: String? = null,
+    /** The color of these letters, as ARGB; null keeps the color of the text box. */
+    val color: Int? = null,
 ) {
-    val isPlain get() = bold == null && italic == null && underline == null && strikethrough == null && size == null && font == null
+    val isPlain get() = bold == null && italic == null && underline == null && strikethrough == null && size == null && font == null && color == null
 }
 
 /** The letters from [start] up to [end], counted in characters of the text, that look as [look] says. */
@@ -339,6 +345,20 @@ data class TextItem(
 
 /** Changing the parts of a text that look different, one character at a time, then joining what looks alike. */
 object TextSpans {
+    /**
+     * The characters of [new] that were typed in, found as what lies between the text [old] shares with it at the start and at the end, or
+     * null when nothing was added. A text that was only cut or left as it was adds nothing.
+     */
+    fun inserted(old: String, new: String): IntRange? {
+        if (new.length <= old.length) return null
+        var head = 0
+        while (head < old.length && old[head] == new[head]) head++
+        var tail = 0
+        while (tail < old.length - head && old[old.length - 1 - tail] == new[new.length - 1 - tail]) tail++
+        val end = new.length - tail
+        return if (end > head) head until end else null
+    }
+
     /** The look of each of the [length] characters. */
     fun looks(spans: List<TextSpan>, length: Int): Array<SpanLook> {
         val looks = Array(length) { SpanLook() }

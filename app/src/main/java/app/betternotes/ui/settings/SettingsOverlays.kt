@@ -18,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.betternotes.canvas.CanvasView
@@ -26,12 +25,12 @@ import app.betternotes.core.template.CustomLayout
 import app.betternotes.core.template.changeAppearance
 import app.betternotes.search.DocumentSearch
 import app.betternotes.settings.SettingsRepository
+import app.betternotes.ui.theme.UiColors
 
 /** What the settings UI is showing over the editor, if anything. */
 enum class SettingsOverlay { SCREEN, STYLUS_FINGER, TEMPLATE, EXPORT, SEARCH }
 
 /** The dimming behind a sheet, measured from the reference. */
-private val Scrim = Color(0x54000000)
 
 private val StylusSheetWidth = 770.dp
 private val StylusSheetTop = 100.dp
@@ -127,7 +126,7 @@ private fun SheetFrame(width: Dp, top: Dp, bottom: Dp, onDismiss: () -> Unit, sh
     Box(
         Modifier
             .fillMaxSize()
-            .background(Scrim)
+            .background(UiColors.ScrimLight)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
         contentAlignment = Alignment.TopCenter,
     ) {

@@ -10,7 +10,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -18,12 +17,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -81,6 +77,11 @@ import app.betternotes.settings.SettingsRepository
 import app.betternotes.settings.actionFor
 import app.betternotes.ui.settings.SettingsOverlay
 import app.betternotes.ui.settings.SettingsOverlayHost
+import app.betternotes.ui.theme.AppFonts
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -638,16 +639,16 @@ internal fun backdropOf(theme: ThemeMode) =
 
 @androidx.compose.runtime.Composable
 private fun PerfReadout(text: String) {
-    Box(Modifier.padding(12.dp), contentAlignment = Alignment.BottomStart) {
+    Box(Modifier.padding(Spacing.S12), contentAlignment = Alignment.BottomStart) {
         Text(
             text,
-            color = Color(0xFFB8F0C0),
-            fontSize = 11.sp,
-            lineHeight = 13.sp,
-            fontFamily = FontFamily.Monospace,
+            color = UiColors.PerfText,
+            fontSize = TextSize.S11,
+            lineHeight = TextSize.S13,
+            fontFamily = AppFonts.Mono,
             modifier = Modifier
-                .background(Color(0xE01C1E22), RoundedCornerShape(8.dp))
-                .padding(8.dp),
+                .background(UiColors.PerfBack, AppShapes.Rounded8)
+                .padding(Spacing.S8),
         )
     }
 }

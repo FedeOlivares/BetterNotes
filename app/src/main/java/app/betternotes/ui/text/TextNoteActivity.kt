@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -34,10 +33,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import app.betternotes.R
 import app.betternotes.core.edit.ItemsEdit
@@ -49,9 +46,13 @@ import app.betternotes.library.LibraryPreferences
 import app.betternotes.library.LibraryRepository
 import app.betternotes.ui.library.LibraryIcons
 import app.betternotes.ui.requestHighestRefreshRate
+import app.betternotes.ui.theme.AppFonts
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.AppTheme
 import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.ReferenceScale
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -171,20 +172,20 @@ private fun TextNoteScreen(
     Column(Modifier.fillMaxSize().background(colors.background).imePadding()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, top = 62.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = Spacing.S22, end = Spacing.S22, top = 62.dp),
         ) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(66.dp).clip(CircleShape).background(colors.surface).clickable(onClick = onBack),
+                modifier = Modifier.size(66.dp).clip(AppShapes.Circle).background(colors.surface).clickable(onClick = onBack),
             ) {
                 Icon(LibraryIcons.Back, stringResource(R.string.library_back), tint = colors.title, modifier = Modifier.size(30.dp))
             }
             HintedField(
                 title,
                 stringResource(R.string.text_note_title),
-                TextStyle(colors.greeting, 41.sp, FontWeight.SemiBold, fontFamily = FontFamily.Serif),
+                TextStyle(colors.greeting, TextSize.S41, FontWeight.SemiBold, fontFamily = AppFonts.Display),
                 cursor,
-                Modifier.padding(start = 20.dp).weight(1f),
+                Modifier.padding(start = Spacing.S20).weight(1f),
             ) {
                 title = it
                 onTitle(it)
@@ -193,13 +194,13 @@ private fun TextNoteScreen(
         HintedField(
             body,
             stringResource(R.string.text_note_body),
-            TextStyle(colors.title, 24.sp, lineHeight = 34.sp),
+            TextStyle(colors.title, TextSize.S24, lineHeight = TextSize.S34),
             cursor,
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(start = 108.dp, end = 108.dp, top = 28.dp, bottom = 60.dp),
+                .padding(start = 108.dp, end = 108.dp, top = Spacing.S28, bottom = 60.dp),
         ) {
             body = it
             onBody(it)

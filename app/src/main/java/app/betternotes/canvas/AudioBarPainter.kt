@@ -6,6 +6,7 @@ import android.graphics.Path
 import android.graphics.RectF
 import app.betternotes.core.model.AudioBar
 import app.betternotes.core.model.AudioItem
+import app.betternotes.ui.theme.CanvasColors
 
 /** Plays, stops and seeks the recordings on the page. */
 internal interface AudioPlayback {
@@ -23,17 +24,17 @@ internal interface AudioPlayback {
 
 /** Draws a recording as a bar over the page: play button, waveform that fills as it plays, and the fold control. */
 internal class AudioBarPainter {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFF4F5F8.toInt() }
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CanvasColors.AUDIO_FILL_LIGHT }
     private val edge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = 0xFFC9CDD6.toInt()
+        color = CanvasColors.AUDIO_EDGE_LIGHT
     }
     private val button = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = ACCENT }
-    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CanvasColors.AUDIO_GLYPH }
     private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeCap = Paint.Cap.ROUND }
     private val arrow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = 0xFF6B7280.toInt()
+        color = CanvasColors.AUDIO_ARROW_LIGHT
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
@@ -42,9 +43,9 @@ internal class AudioBarPainter {
 
     /** [left] and [top] are where the bar starts on screen, and [scale] is pixels per point. */
     fun draw(canvas: Canvas, item: AudioItem, left: Float, top: Float, scale: Float, playing: Boolean, fraction: Float, wave: FloatArray?, dark: Boolean) {
-        fill.color = if (dark) 0xFF2B2E36.toInt() else 0xFFF4F5F8.toInt()
-        edge.color = if (dark) 0xFF4D525E.toInt() else 0xFFC9CDD6.toInt()
-        arrow.color = if (dark) 0xFFB4BAC6.toInt() else 0xFF6B7280.toInt()
+        fill.color = if (dark) CanvasColors.AUDIO_FILL_DARK else CanvasColors.AUDIO_FILL_LIGHT
+        edge.color = if (dark) CanvasColors.AUDIO_EDGE_DARK else CanvasColors.AUDIO_EDGE_LIGHT
+        arrow.color = if (dark) CanvasColors.AUDIO_ARROW_DARK else CanvasColors.AUDIO_ARROW_LIGHT
         val frame = item.frame
         val width = frame.width * scale
         val height = frame.height * scale
@@ -104,13 +105,13 @@ internal class AudioBarPainter {
         for (i in 0 until count) {
             val x = start + (i + 0.5f) * step
             val level = wave?.get(i) ?: FLAT_LEVEL
-            bar.color = if ((i + 0.5f) / count <= fraction) ACCENT else if (dark) 0xFF6B7180.toInt() else 0xFFB6BBC7.toInt()
+            bar.color = if ((i + 0.5f) / count <= fraction) ACCENT else if (dark) CanvasColors.AUDIO_WAVE_IDLE_DARK else CanvasColors.AUDIO_WAVE_IDLE_LIGHT
             canvas.drawLine(x, cy - level * maxHalf, x, cy + level * maxHalf, bar)
         }
     }
 
     private companion object {
-        const val ACCENT = 0xFF3B6FF5.toInt()
+        const val ACCENT = CanvasColors.AUDIO_ACCENT
         const val FLAT_BARS = 48
         const val FLAT_LEVEL = 0.08f
     }

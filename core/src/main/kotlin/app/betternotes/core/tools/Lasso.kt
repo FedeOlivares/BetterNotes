@@ -52,8 +52,9 @@ class Selection(
  * at least half of it is inside, so a slightly sloppy lasso still works. Anything else is selected
  * if its center is inside. With [fullOnly], all of the item must be inside. With [anyPortion], an item is selected
  * if any part of it is inside, even when the lasso only crosses it. Only items of [kinds] count, and locked ones only with [includeLocked].
- * On a cover page, pass its size as [coverSize]: its background (see [isCoverBackground]) is never selected, locked or not,
- * so the large color shape does not get in the way while the cover is designed.
+ * On a cover page, pass its size as [coverSize]: its background (see [isCoverBackground]) is never selected by a loop, locked or not, whatever
+ * the lasso's settings are, so the large color shape does not get in the way while the cover is designed. The background is selected only by
+ * holding a touch on it.
  */
 fun selectWithLasso(
     pageId: Long,
@@ -78,11 +79,19 @@ fun selectWithLasso(
     return Selection(pageId, indices.toIntArray(), items)
 }
 
-/** The large shape that colors a whole cover page: it reaches every edge of the page. */
+/**
+ * The large shape that colors a whole cover page: it reaches every edge of the page, or all but a sliver of each edge (as a background that
+ * is a little short of the page, or a little turned, does).
+ */
 fun PageItem.isCoverBackground(size: PageSize): Boolean {
     val box = bounds
-    return box.left <= 0f && box.top <= 0f && box.right >= size.widthPt && box.bottom >= size.heightPt
+    val slackX = size.widthPt * COVER_EDGE_SLACK
+    val slackY = size.heightPt * COVER_EDGE_SLACK
+    return box.left <= slackX && box.top <= slackY && box.right >= size.widthPt - slackX && box.bottom >= size.heightPt - slackY
 }
+
+/** How far short of a page's edge, as a share of the page, a cover's background may stop and still be the background. */
+private const val COVER_EDGE_SLACK = 0.01f
 
 /** Whether every point of the loop [polygon] lies inside [box], so that the loop never leaves it. */
 fun polygonWithin(polygon: FloatArray, box: Bounds): Boolean {

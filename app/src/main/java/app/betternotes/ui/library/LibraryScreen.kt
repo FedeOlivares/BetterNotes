@@ -28,8 +28,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -65,14 +63,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -93,9 +89,13 @@ import app.betternotes.settings.SettingsRepository
 import app.betternotes.ui.settings.SettingsScreen
 import app.betternotes.ui.settings.SettingsTheme
 import app.betternotes.ui.theme.AppColors
+import app.betternotes.ui.theme.AppFonts
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalAppColors
 import app.betternotes.ui.theme.ThemeMode
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.opensFrom
 import app.betternotes.ui.theme.isCompactScreen
 import kotlinx.coroutines.launch
@@ -122,7 +122,6 @@ private const val BREADCRUMB_FOLDERS = 3
 
 private val BreadcrumbMaxWidth = 620.dp
 private val RowGap = 12.dp
-private val MenuShape = RoundedCornerShape(24.dp)
 
 /** From the circled "..." to the menu's top right corner, measured on the reference. */
 private val MenuOffsetX = 19.dp
@@ -389,7 +388,7 @@ internal fun LibraryScreen(
                 repository,
                 onMove = { dialog = PendingDialog.Move(chosen) },
                 onDone = { selection = null },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 17.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = Spacing.S17),
             )
         }
         HomePill(
@@ -398,7 +397,7 @@ internal fun LibraryScreen(
                 query = null
                 shelf = Top
             },
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = SideMargin, bottom = 18.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = SideMargin, bottom = Spacing.S18),
         )
         if (adding) {
             NewItemPanel(
@@ -411,7 +410,7 @@ internal fun LibraryScreen(
         // The sheet on a phone covers it, as in the reference.
         if (!(adding && compact)) AddButton(
             onClick = { adding = !adding },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = 17.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = SideMargin, bottom = Spacing.S17),
         )
     }
 
@@ -590,10 +589,10 @@ private fun Header(
         Text(
             greeting(preferences.userName, nowMs),
             color = colors.greeting,
-            fontFamily = FontFamily.Serif,
+            fontFamily = AppFonts.Display,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 41.sp,
-            lineHeight = 56.sp,
+            fontSize = TextSize.S41,
+            lineHeight = TextSize.S56,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.offset(y = 144.dp),
@@ -601,15 +600,15 @@ private fun Header(
         Text(
             stringResource(if (isLateNight(nowMs)) R.string.library_subtitle_night else R.string.library_subtitle),
             color = colors.subtitle,
-            fontSize = 18.sp,
-            lineHeight = 24.sp,
+            fontSize = TextSize.S18,
+            lineHeight = TextSize.S24,
             letterSpacing = 0.05.em,
             maxLines = 1,
             modifier = Modifier.offset(y = 206.dp),
         )
         Row(Modifier.align(Alignment.TopEnd).offset(y = 62.dp), verticalAlignment = Alignment.CenterVertically) {
             SearchControl(query, onQuery, Modifier)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(Spacing.S12))
             SettingsButton(onSettings)
         }
         FilterRow(shelf, query != null, onShelf, library, Modifier.offset(y = 257.dp))
@@ -649,9 +648,9 @@ private fun SettingsButton(onClick: () -> Unit) {
     Box(
         Modifier
             .size(66.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(colors.surface)
-            .border(1.5.dp, colors.border, CircleShape),
+            .border(1.5.dp, colors.border, AppShapes.Circle),
     ) {
         IconButton(LibraryIcons.Settings, stringResource(R.string.library_settings), colors.title, 66.dp, onClick)
     }
@@ -665,18 +664,18 @@ private fun SearchControl(query: String?, onQuery: (String?) -> Unit, modifier: 
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .height(66.dp)
-            .clip(RoundedCornerShape(33.dp))
+            .clip(AppShapes.Rounded33)
             .background(colors.surface)
-            .border(1.5.dp, colors.border, RoundedCornerShape(33.dp)),
+            .border(1.5.dp, colors.border, AppShapes.Rounded33),
     ) {
         if (query != null) {
             BasicTextField(
                 value = query,
                 onValueChange = { onQuery(it) },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.title, fontSize = 19.sp),
+                textStyle = TextStyle(color = colors.title, fontSize = TextSize.S19),
                 cursorBrush = SolidColor(colors.accent),
-                modifier = Modifier.padding(start = 24.dp).size(280.dp, 28.dp),
+                modifier = Modifier.padding(start = Spacing.S24).size(280.dp, 28.dp),
             )
             IconButton(LibraryIcons.Close, stringResource(R.string.library_close_search), colors.strongIcon, 66.dp) {
                 onQuery(null)
@@ -708,14 +707,14 @@ private fun FilterRow(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(88.dp, 49.dp)
-                    .clip(RoundedCornerShape(25.dp))
+                    .clip(AppShapes.Rounded25)
                     .then(if (allSelected) Modifier.background(colors.accentContainer) else Modifier)
                     .clickable { onShelf(Top) },
             ) {
                 Text(
                     stringResource(R.string.library_filter_all),
                     color = if (allSelected) colors.onAccentContainer else colors.icon,
-                    fontSize = 20.sp,
+                    fontSize = TextSize.S20,
                 )
             }
         }
@@ -756,23 +755,23 @@ private fun Breadcrumb(path: List<LibraryEntry>, onShelf: (LibraryView) -> Unit)
         modifier = Modifier
             .height(49.dp)
             .widthIn(max = BreadcrumbMaxWidth)
-            .clip(RoundedCornerShape(25.dp))
+            .clip(AppShapes.Rounded25)
             .background(colors.accentContainer)
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = Spacing.S14),
     ) {
         Icon(
             LibraryIcons.Home,
             stringResource(R.string.library_home),
             tint = colors.onAccentContainer,
-            modifier = Modifier.size(28.dp).clip(CircleShape).clickable { onShelf(Top) },
+            modifier = Modifier.size(28.dp).clip(AppShapes.Circle).clickable { onShelf(Top) },
         )
         // A deep path keeps its last folders, which are the ones that say where this is.
         for (folder in path.takeLast(BREADCRUMB_FOLDERS)) {
-            Icon(LibraryIcons.Chevron, null, tint = colors.onAccentContainer, modifier = Modifier.padding(horizontal = 4.dp).size(20.dp))
+            Icon(LibraryIcons.Chevron, null, tint = colors.onAccentContainer, modifier = Modifier.padding(horizontal = Spacing.S4).size(20.dp))
             Text(
                 folder.name,
                 color = colors.onAccentContainer,
-                fontSize = 20.sp,
+                fontSize = TextSize.S20,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false).clickable { onShelf(LibraryView.InFolder(folder.id)) },
@@ -789,7 +788,7 @@ private fun FilterIcon(icon: ImageVector, label: Int, selected: Boolean, onClick
         modifier = Modifier
             .padding(start = if (selected) 4.dp else 0.dp, end = if (selected) 4.dp else 0.dp)
             .size(if (selected) 66.dp else 50.dp, 49.dp)
-            .clip(RoundedCornerShape(25.dp))
+            .clip(AppShapes.Rounded25)
             .then(if (selected) Modifier.background(colors.accentContainer) else Modifier)
             .clickable(onClick = onClick),
     ) {
@@ -834,10 +833,10 @@ private fun OptionsMenu(
                 .opensFrom(OpenFrom.TopEnd)
                 // Across the screen on a phone.
                 .then(if (compact) Modifier.padding(horizontal = SideMargin).fillMaxWidth() else Modifier.width(274.dp))
-                .padding(bottom = 12.dp)
-                .shadow(12.dp, MenuShape)
-                .background(colors.surface, MenuShape)
-                .clip(MenuShape),
+                .padding(bottom = Spacing.S12)
+                .shadow(12.dp, AppShapes.LibraryMenu)
+                .background(colors.surface, AppShapes.LibraryMenu)
+                .clip(AppShapes.LibraryMenu),
         ) {
             OptionRow(LibraryIcons.CheckCircle, stringResource(R.string.library_select), height = 64.dp, onClick = choose(onSelect))
             OptionDivider()
@@ -902,12 +901,12 @@ private fun OptionRow(
             .fillMaxWidth()
             .height(height)
             .clickable(onClick = onClick)
-            .padding(start = 17.dp, end = 18.dp),
+            .padding(start = Spacing.S17, end = Spacing.S18),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(26.dp))
-        Column(Modifier.padding(start = 15.dp).weight(1f)) {
-            Text(label, color = tint, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            if (detail != null) Text(detail, color = colors.subtitle, fontSize = 16.sp, maxLines = 1)
+        Column(Modifier.padding(start = Spacing.S15).weight(1f)) {
+            Text(label, color = tint, fontSize = TextSize.S20, fontWeight = FontWeight.Medium, maxLines = 1)
+            if (detail != null) Text(detail, color = colors.subtitle, fontSize = TextSize.S16, maxLines = 1)
         }
         if (chosen) Icon(LibraryIcons.Check, null, tint = tint, modifier = Modifier.size(24.dp))
     }
@@ -917,7 +916,7 @@ private fun OptionRow(
 private fun OptionDivider() {
     Box(
         Modifier
-            .padding(horizontal = 14.dp)
+            .padding(horizontal = Spacing.S14)
             .fillMaxWidth()
             .height(1.dp)
             .background(LocalAppColors.current.border),
@@ -943,16 +942,16 @@ private fun SelectionBar(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .height(66.dp)
-            .clip(RoundedCornerShape(33.dp))
+            .clip(AppShapes.Rounded33)
             .background(colors.surface)
-            .border(1.5.dp, colors.pillBorder, RoundedCornerShape(33.dp))
-            .padding(horizontal = 12.dp),
+            .border(1.5.dp, colors.pillBorder, AppShapes.Rounded33)
+            .padding(horizontal = Spacing.S12),
     ) {
         Text(
             pluralStringResource(R.plurals.library_selected_count, chosen.size, chosen.size),
             color = colors.title,
-            fontSize = 19.sp,
-            modifier = Modifier.padding(start = 12.dp, end = 12.dp),
+            fontSize = TextSize.S19,
+            modifier = Modifier.padding(start = Spacing.S12, end = Spacing.S12),
         )
         if (chosen.isNotEmpty()) {
             if (inBin) {
@@ -977,7 +976,7 @@ private fun SelectionBar(
 private fun IconButton(icon: ImageVector, description: String, tint: Color, size: Dp, onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(size).clip(CircleShape).clickable(onClick = onClick),
+        modifier = Modifier.size(size).clip(AppShapes.Circle).clickable(onClick = onClick),
     ) {
         Icon(icon, description, tint = tint, modifier = Modifier.size(30.dp))
     }
@@ -991,15 +990,15 @@ private fun HomePill(selected: Boolean, onClick: () -> Unit, modifier: Modifier)
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(91.dp, 64.dp)
-            .clip(RoundedCornerShape(32.dp))
+            .clip(AppShapes.Rounded32)
             .background(colors.surface)
-            .border(1.5.dp, colors.pillBorder, RoundedCornerShape(32.dp)),
+            .border(1.5.dp, colors.pillBorder, AppShapes.Rounded32),
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(69.dp, 48.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(AppShapes.Rounded24)
                 .then(if (selected) Modifier.background(colors.accentContainer) else Modifier)
                 .clickable(onClick = onClick),
         ) {
@@ -1020,7 +1019,7 @@ private fun AddButton(onClick: () -> Unit, modifier: Modifier) {
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(66.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(colors.accent)
             .clickable(onClick = onClick),
     ) {

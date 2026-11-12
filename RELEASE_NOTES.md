@@ -1,3 +1,23 @@
+# Better Notes 2.5.0 — Release Notes
+
+Text colors, one color picker everywhere, steadier gestures around text and post-its, and a cleaned-up code base.
+
+- Text colors: the text row has color circles (black, blue, white, and a + for the color wheel). The color follows the selection: single letters, the whole box, or the next text you type. A text box's background color is in the text tool's settings.
+- Writing in a text box: scribbling over typed letters rubs out only those letters. Tapping away in the middle of writing lets the last words land, then closes the box, and the tool in use before (or the pen) comes back. Double tapping opens a box for editing without its handles, and typing again drops the handles. While a box is open the pen always writes, including in the strip around the box that used to be dead.
+- Undo: each block of handwriting you write is one undo step (after a 1.5 second pause), and keyboard typing is grouped the same way. Undo and redo no longer stop at a post-it opening or closing.
+- Color pickers: every color wheel is one sheet with a hex code field and Cancel and Done. Every fixed set of colors ends in a + circle that opens it: shape and tape colors, post-it colors, folders, covers, planner colors, paper colors, the layout builder and the template sheet.
+- Selecting: a loop with the lasso round the hanging part of an item that sticks out of a post-it grabs the item. A cover's background is selected only by holding on it, never by a loop. Circle to lasso works over post-its. The post-it's close corner is 60 percent bigger.
+- Finger in scroll mode never draws: with something selected and unlocked it moves or resizes the selection, and otherwise it moves the page (a locked selection moves the page).
+- Tape returns to the previous tool (on, 1 second by default), and every tool that gives the earlier tool back goes to the pen when there is none.
+- Code: the colors, shapes, text sizes and spacing of the app are now defined in one place. This was meant to change nothing you see.
+- Notebooks that use a text box background color are saved at page format 16, and those with per-letter colors at 17. A page uses them only when it needs them, other pages keep their bytes, and older notebooks open as before. Older versions of the app cannot open pages saved at 16 or 17.
+- Known limits: handwriting written from right to left is not recognized as text (a limit of the recognizer), and closing a post-it that folds items into it still reopens when undone.
+- Tried on the Pad 7 for this release: the fix for text drawn twice behind an open box, and holding to select a cover's background. Both worked.
+- Not hand-tested on the Pad 7: holding to select a locked item, a tiny loop over an overhanging item, moving an image with a finger, a finger tap away from a selection, the return to the pen for the highlighter, eraser, lasso, text and sticker tools one by one, and opening a notebook with tape as the first tool. The rest of the text work was tried on the Pad 7 while it was made, and I did not repeat those checks for this release. The code cleanup has no visual check on the Pad. See the 2.4.0 notes below for what was and was not tested there.
+- Still true from earlier: three connected tests fail on the Pad 7 and are not confirmed with a real pen (aStylusStrokeKeepsPressure, aSavedStrokeMeshesTheSameAsTheOneJustDrawn and holdingThePenStillStraightens), and the lint error at PlannerMenus.kt line 112 remains.
+
+---
+
 # Better Notes 2.4.1 — Release Notes
 
 A privacy notice, and nothing else.

@@ -2,6 +2,7 @@ package app.betternotes.core.tools
 
 import app.betternotes.core.edit.ItemsEdit
 import app.betternotes.core.geometry.Affine
+import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.model.PageContent
 import app.betternotes.core.model.StickyNoteItem
 
@@ -83,13 +84,50 @@ class NoteScope private constructor(
             return if (at < 0) null else open(pageId, page, at)
         }
 
-        /** The top open post-it of [page] that the loop [polygon] lies wholly inside, or -1. */
+        /**
+         * The top open post-it of [page] that the loop [polygon] lies wholly inside, or -1. A loop that crosses the edge of the post-it, or lies
+         * outside it, still belongs to it when it lies wholly inside an item of the post-it that hangs past its edge: the part that hangs out
+         * is as much the post-it's as the rest, and a loop round only that part grabs the item.
+         */
         fun noteHolding(page: PageContent, polygon: FloatArray): Int {
             for (i in page.size - 1 downTo 0) {
                 val note = page[i] as? StickyNoteItem ?: continue
-                if (note.isOpen && page.isEditable(note) && page.isShown(note) && polygonWithin(polygon, note.frame)) return i
+                if (!note.isOpen || !page.isEditable(note) || !page.isShown(note)) continue
+                if (polygonWithin(polygon, note.frame) || withinOverhang(note, polygon)) return i
             }
             return -1
+        }
+
+        /** How far past an item's box a loop round its hanging part may reach and still be round that item, in points. */
+        private const val OVERHANG_SLACK = 6f
+
+        /**
+         * Whether [polygon] is a loop round the part of an item of [note] that hangs past the post-it's edge: every point of it lies in the post-it
+         * or in the box of a hanging item (a little enlarged), and some point lies outside the post-it. A turned post-it has none.
+         */
+        private fun withinOverhang(note: StickyNoteItem, polygon: FloatArray): Boolean {
+            if (note.frame.rotation != 0f || polygon.size < 2) return false
+            val edges = note.frame.bounds
+            val hanging = note.items.mapNotNull { item ->
+                val box = item.paintBounds
+                val inPage = Bounds(box.left + note.frame.left, box.top + note.frame.top, box.right + note.frame.left, box.bottom + note.frame.top)
+                val hangs = inPage.left < edges.left || inPage.top < edges.top || inPage.right > edges.right || inPage.bottom > edges.bottom
+                if (hangs) Bounds(inPage.left - OVERHANG_SLACK, inPage.top - OVERHANG_SLACK, inPage.right + OVERHANG_SLACK, inPage.bottom + OVERHANG_SLACK) else null
+            }
+            if (hanging.isEmpty()) return false
+            var outside = false
+            var i = 0
+            while (i + 1 < polygon.size) {
+                val x = polygon[i]
+                val y = polygon[i + 1]
+                val inFrame = x > edges.left && x < edges.right && y > edges.top && y < edges.bottom
+                if (!inFrame) {
+                    outside = true
+                    if (hanging.none { x >= it.left && x <= it.right && y >= it.top && y <= it.bottom }) return false
+                }
+                i += 2
+            }
+            return outside
         }
     }
 }

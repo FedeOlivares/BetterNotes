@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.view.MotionEvent
 import android.view.ViewGroup
+import app.betternotes.ui.theme.CanvasColors
 import kotlin.math.roundToInt
 
 /**
@@ -28,17 +29,8 @@ class SplitLayout(context: Context) : ViewGroup(context) {
             requestLayout()
         }
 
-    /** The bar's color, and the handle's, as the theme sets them. */
-    var barColor = 0xFF1C1E22.toInt()
-        set(value) {
-            field = value
-            invalidate()
-        }
-    var handleColor = 0xFF8A8F98.toInt()
-        set(value) {
-            field = value
-            invalidate()
-        }
+    private val barColor = CanvasColors.SPLIT_BAR
+    private val handleColor = CanvasColors.SPLIT_HANDLE
 
     /** True for panes side by side, false for one above the other, null to follow the screen's shape (wider than tall: side by side). */
     var sideBySideChoice: Boolean? = null

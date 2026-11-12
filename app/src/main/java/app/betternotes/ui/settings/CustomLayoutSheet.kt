@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -39,7 +37,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.geometry.LengthUnit
 import app.betternotes.core.template.CustomLayout
@@ -50,12 +47,18 @@ import app.betternotes.core.template.strokeColor
 import app.betternotes.core.template.strokeWidth
 import app.betternotes.core.template.withStrokeColor
 import app.betternotes.core.template.withStrokeWidth
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.abs
 import kotlin.math.min
 
-private const val ELEMENT_COLOR = 0xFF55585F.toInt()
+private const val ELEMENT_COLOR = Swatches.LAYOUT_ELEMENT
 private const val DEFAULT_LINE_WIDTH = 0.75f
 private const val DEFAULT_SPACING = 24f
 private const val MIN_ELEMENT_PT = 12f
@@ -65,8 +68,8 @@ private val UNITS = listOf(LengthUnit.PX, LengthUnit.CM, LengthUnit.INCH)
 internal enum class LayoutTool { SELECT, LINE, HIGHLIGHTER, BOX, STICKY, TABLE, RULED }
 
 private const val HIGHLIGHTER_WIDTH = 14f
-private const val HIGHLIGHTER_COLOR = 0x66FFEB3B
-private const val STICKY_COLOR = 0xFFFFE680.toInt()
+private const val HIGHLIGHTER_COLOR = Swatches.LAYOUT_HIGHLIGHTER
+private const val STICKY_COLOR = Swatches.LAYOUT_STICKY
 
 /** The element a drag from (x0, y0) to (x1, y1) makes with this tool, or null when the drag is too small. */
 private fun LayoutTool.draw(x0: Float, y0: Float, x1: Float, y1: Float): LayoutElement? {
@@ -135,11 +138,11 @@ fun CustomLayoutSheet(
         Column(Modifier.fillMaxSize().background(colors.menu)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxWidth().height(84.dp).padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S14),
+                modifier = Modifier.fillMaxWidth().height(84.dp).padding(horizontal = Spacing.S16),
             ) {
                 ChoiceChip(stringResource(R.string.layout_discard), false, ::discard)
-                Spacer(Modifier.width(10.dp))
+                Spacer(Modifier.width(Spacing.S10))
                 TextBox(name, 260.dp, KeyboardType.Text, stringResource(R.string.layout_name)) { name = it }
                 for (unit in UNITS) {
                     ChoiceChip(unitName(unit), builder.unit == unit) {
@@ -154,7 +157,7 @@ fun CustomLayoutSheet(
                     it.toFloatOrNull()?.let { value -> builder.setSize(value, builder.height) }
                     changed()
                 }
-                Text("x", color = colors.text, fontSize = 19.5.sp)
+                Text("x", color = colors.text, fontSize = TextSize.S19_5)
                 TextBox(heightText, 90.dp, KeyboardType.Decimal) {
                     heightText = it
                     it.toFloatOrNull()?.let { value -> builder.setSize(builder.width, value) }
@@ -166,7 +169,7 @@ fun CustomLayoutSheet(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .height(52.dp)
-                        .clip(RoundedCornerShape(26.dp))
+                        .clip(AppShapes.Rounded26)
                         .background(colors.chipSelected)
                         .pointerInput(Unit) {
                             detectTapGestures {
@@ -174,9 +177,9 @@ fun CustomLayoutSheet(
                                 onSave(builder.build())
                             }
                         }
-                        .padding(horizontal = 32.dp),
+                        .padding(horizontal = Spacing.S32),
                 ) {
-                    ShrinkText(stringResource(R.string.layout_confirm), Color.White, 19.5.sp)
+                    ShrinkText(stringResource(R.string.layout_confirm), UiColors.OnFilled, TextSize.S19_5)
                 }
             }
             Row(Modifier.weight(1f).fillMaxWidth()) {
@@ -247,13 +250,13 @@ fun CustomLayoutSheet(
                         Column(
                             Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(16.dp)
+                                .padding(Spacing.S16)
                                 .widthIn(max = 560.dp)
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(AppShapes.Rounded20)
                                 .background(colors.sheet)
                                 .heightIn(max = 260.dp)
                                 .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 24.dp),
+                                .padding(horizontal = Spacing.S24),
                         ) {
                             ElementControls(builder.elements[selected], builder.unit, onChange = {
                                 builder.update(selected, it)
@@ -266,7 +269,7 @@ fun CustomLayoutSheet(
                         }
                     }
                     panel?.let { open ->
-                        Box(Modifier.padding(16.dp)) {
+                        Box(Modifier.padding(Spacing.S16)) {
                             when (open) {
                                 LayoutPanel.BACKGROUND -> BackgroundPanel(layout.paper) {
                                     builder.paper = it
@@ -292,21 +295,21 @@ fun CustomLayoutSheet(
         }
         if (askDiscard) {
             Box(
-                Modifier.fillMaxSize().background(Color(0x99000000)).pointerInput(Unit) { detectTapGestures { } },
+                Modifier.fillMaxSize().background(UiColors.ScrimStrong).pointerInput(Unit) { detectTapGestures { } },
                 contentAlignment = Alignment.Center,
             ) {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(Spacing.S18),
                     modifier = Modifier
                         .opensFrom(OpenFrom.Center)
                         .width(420.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(AppShapes.Rounded24)
                         .background(colors.card)
-                        .padding(28.dp),
+                        .padding(Spacing.S28),
                 ) {
-                    Text(stringResource(R.string.layout_discard_title), color = colors.text, fontSize = 22.sp)
-                    Text(stringResource(R.string.layout_discard_message), color = colors.text, fontSize = 19.5.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                    Text(stringResource(R.string.layout_discard_title), color = colors.text, fontSize = TextSize.S22)
+                    Text(stringResource(R.string.layout_discard_message), color = colors.text, fontSize = TextSize.S19_5)
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S11)) {
                         ChoiceChip(stringResource(R.string.layout_keep_editing), true) { askDiscard = false }
                         ChoiceChip(stringResource(R.string.layout_discard), false, onClose)
                     }
@@ -344,15 +347,15 @@ private fun TextBox(value: String, width: Dp, keyboard: KeyboardType, hint: Stri
         onChange,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = keyboard),
-        textStyle = TextStyle(color = colors.text, fontSize = 19.5.sp),
+        textStyle = TextStyle(color = colors.text, fontSize = TextSize.S19_5),
         cursorBrush = SolidColor(colors.accent),
         modifier = Modifier
             .width(width)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(AppShapes.Rounded10)
             .background(colors.card)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = Spacing.S14, vertical = Spacing.S10),
         decorationBox = { field ->
-            if (value.isEmpty() && hint != null) Text(hint, color = colors.secondary, fontSize = 19.5.sp)
+            if (value.isEmpty() && hint != null) Text(hint, color = colors.secondary, fontSize = TextSize.S19_5)
             field()
         },
     )
@@ -389,8 +392,8 @@ private fun ElementControls(element: LayoutElement, unit: LengthUnit, onChange: 
         Text(
             stringResource(R.string.layout_remove_element),
             color = colors.danger,
-            fontSize = 20.sp,
-            modifier = Modifier.padding(vertical = 8.dp).pointerInput(Unit) { detectTapGestures { onRemove() } },
+            fontSize = TextSize.S20,
+            modifier = Modifier.padding(vertical = Spacing.S8).pointerInput(Unit) { detectTapGestures { onRemove() } },
         )
     }
 }

@@ -3,6 +3,7 @@ package app.betternotes.canvas
 import android.graphics.Typeface
 import android.text.Spannable
 import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StrikethroughSpan
 import android.text.style.StyleSpan
@@ -49,6 +50,7 @@ internal fun spannedText(value: String, size: Float, style: TextStyle, spans: Li
         if (underline) out.setSpan(UnderlineSpan(), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (strike) out.setSpan(StrikethroughSpan(), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (runSize != size && size > 0f) out.setSpan(RelativeSizeSpan(runSize / size), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        look?.color?.let { out.setSpan(ForegroundColorSpan(it), from, to, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE) }
     }
     return out
 }

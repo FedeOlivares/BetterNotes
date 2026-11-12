@@ -18,7 +18,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.produceState
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,7 +34,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,7 +48,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import app.betternotes.R
 import app.betternotes.canvas.VideoPlayRequest
@@ -58,7 +55,13 @@ import app.betternotes.core.model.TapePattern
 import app.betternotes.core.tools.TapeLineMode
 import app.betternotes.core.tools.TapeOptions
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LetterSpacing
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OPAQUE_ALPHA
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import kotlin.math.roundToInt
 
 /** The tape's row: three widths and its colors. It has no panel, as there is nothing more to it. */
@@ -84,7 +87,7 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
             PillDivider()
             options.colors.forEachIndexed { slot, color ->
                 ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
-                    ColorDot(color or OPAQUE, diameter = 24.dp)
+                    ColorDot(color or OPAQUE_ALPHA, diameter = 24.dp)
                     if (slot == options.selectedColor) SelectedDot()
                 }
             }
@@ -92,6 +95,7 @@ internal fun TapeRow(state: EditorState, options: TapeOptions, modifier: Modifie
                 WarningSwatch()
                 if (options.selectedColor >= options.colors.size) SelectedDot()
             }
+            ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) { state.colorTarget = ColorTarget.TAPE }
             PillDivider()
             ToolbarIcon(EditorIcons.Sliders, stringResource(R.string.editor_tool_options)) {
                 state.panelOpen = !state.panelOpen
@@ -125,6 +129,8 @@ internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modif
             onOpacity = { value -> state.updateTape { it.copy(opacity = value) } },
             onFinished = {},
         )
+        PanelDivider()
+        ToolReturnRows(state, ActiveTool.TAPE)
         PanelDivider()
         // The shadow's settings stay folded away until asked for, behind a switch that turns the shadow on or off.
         var shadowOpen by remember { mutableStateOf(false) }
@@ -168,7 +174,7 @@ internal fun TapePanel(state: EditorState, options: TapeOptions, modifier: Modif
             steps = (TapeOptions.MAX_HOLD_MS - TapeOptions.MIN_HOLD_MS) / 100,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(Spacing.S18))
     }
 }
 
@@ -215,14 +221,14 @@ internal fun EmojiRow(state: EditorState, modifier: Modifier) {
                 Text(
                     stringResource(R.string.sticker_empty_short),
                     color = LocalEditorColors.current.label,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(horizontal = 14.dp),
+                    fontSize = TextSize.S14,
+                    modifier = Modifier.padding(horizontal = Spacing.S14),
                 )
             }
         }
         for (emoji in if (state.stickerTab) emptyList() else state.recentEmoji) {
             ToolbarCellBox(onClick = { state.chooseEmoji(emoji) }) {
-                Text(emoji, fontSize = 20.sp)
+                Text(emoji, fontSize = TextSize.S20)
                 if (emoji == state.emoji) SelectedDot()
             }
         }
@@ -238,8 +244,8 @@ internal fun EmojiPanel(state: EditorState, modifier: Modifier) {
     val colors = LocalEditorColors.current
     PanelSheet(stringResource(R.string.tool_sticker), onClose = { state.panelOpen = false }, modifier = modifier) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S8),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = Spacing.S6),
         ) {
             // The stickers come first, and the emoji are the second choice.
             StickerTab(R.string.sticker_tab_stickers, state.stickerTab, Modifier.weight(1f)) { state.showStickerTab(true) }
@@ -251,7 +257,7 @@ internal fun EmojiPanel(state: EditorState, modifier: Modifier) {
             return@PanelSheet
         }
         LabeledRow(R.string.panel_size) { ValuePill { ValueText(state.emojiSize.toString()) } }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - Spacing.S6)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) { state.resizeEmoji(state.emojiSize - 2) }
             PanelSlider(
                 fraction = (state.emojiSize - EditorState.MIN_EMOJI).toFloat() / (EditorState.MAX_EMOJI - EditorState.MIN_EMOJI),
@@ -264,24 +270,24 @@ internal fun EmojiPanel(state: EditorState, modifier: Modifier) {
         }
         PanelDivider()
         for (row in EMOJI.chunked(EMOJI_PER_ROW)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = PanelPadding - 4.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = PanelPadding - Spacing.S4)) {
                 for (emoji in row) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .weight(1f)
                             .aspectRatio(1f)
-                            .clip(CircleShape)
+                            .clip(AppShapes.Circle)
                             .background(if (emoji == state.emoji) colors.accentContainer else Color.Transparent)
                             .clickable(role = Role.Button) { state.chooseEmoji(emoji) },
                     ) {
-                        Text(emoji, fontSize = 22.sp)
+                        Text(emoji, fontSize = TextSize.S22)
                     }
                 }
                 repeat(EMOJI_PER_ROW - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(Spacing.S14))
     }
 }
 
@@ -302,7 +308,7 @@ internal fun VideoPlayer(request: VideoPlayRequest, onClose: () -> Unit) {
                     (request.pivotY - request.top) / size.height,
                 )
             }
-            .background(Color.Black),
+            .background(UiColors.VideoBack),
     ) {
         AndroidView(
             factory = { context ->
@@ -319,9 +325,9 @@ internal fun VideoPlayer(request: VideoPlayRequest, onClose: () -> Unit) {
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(6.dp)
+                .padding(Spacing.S6)
                 .size(27.dp)
-                .clip(CircleShape)
+                .clip(AppShapes.Circle)
                 .background(colors.closeButton)
                 .clickable(role = Role.Button, onClick = onClose),
         ) {
@@ -346,12 +352,11 @@ internal val EMOJI: List<String> = listOf(
 )
 
 private const val EMOJI_PER_ROW = 8
-private const val OPAQUE = 0xFF000000.toInt()
 
 /** A round swatch striped yellow and black, for the warning tape. */
 @Composable
 private fun WarningSwatch() {
-    androidx.compose.foundation.Canvas(Modifier.size(24.dp).clip(CircleShape)) {
+    androidx.compose.foundation.Canvas(Modifier.size(24.dp).clip(AppShapes.Circle)) {
         drawRect(Color(TapeOptions.WARNING_FILL))
         val stripe = size.width / 4f
         var x = -size.height
@@ -375,14 +380,14 @@ private fun ColumnScope.TapeColorSection(state: EditorState, options: TapeOption
     val colors = LocalEditorColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().height(49.dp).padding(start = PanelPadding, end = PanelPadding - 6.dp),
+        modifier = Modifier.fillMaxWidth().height(49.dp).padding(start = PanelPadding, end = PanelPadding - Spacing.S6),
     ) {
         Text(
             stringResource(R.string.panel_color),
             color = colors.label,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
-            letterSpacing = 0.4.sp,
+            letterSpacing = LetterSpacing.Label,
         )
         Spacer(Modifier.weight(1f))
         PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_add_swatch)) { state.colorTarget = ColorTarget.TAPE }
@@ -391,12 +396,12 @@ private fun ColumnScope.TapeColorSection(state: EditorState, options: TapeOption
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = PanelPadding - 8.dp, end = PanelPadding - 8.dp, bottom = 10.dp)
+            .padding(start = PanelPadding - Spacing.S8, end = PanelPadding - Spacing.S8, bottom = Spacing.S10)
             .horizontalScroll(rememberScrollState()),
     ) {
         options.colors.forEachIndexed { slot, color ->
             ToolbarCellBox(onClick = { state.updateTape { it.copy(selectedColor = slot) } }) {
-                ColorDot(color or OPAQUE, diameter = 26.dp)
+                ColorDot(color or OPAQUE_ALPHA, diameter = 26.dp)
                 if (slot == options.selectedColor) SelectedDot()
             }
         }
@@ -417,14 +422,14 @@ private fun StickerTab(label: Int, selected: Boolean, modifier: Modifier, onClic
         contentAlignment = Alignment.Center,
         modifier = modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(AppShapes.Rounded20)
             .background(if (selected) colors.accentContainer else colors.field)
             .clickable(role = Role.Tab, onClick = onClick),
     ) {
         Text(
             stringResource(label),
             color = if (selected) colors.accent else colors.label,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -450,16 +455,16 @@ private fun StickerGrid(state: EditorState) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(role = Role.Button) { pickPack.launch(null) }
-            .padding(horizontal = PanelPadding, vertical = 12.dp),
+            .padding(horizontal = PanelPadding, vertical = Spacing.S12),
     ) {
-        Text(stringResource(R.string.sticker_add_pack), color = colors.accent, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(R.string.sticker_add_pack), color = colors.accent, fontSize = TextSize.S14, fontWeight = FontWeight.Medium)
     }
     if (state.stickers.isEmpty()) {
         Text(
             stringResource(R.string.sticker_empty),
             color = colors.label,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(horizontal = PanelPadding, vertical = 8.dp),
+            fontSize = TextSize.S14,
+            modifier = Modifier.padding(horizontal = PanelPadding, vertical = Spacing.S8),
         )
         return
     }
@@ -473,13 +478,13 @@ private fun StickerGrid(state: EditorState) {
             Text(
                 pack ?: stringResource(R.string.sticker_loose),
                 color = if (over) colors.accent else colors.label,
-                fontSize = 13.sp,
+                fontSize = TextSize.S13,
                 fontWeight = FontWeight.Medium,
-                modifier = Modifier.dropTarget(state, key).padding(horizontal = PanelPadding, vertical = 6.dp),
+                modifier = Modifier.dropTarget(state, key).padding(horizontal = PanelPadding, vertical = Spacing.S6),
             )
         }
         for (row in ids.chunked(STICKERS_PER_ROW)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = PanelPadding - 4.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = PanelPadding - Spacing.S4, vertical = Spacing.S4), horizontalArrangement = Arrangement.spacedBy(Spacing.S8)) {
                 for (id in row) {
                     // A sticker let go over this one goes into one set with it.
                     val over by remember(id) { derivedStateOf { state.stickerDropKey() == id } }
@@ -489,7 +494,7 @@ private fun StickerGrid(state: EditorState) {
                             .weight(1f)
                             .aspectRatio(1f)
                             .dropTarget(state, id)
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(AppShapes.Rounded14)
                             .background(if (over) colors.accent.copy(alpha = 0.35f) else if (id == state.sticker) colors.accentContainer else colors.field)
                             .clickable(role = Role.Button) {
                                 when {
@@ -502,12 +507,12 @@ private fun StickerGrid(state: EditorState) {
                                 }
                             }
                             .stickerDragSource(state, id, enabled = !removing && !exporting)
-                            .padding(8.dp),
+                            .padding(Spacing.S8),
                     ) {
                         StickerThumb(state, id, 72.dp)
                         if (removing) {
-                            Box(Modifier.align(Alignment.TopEnd).size(22.dp).background(Color(0xFFE5483F), CircleShape), contentAlignment = Alignment.Center) {
-                                Text("x", color = Color.White, fontSize = 14.sp)
+                            Box(Modifier.align(Alignment.TopEnd).size(22.dp).background(UiColors.DeleteBadge, AppShapes.Circle), contentAlignment = Alignment.Center) {
+                                Text("x", color = UiColors.OnFilled, fontSize = TextSize.S14)
                             }
                         }
                     }
@@ -523,12 +528,12 @@ private fun StickerGrid(state: EditorState) {
                 removing = !removing
                 exporting = false
             }
-            .padding(horizontal = PanelPadding, vertical = 14.dp),
+            .padding(horizontal = PanelPadding, vertical = Spacing.S14),
     ) {
         Text(
             stringResource(if (removing) R.string.sticker_done_removing else R.string.sticker_remove),
             color = colors.accent,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -539,12 +544,12 @@ private fun StickerGrid(state: EditorState) {
                 exporting = !exporting
                 removing = false
             }
-            .padding(horizontal = PanelPadding, vertical = 14.dp),
+            .padding(horizontal = PanelPadding, vertical = Spacing.S14),
     ) {
         Text(
             stringResource(if (exporting) R.string.sticker_done_exporting else R.string.sticker_export),
             color = colors.accent,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -567,7 +572,7 @@ internal fun StickerThumb(state: EditorState, id: Long, size: androidx.compose.u
     androidx.compose.foundation.Image(
         image,
         contentDescription = null,
-        modifier = Modifier.size(size).clip(RoundedCornerShape(8.dp)).background(Color(0xFFF4F1E8)).padding(3.dp),
+        modifier = Modifier.size(size).clip(AppShapes.Rounded8).background(UiColors.StickerTile).padding(Spacing.S3),
     )
 }
 

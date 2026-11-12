@@ -97,6 +97,9 @@
     <string name="panel_corner_radius">Corner radius</string>
     <string name="panel_border_color">Border color</string>
     <string name="panel_fill_color">Fill color</string>
+    <string name="panel_text_stroke_color">Stroke color</string>
+    <string name="panel_text_background_color">Background color</string>
+    <string name="panel_color_none">None</string>
     <string name="panel_more_shapes">More shapes</string>
     <string name="panel_size">Size</string>
     <string name="panel_erase_entire">Erase entire object</string>

@@ -10,7 +10,6 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.runtime.mutableFloatStateOf
@@ -55,8 +54,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import app.betternotes.canvas.CanvasView
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -83,9 +80,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.TextItem
@@ -94,9 +89,15 @@ import app.betternotes.core.tools.InkPreset
 import app.betternotes.core.tools.ToolbarEntries
 import app.betternotes.core.tools.ToolbarGroups
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.EditorScale
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.isCompactScreen
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -144,12 +145,6 @@ private const val SAVE_DELAY_MS = 400L
 private val RECORDER_MENU_END = 70.dp
 
 /**
- * The sizes in this package were read off screenshots at 2.5 pixels per unit, and the tablet those
- * screenshots came from has 2.75 pixels per dp. This makes them come out the same size on it.
- */
-private const val SCREENSHOT_SCALE = 2.5f / 2.75f
-
-/**
  * The floating controls over the canvas, laid out from the owner's Notewise screenshots: the left,
  * center and right pills in a row, and the active tool's row centered under the center pill.
  */
@@ -163,9 +158,7 @@ internal fun EditorChrome(state: EditorState, actions: EditorActions) {
         state.saveTools()
     }
 
-    val density = LocalDensity.current
-    val designDensity = Density(density.density * SCREENSHOT_SCALE, density.fontScale)
-    CompositionLocalProvider(LocalDensity provides designDensity) {
+    EditorScale {
         EditorControls(state, actions, notices, preset)
     }
 }
@@ -197,7 +190,7 @@ private fun ToolRowTransition(state: EditorState, recorder: RecorderState, sourc
             .background(colors.pill)
             .border(1.dp, colors.pillBorder, PillShape)
             .animateContentSize(tween(BAR_RESIZE_MS))
-            .then(if (upright) Modifier.padding(vertical = 6.dp) else Modifier.padding(horizontal = 6.dp)),
+            .then(if (upright) Modifier.padding(vertical = Spacing.S6) else Modifier.padding(horizontal = Spacing.S6)),
     ) {
         CompositionLocalProvider(LocalInToolBar provides true) {
             // Nothing shows until the box has its new size, then the icons come in. The box clips them, so none is ever outside it.
@@ -220,8 +213,8 @@ private fun ToolRowFor(tool: ActiveTool, state: EditorState, sources: ImageSourc
         preset != null -> ToolRow(state, preset, none)
         tool == ActiveTool.LASER -> LaserRow(state, none)
         tool == ActiveTool.ERASER -> EraserRow(state, state.eraser, none)
-        tool == ActiveTool.LASSO && state.selection?.singleOrNull() is TextItem ->
-            TextSelectionRow(state, state.selection!!.single() as TextItem, none)
+        // A text box that is selected shows the whole text row, with its settings.
+        tool == ActiveTool.LASSO && state.selectedText != null -> NoteRow(state, state.note, none, showColors = false)
         tool == ActiveTool.LASSO -> LassoRow(state, state.lasso, none)
         tool == ActiveTool.SHAPE -> ShapeRow(state, state.shape, none)
         tool == ActiveTool.STICKY && state.selectionIsNotes ->
@@ -502,6 +495,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
             when {
                 preset != null -> InkPanel(state, preset, notices, sheet)
                 state.activeTool == ActiveTool.ERASER -> EraserPanel(state, state.eraser, notices, sheet)
+                state.selectedText != null -> NotePanel(state, notices, state.note, sheet, sticky = false)
                 state.activeTool == ActiveTool.LASSO -> LassoPanel(state, state.lasso, notices, sheet)
                 state.activeTool == ActiveTool.SHAPE -> ShapePanel(state, state.shape, sheet)
                 state.activeTool == ActiveTool.TAPE -> TapePanel(state, state.tape, sheet)
@@ -672,16 +666,16 @@ private fun HiddenToolsButton(hidden: List<StripItem>, state: EditorState, recor
         if (open) {
             androidx.compose.ui.window.Popup(
                 alignment = Alignment.TopStart,
-                offset = androidx.compose.ui.unit.IntOffset(0, with(androidx.compose.ui.platform.LocalDensity.current) { (PillHeight + 8.dp).roundToPx() }),
+                offset = androidx.compose.ui.unit.IntOffset(0, with(LocalDensity.current) { (PillHeight + 8.dp).roundToPx() }),
                 onDismissRequest = { open = false },
             ) {
                 Column(
                     Modifier
                         .width(220.dp)
-                        .shadow(12.dp, RoundedCornerShape(18.dp), clip = false)
-                        .clip(RoundedCornerShape(18.dp))
+                        .shadow(12.dp, AppShapes.Rounded18, clip = false)
+                        .clip(AppShapes.Rounded18)
                         .background(colors.panel)
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = Spacing.S8),
                 ) {
                     for (item in hidden) {
                         Row(
@@ -693,10 +687,10 @@ private fun HiddenToolsButton(hidden: List<StripItem>, state: EditorState, recor
                                     open = false
                                     stripClick(item, state, recorder, sources, notices)
                                 }
-                                .padding(horizontal = 16.dp),
+                                .padding(horizontal = Spacing.S16),
                         ) {
                             Icon(item.icon, null, tint = colors.icon, modifier = Modifier.size(22.dp))
-                            Text(stringResource(item.label), color = colors.title, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp))
+                            Text(stringResource(item.label), color = colors.title, fontSize = TextSize.S15, modifier = Modifier.padding(start = Spacing.S16))
                         }
                     }
                 }
@@ -763,7 +757,7 @@ private fun GroupButton(items: List<StripItem>, state: EditorState, recorder: Re
                 .size(ToolbarCell, PillHeight)
                 .tappable(radius = 20.dp) { open = !open },
         ) {
-            if (selected) Box(Modifier.size(42.dp).background(colors.toolSelected, CircleShape))
+            if (selected) Box(Modifier.size(42.dp).background(colors.toolSelected, AppShapes.Circle))
             val shown = items.take(3)
             // A triangle: the first on top, the second and third below it, side by side.
             val spots = listOf(0.dp to (-8).dp, (-7).dp to 6.dp, 7.dp to 6.dp)
@@ -799,7 +793,7 @@ private fun RightPill(state: EditorState, recorder: RecorderState, actions: Edit
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(42.dp)
-                .clip(CircleShape)
+                .clip(AppShapes.Circle)
                 .background(if (state.viewOnly) colors.accentContainer else colors.raisedButton)
                 .tappable(radius = 21.dp, onClick = state::toggleViewOnly),
         ) {
@@ -825,7 +819,7 @@ private fun LaserRow(state: EditorState, modifier: Modifier) {
         for (slot in 0..2) {
             ToolbarCellBox(onClick = { state.selectLaserWidth(slot) }) {
                 if (slot == 0) {
-                    Box(Modifier.size(5.dp).background(LocalEditorColors.current.icon, CircleShape))
+                    Box(Modifier.size(5.dp).background(LocalEditorColors.current.icon, AppShapes.Circle))
                 } else {
                     WidthGlyph(if (slot == 1) LASER_MIDDLE_GLYPH else LASER_THICK_GLYPH)
                 }
@@ -868,29 +862,29 @@ private fun BoxScope.PositionControls(state: EditorState) {
             .padding(start = 9.dp, bottom = bandBottom(state, isCompactScreen()))
             .masksInk(state, "readout")
             .height(PillHeight)
-            .shadow(4.dp, CircleShape, clip = false)
-            .clip(CircleShape)
+            .shadow(4.dp, AppShapes.Circle, clip = false)
+            .clip(AppShapes.Circle)
             .background(colors.pill)
-            .border(1.dp, colors.pillBorder, CircleShape)
+            .border(1.dp, colors.pillBorder, AppShapes.Circle)
             .tappable(radius = 60.dp, onClick = state::zoomToRealSize)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = Spacing.S12),
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.width(46.dp).clickable(role = Role.Button) { entering = true },
         ) {
             // The cover is page 0, so a notebook with one still counts its pages from 1.
-            Text("${state.currentPage + 1 - state.coverOffset}", color = colors.title, fontSize = 12.sp, lineHeight = 14.sp)
+            Text("${state.currentPage + 1 - state.coverOffset}", color = colors.title, fontSize = TextSize.S12, lineHeight = TextSize.S14)
             Box(Modifier.fillMaxWidth().height(1.dp).background(colors.pillDivider))
-            Text("${state.pageCount - state.coverOffset}", color = colors.label, fontSize = 12.sp, lineHeight = 14.sp)
+            Text("${state.pageCount - state.coverOffset}", color = colors.label, fontSize = TextSize.S12, lineHeight = TextSize.S14)
         }
         PillDivider()
         Text(
             "${(state.zoom * 100).roundToInt()}%",
             color = colors.title,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(horizontal = 8.dp),
+            modifier = Modifier.padding(horizontal = Spacing.S8),
         )
     }
     val fraction = state.scrollFraction
@@ -900,7 +894,7 @@ private fun BoxScope.PositionControls(state: EditorState) {
             .align(Alignment.TopEnd)
             .fillMaxHeight()
             .wrapContentHeight(Alignment.CenterVertically)
-            .padding(end = 2.dp)
+            .padding(end = Spacing.S2)
             // The buttons ride along the edge with the page's position, as a scroll handle does.
             .layout { measurable, constraints ->
                 val placeable = measurable.measure(constraints.copy(minHeight = 0))
@@ -924,10 +918,10 @@ private fun BoxScope.PositionControls(state: EditorState) {
                     state.scrubTo(at, false)
                 }
             }
-            .shadow(4.dp, CircleShape, clip = false)
-            .clip(CircleShape)
+            .shadow(4.dp, AppShapes.Circle, clip = false)
+            .clip(AppShapes.Circle)
             .background(colors.pill)
-            .border(1.dp, colors.pillBorder, CircleShape),
+            .border(1.dp, colors.pillBorder, AppShapes.Circle),
     ) {
         PageButton(EditorIcons.ChevronUp, stringResource(R.string.editor_previous_page), state::previousPage)
         PageButton(EditorIcons.ChevronDown, stringResource(R.string.editor_next_page), state::nextPage)
@@ -943,10 +937,10 @@ private fun MinimapView(map: CanvasView.Minimap, modifier: Modifier) {
     Canvas(
         modifier
             .size(MINIMAP_WIDTH, MINIMAP_HEIGHT)
-            .shadow(4.dp, RoundedCornerShape(12.dp), clip = false)
-            .clip(RoundedCornerShape(12.dp))
+            .shadow(4.dp, AppShapes.Rounded12, clip = false)
+            .clip(AppShapes.Rounded12)
             .background(colors.pill)
-            .border(1.dp, colors.pillBorder, RoundedCornerShape(12.dp)),
+            .border(1.dp, colors.pillBorder, AppShapes.Rounded12),
     ) {
         var left = map.viewLeft
         var top = map.viewTop
@@ -1055,7 +1049,7 @@ private fun ToolRow(state: EditorState, preset: InkPreset, modifier: Modifier) {
                     ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) { state.moreColorsOpen = true }
                     if (state.moreColorsOpen) {
                         FavoriteColors(
-                            favorites = (preset.palette + MORE_FAVORITES).distinct(),
+                            favorites = (preset.palette + Swatches.MoreFavorites).distinct(),
                             onBar = preset.colors,
                             onPick = { color -> state.update { it.withColorAdded(color) } },
                             onWheel = { state.colorTarget = ColorTarget.CUSTOM_SLOT },
@@ -1091,10 +1085,10 @@ internal fun FavoriteColors(
         Text(
             stringResource(R.string.editor_more_colors),
             color = colors.label,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            fontSize = TextSize.S13,
+            modifier = Modifier.padding(horizontal = Spacing.S16, vertical = Spacing.S6),
         )
-        Column(Modifier.padding(horizontal = 8.dp).width((MORE_COLORS_COLUMNS * 44).dp)) {
+        Column(Modifier.padding(horizontal = Spacing.S8).width((MORE_COLORS_COLUMNS * 44).dp)) {
             favorites.chunked(MORE_COLORS_COLUMNS).forEach { line ->
                 Row {
                     for (color in line) {
@@ -1114,10 +1108,10 @@ internal fun FavoriteColors(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .padding(vertical = 8.dp, horizontal = 8.dp)
+                        .padding(vertical = Spacing.S8, horizontal = Spacing.S8)
                         .size(28.dp)
-                        .clip(CircleShape)
-                        .background(androidx.compose.ui.graphics.Brush.sweepGradient(HueStops))
+                        .clip(AppShapes.Circle)
+                        .background(androidx.compose.ui.graphics.Brush.sweepGradient(Swatches.Hues))
                         .tappable(radius = 20.dp) {
                             onDismiss()
                             onWheel()
@@ -1130,14 +1124,6 @@ internal fun FavoriteColors(
 
 private const val MORE_COLORS_COLUMNS = 6
 
-internal val MORE_FAVORITES = listOf(
-    0xFF000000.toInt(), 0xFF424242.toInt(), 0xFF9E9E9E.toInt(), 0xFFFFFFFF.toInt(),
-    0xFFB71C1C.toInt(), 0xFFE53935.toInt(), 0xFFFF7043.toInt(), 0xFFFFA000.toInt(),
-    0xFFFDD835.toInt(), 0xFFC0CA33.toInt(), 0xFF43A047.toInt(), 0xFF00897B.toInt(),
-    0xFF00ACC1.toInt(), 0xFF1E88E5.toInt(), 0xFF3949AB.toInt(), 0xFF8E24AA.toInt(),
-    0xFFD81B60.toInt(), 0xFF6D4C41.toInt(),
-)
-
 /**
  * The bar while its colors are edited: each color has a red minus to remove it, holding and dragging one moves it,
  * and a cross discards the changes while a tick keeps them.
@@ -1147,7 +1133,7 @@ internal fun ColorEditor(draft: List<Int>, setDraft: (List<Int>) -> Unit, accept
     val latest by androidx.compose.runtime.rememberUpdatedState(draft)
     val colors = LocalEditorColors.current
     val cell = ToolbarCell
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    val density = LocalDensity.current
     draft.forEachIndexed { index, color ->
         var dragged by remember(color) { mutableStateOf(0f) }
         Box(
@@ -1180,16 +1166,16 @@ internal fun ColorEditor(draft: List<Int>, setDraft: (List<Int>) -> Unit, accept
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
-                    .padding(top = 3.dp, end = 3.dp)
+                    .padding(top = Spacing.S3, end = Spacing.S3)
                     .size(16.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFFE53935))
+                    .clip(AppShapes.Circle)
+                    .background(UiColors.RemoveRed)
                     .tappable(radius = 12.dp) {
                         if (draft.size > 1) setDraft(draft - color)
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(8.dp, 2.dp).background(Color.White))
+                Box(Modifier.size(8.dp, 2.dp).background(UiColors.OnFilled))
             }
         }
     }
@@ -1245,23 +1231,23 @@ private fun PageEntry(state: EditorState, close: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .opensFrom(OpenFrom.Center)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(AppShapes.Rounded18)
                 .background(colors.pill)
-                .border(1.dp, colors.pillBorder, RoundedCornerShape(18.dp))
-                .padding(horizontal = 18.dp, vertical = 12.dp),
+                .border(1.dp, colors.pillBorder, AppShapes.Rounded18)
+                .padding(horizontal = Spacing.S18, vertical = Spacing.S12),
         ) {
             BasicTextField(
                 value = text,
                 onValueChange = { v -> if (v.text.length <= 5 && v.text.all(Char::isDigit)) text = v },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.title, fontSize = 20.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
+                textStyle = TextStyle(color = colors.title, fontSize = TextSize.S20, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center),
                 cursorBrush = SolidColor(colors.accent),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { go() }),
                 modifier = Modifier.width(72.dp).focusRequester(focus),
             )
-            Text("/ $last", color = colors.label, fontSize = 16.sp, modifier = Modifier.padding(start = 6.dp, end = 14.dp))
-            Text("Go", color = colors.accent, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.clickable(role = Role.Button) { go() }.padding(8.dp))
+            Text("/ $last", color = colors.label, fontSize = TextSize.S16, modifier = Modifier.padding(start = Spacing.S6, end = Spacing.S14))
+            Text("Go", color = colors.accent, fontSize = TextSize.S16, fontWeight = FontWeight.Medium, modifier = Modifier.clickable(role = Role.Button) { go() }.padding(Spacing.S8))
         }
     }
 }

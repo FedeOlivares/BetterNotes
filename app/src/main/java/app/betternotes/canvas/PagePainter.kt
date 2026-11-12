@@ -22,6 +22,7 @@ import app.betternotes.core.template.TextAlign
 import app.betternotes.core.template.TextStyle
 import app.betternotes.core.template.draw
 import app.betternotes.core.template.isMirroredOn
+import app.betternotes.ui.theme.CanvasColors
 
 /** What a [PagePainter] paints from. */
 internal interface PaintSource {
@@ -236,8 +237,8 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
         const val MIN_PATTERN_SPACING_PX = 4f
         const val NO_LAYER = -1
         const val LAYER_REACH_PX = 8f
-        const val HIGHLIGHT_COLOR = 0xFFFFE680.toInt()
-        const val CURRENT_HIGHLIGHT_COLOR = 0xFFFFA726.toInt()
+        const val HIGHLIGHT_COLOR = CanvasColors.SEARCH_HIGHLIGHT
+        const val CURRENT_HIGHLIGHT_COLOR = CanvasColors.SEARCH_HIGHLIGHT_CURRENT
     }
 }
 

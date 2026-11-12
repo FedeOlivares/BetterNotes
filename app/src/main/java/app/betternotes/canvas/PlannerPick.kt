@@ -9,6 +9,7 @@ import app.betternotes.core.planner.PlannerElement
 import app.betternotes.core.planner.RoleSlot
 import app.betternotes.core.planner.plannerElements
 import app.betternotes.core.template.PageTemplate
+import app.betternotes.ui.theme.CanvasColors
 
 /**
  * What a lasso picked on a planner page when it caught none of the owner's own ink: the page's generated elements. They are locked
@@ -115,7 +116,7 @@ internal class PlannerPick(private val redraw: () -> Unit) {
     }
 
     private companion object {
-        const val OUTLINE_COLOR = 0xFF3D6AF2.toInt()
+        const val OUTLINE_COLOR = CanvasColors.PLANNER_PICK_OUTLINE
         const val OUTLINE_WIDTH = 3f
     }
 }

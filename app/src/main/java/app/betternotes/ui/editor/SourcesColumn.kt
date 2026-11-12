@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,19 +49,22 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import app.betternotes.R
 import app.betternotes.library.ThumbnailRenderer
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppFonts
+import app.betternotes.ui.theme.AppShapes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 import java.util.Date
 
@@ -88,7 +89,7 @@ internal fun SourcesColumn(
     Box(
         Modifier
             .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color(SCRIM))
+            .background(UiColors.Scrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
     ) {
         Column(
@@ -96,10 +97,10 @@ internal fun SourcesColumn(
                 .opensFrom(OpenFrom.Start)
                 .fillMaxHeight()
                 .width(ColumnWidth)
-                .clip(RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp))
+                .clip(AppShapes.EndRounded28)
                 .background(colors.panel)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(horizontal = 18.dp, vertical = 14.dp),
+                .padding(horizontal = Spacing.S18, vertical = Spacing.S14),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 RoundButton(EditorIcons.Back, stringResource(R.string.editor_back), onClose)
@@ -109,12 +110,12 @@ internal fun SourcesColumn(
                 }
             }
             if (info != null) {
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(Spacing.S26))
                 val titleStyle = TextStyle(
                     color = colors.title,
-                    fontFamily = FontFamily.Serif,
+                    fontFamily = AppFonts.Display,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 28.sp,
+                    fontSize = TextSize.S28,
                 )
                 if (renaming) {
                     // The name is edited where it stands. Done, or leaving the field, keeps it.
@@ -156,19 +157,19 @@ internal fun SourcesColumn(
                 val context = LocalContext.current
                 val stamp = "${DateFormat.getMediumDateFormat(context).format(Date(info.createdMs))}, " +
                     DateFormat.getTimeFormat(context).format(Date(info.createdMs))
-                Text(stamp, color = colors.label, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+                Text(stamp, color = colors.label, fontSize = TextSize.S14, modifier = Modifier.padding(top = Spacing.S4))
             }
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(Spacing.S34))
             SectionRow(stringResource(R.string.sources_tabs)) { notices.notBuilt() }
-            Spacer(Modifier.height(34.dp))
+            Spacer(Modifier.height(Spacing.S34))
             // The binder: the notebook itself, the sources made from here, and notebooks linked as sources.
             val entries by produceState(emptyList<SourceEntry>(), state.sourcesVersion) {
                 value = withContext(Dispatchers.IO) { actions.sources() }
             }
             val currentId = actions.currentSourceId()
             SectionRow(stringResource(R.string.sources_count, entries.size.coerceAtLeast(1))) { state.sourcesAddOpen = true }
-            Spacer(Modifier.height(10.dp))
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Spacer(Modifier.height(Spacing.S10))
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Spacing.S8)) {
                 for (entry in entries) {
                     SourceCard(
                         entry,
@@ -197,8 +198,8 @@ private fun RoundButton(icon: ImageVector, description: String, onClick: () -> U
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(46.dp)
-            .clip(CircleShape)
-            .border(1.dp, colors.pillBorder, CircleShape)
+            .clip(AppShapes.Circle)
+            .border(1.dp, colors.pillBorder, AppShapes.Circle)
             .clickable(role = Role.Button, onClick = onClick),
     ) { Icon(icon, description, tint = colors.icon, modifier = Modifier.size(22.dp)) }
 }
@@ -207,13 +208,13 @@ private fun RoundButton(icon: ImageVector, description: String, onClick: () -> U
 private fun SectionRow(label: String, onAdd: () -> Unit) {
     val colors = LocalEditorColors.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Text(label, color = colors.label, fontSize = 17.sp)
-        Spacer(Modifier.width(8.dp))
+        Text(label, color = colors.label, fontSize = TextSize.S17)
+        Spacer(Modifier.width(Spacing.S8))
         Icon(EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.size(18.dp))
         Spacer(Modifier.weight(1f))
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onAdd),
+            modifier = Modifier.size(36.dp).clip(AppShapes.Circle).clickable(role = Role.Button, onClick = onAdd),
         ) { Icon(EditorIcons.Plus, stringResource(R.string.sources_add), tint = colors.icon, modifier = Modifier.size(22.dp)) }
     }
 }
@@ -235,23 +236,23 @@ private fun SourceCard(entry: SourceEntry, current: Boolean, onOpen: () -> Unit,
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(AppShapes.Rounded18)
             .background(if (current) colors.accentContainer else colors.field)
             .clickable(role = Role.Button, onClick = onOpen)
-            .padding(10.dp),
+            .padding(Spacing.S10),
     ) {
-        Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)).background(colors.pill)) {
+        Box(Modifier.size(52.dp).clip(AppShapes.Rounded8).background(colors.pill)) {
             thumbnail?.let { Image(it.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()) }
         }
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(Spacing.S14))
         Column(Modifier.weight(1f)) {
-            Text(entry.title, color = colors.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text(stringResource(R.string.sources_pages, entry.pageCount), color = colors.label, fontSize = 13.sp)
+            Text(entry.title, color = colors.title, fontSize = TextSize.S16, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(stringResource(R.string.sources_pages, entry.pageCount), color = colors.label, fontSize = TextSize.S13)
         }
         if (entry.kind != SourceKind.OWNER) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onRemove),
+                modifier = Modifier.size(40.dp).clip(AppShapes.Circle).clickable(role = Role.Button, onClick = onRemove),
             ) { Icon(EditorIcons.Trash, stringResource(R.string.sources_remove), tint = colors.label, modifier = Modifier.size(20.dp)) }
         }
     }
@@ -268,12 +269,12 @@ private fun NotebookPicker(state: EditorState, actions: EditorActions, closeColu
         title = { Text(stringResource(R.string.add_notebook)) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                if (notebooks.isEmpty()) Text(stringResource(R.string.sources_no_notebooks), color = colors.label, fontSize = 15.sp)
+                if (notebooks.isEmpty()) Text(stringResource(R.string.sources_no_notebooks), color = colors.label, fontSize = TextSize.S15)
                 for ((id, name) in notebooks) {
                     Text(
                         name,
                         color = colors.title,
-                        fontSize = 17.sp,
+                        fontSize = TextSize.S17,
                         maxLines = 1,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -281,7 +282,7 @@ private fun NotebookPicker(state: EditorState, actions: EditorActions, closeColu
                                 state.notebookPickerOpen = false
                                 state.onAddSource?.invoke(SourceRequest.Notebook(id))
                             }
-                            .padding(vertical = 12.dp),
+                            .padding(vertical = Spacing.S12),
                     )
                 }
             }
@@ -329,17 +330,17 @@ private fun AddToNote(state: EditorState, actions: EditorActions, sources: Image
             Modifier
                 .opensFrom(OpenFrom.Center)
                 .width(AddSheetWidth)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(AppShapes.Rounded28)
                 .background(colors.panel)
-                .border(1.dp, colors.pillBorder, RoundedCornerShape(28.dp))
+                .border(1.dp, colors.pillBorder, AppShapes.Rounded28)
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-                .padding(16.dp),
+                .padding(Spacing.S16),
         ) {
             Box(Modifier.fillMaxWidth().height(46.dp)) {
                 Text(
                     stringResource(R.string.add_title),
                     color = colors.title,
-                    fontSize = 20.sp,
+                    fontSize = TextSize.S20,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.align(Alignment.Center),
                 )
@@ -347,9 +348,9 @@ private fun AddToNote(state: EditorState, actions: EditorActions, sources: Image
                     RoundButton(EditorIcons.Close, stringResource(R.string.panel_close)) { state.sourcesAddOpen = false }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(Spacing.S12))
             for (row in options.chunked(2)) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth().padding(bottom = Spacing.S12), horizontalArrangement = Arrangement.spacedBy(Spacing.S12)) {
                     for (option in row) AddCard(option, Modifier.weight(1f))
                     if (row.size == 1) Spacer(Modifier.weight(1f))
                 }
@@ -364,22 +365,20 @@ private fun AddCard(option: AddOption, modifier: Modifier) {
     Column(
         modifier
             .height(CARD_HEIGHT)
-            .clip(RoundedCornerShape(22.dp))
-            .border(1.dp, colors.pillBorder, RoundedCornerShape(22.dp))
+            .clip(AppShapes.Rounded22)
+            .border(1.dp, colors.pillBorder, AppShapes.Rounded22)
             .clickable(role = Role.Button, onClick = option.action)
-            .padding(16.dp),
+            .padding(Spacing.S16),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Icon(option.icon, null, tint = colors.accent, modifier = Modifier.size(38.dp))
         Column {
-            Text(stringResource(option.title), color = colors.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(stringResource(option.subtitle), color = colors.label, fontSize = 14.sp, maxLines = 2)
+            Text(stringResource(option.title), color = colors.title, fontSize = TextSize.S18, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(option.subtitle), color = colors.label, fontSize = TextSize.S14, maxLines = 2)
         }
     }
 }
 
-private const val SCRIM = 0x66000000
-private const val THUMBNAIL_PX = 160
 private val ColumnWidth = 340.dp
 private val AddSheetWidth = 520.dp
 private val CARD_HEIGHT = 124.dp

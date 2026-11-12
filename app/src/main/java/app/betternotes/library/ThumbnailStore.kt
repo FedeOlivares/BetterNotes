@@ -40,6 +40,7 @@ import app.betternotes.core.template.CoverDesign
 import app.betternotes.ui.theme.templateLanguage
 import app.betternotes.core.template.draw
 import app.betternotes.pdf.PdfThumbnails
+import app.betternotes.ui.theme.CanvasColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -133,8 +134,6 @@ internal object ThumbnailRenderer {
     /** Below this a canvas's pattern would be a dense blur that costs thousands of draws. */
     private const val MIN_PATTERN_SCALE = 0.5f
 
-    private const val WHITE = 0xFFFFFFFF.toInt()
-
     fun render(store: DocumentStore): Bitmap {
         val document = store.readDocument()
         val page = document.pages[0]
@@ -143,7 +142,7 @@ internal object ThumbnailRenderer {
         // A cover is shown across its whole width and cut at the top and bottom around its middle.
         val heightPx = HEIGHT_PX
         val bitmap = createBitmap(WIDTH_PX, heightPx)
-        bitmap.eraseColor(if (isPdf) WHITE else page.background.color)
+        bitmap.eraseColor(if (isPdf) CanvasColors.PAPER else page.background.color)
         val canvas = Canvas(bitmap)
         val view = if (page.size == null) canvasView(items) else pageView(page, heightPx)
         (page.source as? PageSource.PdfPage)?.let { drawPdf(canvas, store, it, view.top) }

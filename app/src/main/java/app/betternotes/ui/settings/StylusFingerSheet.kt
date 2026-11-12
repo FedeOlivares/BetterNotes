@@ -17,7 +17,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.gesture.TwoFingerAction
 import app.betternotes.core.settings.AppSettings
@@ -26,6 +25,9 @@ import app.betternotes.core.settings.OneFingerSetting
 import app.betternotes.core.settings.StylusAction
 import app.betternotes.core.settings.StylusEraserEnd
 import app.betternotes.core.settings.StylusHoldAction
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlin.math.roundToLong
 
 private const val TIMING_STEP_MS = 50L
@@ -40,7 +42,7 @@ fun StylusFingerSheet(
 ) {
     SettingsSheet(stringResource(R.string.stylus_finger_title), onClose, modifier) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(28.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.S28),
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
@@ -51,7 +53,7 @@ fun StylusFingerSheet(
             SingleFingerCard(settings.gestures.oneFinger) { value -> onChange { it.withGestures { copy(oneFinger = value) } } }
             DoubleFingerCard(settings.gestures.twoFingers) { value -> onChange { it.withGestures { copy(twoFingers = value) } } }
             MoreGesturesCard(settings.gestures) { change -> onChange { it.withGestures(change) } }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(Spacing.S4))
         }
     }
 }
@@ -93,8 +95,8 @@ private fun StylusCard(settings: AppSettings, onChange: ((AppSettings) -> AppSet
         Text(
             stringResource(R.string.stylus_note),
             color = LocalSettingsColors.current.secondary,
-            fontSize = 17.sp,
-            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+            fontSize = TextSize.S17,
+            modifier = Modifier.padding(top = Spacing.S8, bottom = Spacing.S8),
         )
     }
 }

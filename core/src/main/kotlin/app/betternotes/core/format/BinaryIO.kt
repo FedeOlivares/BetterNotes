@@ -58,6 +58,19 @@ internal const val PAGE_TOOLS_FORMAT_VERSION = 12
  */
 internal const val PAGE_PATTERN_FILL_FORMAT_VERSION = 15
 
+/**
+ * Version 16 adds the background color of a text box, as an item tag of its own. Only a page that holds a text box with one is written at this version (with the layer table, as every version from 11 has); every other page keeps its bytes. This is the newest version
+ * a page file can be read at.
+ */
+internal const val PAGE_TEXT_COLORS_FORMAT_VERSION = 16
+
+/**
+ * Version 17 adds the color of single letters of a text box, as an item tag of its own. Only a page that holds a text box with such letters is
+ * written at this version (with the layer table, as every version from 11 has); every other page keeps its bytes. This is the newest version a
+ * page file can be read at.
+ */
+internal const val PAGE_SPAN_COLORS_FORMAT_VERSION = 17
+
 private const val MAGIC_SIZE = 4
 private const val CRC_SIZE = 4
 

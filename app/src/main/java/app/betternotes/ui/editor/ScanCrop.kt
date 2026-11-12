@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -40,8 +38,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,24 +64,24 @@ internal fun ScanCrop(state: EditorState, photo: Uri) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xF2000000))
+            .background(UiColors.ScanBackdrop)
             .clickable(enabled = false) {}
             .masksInk(state, "scan"),
     ) {
         val source = bitmap
         if (source == null) {
-            Text(stringResource(R.string.scan_loading), color = Color.White, modifier = Modifier.align(Alignment.Center))
+            Text(stringResource(R.string.scan_loading), color = UiColors.OnFilled, modifier = Modifier.align(Alignment.Center))
         } else {
             var corners by remember(source) { mutableStateOf(initialCorners(source)) }
             var working by remember { mutableStateOf(false) }
             val scope = rememberCoroutineScope()
             if (working) {
-                Text(stringResource(R.string.scan_loading), color = Color.White, modifier = Modifier.align(Alignment.Center))
+                Text(stringResource(R.string.scan_loading), color = UiColors.OnFilled, modifier = Modifier.align(Alignment.Center))
             }
             Corners(source, corners, { corners = it }, Modifier.fillMaxSize().padding(bottom = 72.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.S16),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(Spacing.S16),
             ) {
                 ScanButton(R.string.scan_cancel) { state.scanPhoto = null }
                 ScanButton(R.string.scan_done) {
@@ -110,12 +111,12 @@ internal fun ScanCrop(state: EditorState, photo: Uri) {
 private fun ScanButton(label: Int, onClick: () -> Unit) {
     Text(
         stringResource(label),
-        color = Color.White,
-        fontSize = 16.sp,
+        color = UiColors.OnFilled,
+        fontSize = TextSize.S16,
         modifier = Modifier
-            .background(Color(0xFF1B5E8C), RoundedCornerShape(24.dp))
+            .background(UiColors.ScanButton, AppShapes.Rounded24)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 28.dp, vertical = 12.dp),
+            .padding(horizontal = Spacing.S28, vertical = Spacing.S12),
     )
 }
 
@@ -165,10 +166,10 @@ private fun Corners(bitmap: Bitmap, corners: List<Offset>, onChange: (List<Offse
             for (p in points.drop(1)) lineTo(p.x, p.y)
             close()
         }
-        drawPath(outline, Color(0xFF3FA9F5), style = Stroke(3.dp.toPx()))
+        drawPath(outline, UiColors.ScanOutline, style = Stroke(3.dp.toPx()))
         for ((i, p) in points.withIndex()) {
-            drawCircle(Color.White.copy(alpha = if (i == grabbed) 1f else 0.85f), 14.dp.toPx(), p)
-            drawCircle(Color(0xFF3FA9F5), 14.dp.toPx(), p, style = Stroke(3.dp.toPx()))
+            drawCircle(UiColors.White.copy(alpha = if (i == grabbed) 1f else 0.85f), 14.dp.toPx(), p)
+            drawCircle(UiColors.ScanOutline, 14.dp.toPx(), p, style = Stroke(3.dp.toPx()))
         }
     }
 }

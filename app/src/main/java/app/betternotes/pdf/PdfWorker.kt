@@ -1,7 +1,6 @@
 package app.betternotes.pdf
 
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.graphics.pdf.RenderParams
@@ -16,6 +15,7 @@ import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.search.SearchableText
 import app.betternotes.core.search.TextMatch
+import app.betternotes.ui.theme.CanvasColors
 import java.io.IOException
 
 /**
@@ -133,7 +133,7 @@ internal class PdfWorker(
             val page = open(raster.source)
             val bitmap = createBitmap(raster.widthPx, raster.heightPx)
             // Most PDFs paint no background of their own and expect white paper.
-            bitmap.eraseColor(Color.WHITE)
+            bitmap.eraseColor(CanvasColors.PAPER)
             matrix.setScale(raster.scale, raster.scale)
             matrix.postTranslate(-raster.leftPx.toFloat(), -raster.topPx.toFloat())
             page.render(bitmap, null, matrix, params)

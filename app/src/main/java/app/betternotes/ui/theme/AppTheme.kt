@@ -9,11 +9,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.sp
-import kotlin.math.min
 
 enum class ThemeMode { DARK, LIGHT }
 
@@ -158,37 +154,4 @@ fun AppTheme(mode: ThemeMode, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalAppColors provides colors) {
         MaterialTheme(colorScheme = scheme, typography = Typography, content = content)
     }
-}
-
-/** The short side of the screenshots the app's measurements were taken from, in their pixels. */
-private const val REFERENCE_SHORT_SIDE = 1068f
-
-/**
- * On a screen much smaller than the tablet, keeps things from shrinking past what a finger can hit. Low
- * enough to stay out of the way on the Pad 7, whose density of 2.75 would otherwise change its scale.
- */
-private const val MIN_DP_PER_UNIT = 0.6f
-
-/**
- * On a phone one unit is this many dp. The floor above gives 0.6 there, which sets the greeting about a fifth narrower
- * against the screen than Notewise's phone does; this is the size that matches its screenshots.
- */
-private const val COMPACT_DP_PER_UNIT = 0.71f
-
-/**
- * Inside this, one dp is one pixel of the reference screenshots, so a measurement copied from a
- * screenshot lands in the same place on the Pad 7 whatever display size the tablet is set to. Those
- * units come out close to real dp. The system's font scale still applies.
- */
-@Composable
-fun ReferenceScale(content: @Composable () -> Unit) {
-    val density = LocalDensity.current
-    val window = LocalWindowInfo.current.containerSize
-    val shortSide = min(window.width, window.height)
-    val scale = if (isCompactScreen()) {
-        density.density * COMPACT_DP_PER_UNIT
-    } else {
-        maxOf(shortSide / REFERENCE_SHORT_SIDE, density.density * MIN_DP_PER_UNIT)
-    }
-    CompositionLocalProvider(LocalDensity provides Density(scale, density.fontScale), content = content)
 }

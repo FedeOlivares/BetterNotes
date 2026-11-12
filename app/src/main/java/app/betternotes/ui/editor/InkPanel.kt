@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -45,7 +43,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.graphics.withMatrix
 import androidx.ink.brush.InputToolType
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
@@ -61,8 +58,13 @@ import app.betternotes.core.model.PenType
 import app.betternotes.core.model.TipShape
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LetterSpacing
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.isCompactScreen
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.PI
@@ -70,7 +72,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 internal val PanelWidth = 380.dp
-internal val PanelShape = RoundedCornerShape(22.dp)
+internal val PanelShape = AppShapes.Rounded22
 internal val PanelPadding = 18.dp
 private val RowSpacing = 49.dp
 
@@ -101,7 +103,7 @@ internal fun PanelSheet(
             Text(
                 title,
                 color = colors.title,
-                fontSize = 16.sp,
+                fontSize = TextSize.S16,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.align(Alignment.Center),
             )
@@ -109,9 +111,9 @@ internal fun PanelSheet(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 14.dp)
+                    .padding(end = Spacing.S14)
                     .size(27.dp)
-                    .clip(CircleShape)
+                    .clip(AppShapes.Circle)
                     .background(colors.closeButton)
                     .clickable(role = Role.Button, onClick = onClose),
             ) {
@@ -149,7 +151,7 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
             BrushTypeSelector(preset, state.screenDpi) { kind -> state.update { it.copy(brush = kind) } }
         }
         LabeledRow(R.string.panel_thickness) { ValuePill { ValueText(preset.thickness.toString()) } }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - Spacing.S6)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) {
                 state.update { it.withThickness(it.thickness - 1) }
             }
@@ -173,9 +175,9 @@ internal fun InkPanel(state: EditorState, preset: InkPreset, notices: Notices, m
             steps = 20,
             modifier = Modifier.fillMaxWidth(),
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(Spacing.S16))
         Box(Modifier.padding(horizontal = PanelPadding).fillMaxWidth().height(1.dp).background(colors.panelDivider))
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.S10))
         LabeledRow(R.string.panel_line_type) {
             ValuePill(onClick = { state.update { it.copy(line = it.line.next()) } }) {
                 LineTypeGlyph(preset.line, colors.icon)
@@ -280,15 +282,15 @@ internal fun LabeledRow(
         Text(
             stringResource(label),
             color = colors.label,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
-            letterSpacing = 0.4.sp,
+            letterSpacing = LetterSpacing.Label,
         )
         if (info != null) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .padding(start = 4.dp)
+                    .padding(start = Spacing.S4)
                     .size(30.dp)
                     .tappable(radius = 15.dp, onClick = info),
             ) {
@@ -322,16 +324,16 @@ private fun TipShape.next() = if (this == TipShape.ROUND) TipShape.SQUARE else T
 private fun TipGlyph(tip: TipShape) {
     val colors = LocalEditorColors.current
     if (tip == TipShape.ROUND) {
-        Box(Modifier.size(14.dp).background(colors.icon, CircleShape))
+        Box(Modifier.size(14.dp).background(colors.icon, AppShapes.Circle))
     } else {
-        Box(Modifier.size(width = 17.dp, height = 10.dp).background(colors.icon, RoundedCornerShape(3.dp)))
+        Box(Modifier.size(width = 17.dp, height = 10.dp).background(colors.icon, AppShapes.Rounded3))
     }
 }
 
 @Composable
 private fun PenTypeCards(selected: PenType, onSelect: (PenType) -> Unit) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S10),
         modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding),
     ) {
         PenTypeCard(EditorIcons.NaturalNib, R.string.pen_natural, selected == PenType.NATURAL) { onSelect(PenType.NATURAL) }
@@ -350,7 +352,7 @@ private fun androidx.compose.foundation.layout.RowScope.PenTypeCard(
     onClick: () -> Unit,
 ) {
     val colors = LocalEditorColors.current
-    val shape = RoundedCornerShape(16.dp)
+    val shape = AppShapes.Rounded16
     val tint = if (selected) colors.accent else colors.title
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -364,8 +366,8 @@ private fun androidx.compose.foundation.layout.RowScope.PenTypeCard(
             .clickable(role = Role.RadioButton, onClick = onClick),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(stringResource(label), color = tint, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Spacing.S4))
+        Text(stringResource(label), color = tint, fontSize = TextSize.S13, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -437,14 +439,14 @@ private fun ColorSection(state: EditorState, preset: InkPreset, notices: Notices
     val colors = LocalEditorColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().height(RowSpacing).padding(start = PanelPadding, end = PanelPadding - 6.dp),
+        modifier = Modifier.fillMaxWidth().height(RowSpacing).padding(start = PanelPadding, end = PanelPadding - Spacing.S6),
     ) {
         Text(
             stringResource(R.string.panel_color),
             color = colors.label,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
-            letterSpacing = 0.4.sp,
+            letterSpacing = LetterSpacing.Label,
         )
         Spacer(Modifier.weight(1f))
         PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_add_swatch)) {
@@ -454,7 +456,7 @@ private fun ColorSection(state: EditorState, preset: InkPreset, notices: Notices
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(start = PanelPadding - 8.dp, end = PanelPadding - 8.dp, bottom = 18.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = PanelPadding - Spacing.S8, end = PanelPadding - Spacing.S8, bottom = Spacing.S18),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -464,13 +466,13 @@ private fun ColorSection(state: EditorState, preset: InkPreset, notices: Notices
                 PaletteSwatch(color, selected = color == preset.color) { state.update { it.pickColor(color) } }
             }
         }
-        Box(Modifier.padding(horizontal = 4.dp).size(2.dp, 28.dp).background(colors.panelDivider))
+        Box(Modifier.padding(horizontal = Spacing.S4).size(2.dp, 28.dp).background(colors.panelDivider))
         Box(
             Modifier
-                .padding(horizontal = 6.dp)
+                .padding(horizontal = Spacing.S6)
                 .size(24.dp)
-                .clip(CircleShape)
-                .background(Brush.sweepGradient(HueStops))
+                .clip(AppShapes.Circle)
+                .background(Brush.sweepGradient(Swatches.Hues))
                 .clickable(role = Role.Button) { state.colorTarget = ColorTarget.SELECTED_SLOT },
         )
     }
@@ -480,7 +482,7 @@ private fun ColorSection(state: EditorState, preset: InkPreset, notices: Notices
 private fun PaletteSwatch(color: Int, selected: Boolean, onClick: () -> Unit) {
     val ring = LocalEditorColors.current.swatchRing
     SwatchCell(40.dp, onClick) {
-        if (selected) Box(Modifier.size(35.dp).border(5.dp, ring, CircleShape))
+        if (selected) Box(Modifier.size(35.dp).border(5.dp, ring, AppShapes.Circle))
         ColorDot(color)
     }
 }
@@ -493,16 +495,6 @@ private fun SwatchCell(width: Dp, onClick: () -> Unit, content: @Composable BoxS
         content = content,
     )
 }
-
-internal val HueStops = listOf(
-    Color(0xFFFF0000),
-    Color(0xFFFFFF00),
-    Color(0xFF00FF00),
-    Color(0xFF00FFFF),
-    Color(0xFF0000FF),
-    Color(0xFFFF00FF),
-    Color(0xFFFF0000),
-)
 
 private const val MIN_OPACITY = 0.05f
 private const val HOLD_STEP_MS = 100

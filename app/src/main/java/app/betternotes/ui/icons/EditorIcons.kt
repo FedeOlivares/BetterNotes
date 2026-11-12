@@ -1,12 +1,12 @@
 package app.betternotes.ui.icons
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.dp
+import app.betternotes.ui.theme.UiColors
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -214,7 +214,7 @@ internal object EditorIcons {
         ICON_DP,
     ).addPath(
         PathParser().parsePathString(path).toNodes(),
-        stroke = SolidColor(Color.Black),
+        stroke = SolidColor(UiColors.IconMask),
         strokeLineWidth = width,
         strokeLineCap = StrokeCap.Round,
         strokeLineJoin = StrokeJoin.Round,
@@ -226,7 +226,7 @@ internal object EditorIcons {
         ICON_DP.dp,
         ICON_DP,
         ICON_DP,
-    ).addPath(PathParser().parsePathString(path).toNodes(), fill = SolidColor(Color.Black)).build()
+    ).addPath(PathParser().parsePathString(path).toNodes(), fill = SolidColor(UiColors.IconMask)).build()
 
     /**
      * Three squares overlapping from the top left to the bottom right, read as a stack seen from above: the top one is the front and
@@ -243,9 +243,9 @@ internal object EditorIcons {
         for (k in squares.indices.reversed()) {
             val nodes = PathParser().parsePathString(squares[k]).toNodes()
             if (k == solid) {
-                builder.addPath(nodes, fill = SolidColor(Color.Black), stroke = SolidColor(Color.Black), strokeLineWidth = STROKE_WIDTH, strokeLineJoin = StrokeJoin.Round)
+                builder.addPath(nodes, fill = SolidColor(UiColors.IconMask), stroke = SolidColor(UiColors.IconMask), strokeLineWidth = STROKE_WIDTH, strokeLineJoin = StrokeJoin.Round)
             } else {
-                builder.addPath(nodes, stroke = SolidColor(Color.Black), strokeLineWidth = STROKE_WIDTH, strokeLineJoin = StrokeJoin.Round)
+                builder.addPath(nodes, stroke = SolidColor(UiColors.IconMask), strokeLineWidth = STROKE_WIDTH, strokeLineJoin = StrokeJoin.Round)
             }
         }
         return builder.build()

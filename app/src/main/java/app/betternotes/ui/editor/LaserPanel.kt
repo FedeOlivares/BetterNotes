@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,17 +32,17 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.canvas.LaserMode
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LetterSpacing
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
 import kotlin.math.roundToInt
 
-private val LaserColors = intArrayOf(
-    0xFF000000.toInt(), 0xFFCC0000.toInt(), 0xFF000099.toInt(), 0xFF00CCFF.toInt(),
-    0xFF00CC00.toInt(), 0xFF009900.toInt(), 0xFFFFCC00.toInt(), 0xFF8B5A2B.toInt(),
-)
 
 /** The laser's panel from the owner's screenshot: how it shows, how long its tail lasts, and its color. */
 @Composable
@@ -71,8 +69,8 @@ internal fun LaserPanel(state: EditorState, modifier: Modifier = Modifier) {
             }
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S10),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = Spacing.S12),
         ) {
             ModeCard(R.string.laser_dot, 4.dp, 4.dp, state.laserMode == LaserMode.DOT) {
                 state.selectLaserMode(LaserMode.DOT)
@@ -94,14 +92,14 @@ internal fun LaserPanel(state: EditorState, modifier: Modifier = Modifier) {
         )
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().height(49.dp).padding(start = PanelPadding, end = PanelPadding - 6.dp),
+            modifier = Modifier.fillMaxWidth().height(49.dp).padding(start = PanelPadding, end = PanelPadding - Spacing.S6),
         ) {
             Text(
                 stringResource(R.string.panel_color),
                 color = colors.label,
-                fontSize = 14.sp,
+                fontSize = TextSize.S14,
                 fontWeight = FontWeight.Medium,
-                letterSpacing = 0.4.sp,
+                letterSpacing = LetterSpacing.Label,
             )
             Spacer(Modifier.weight(1f))
             PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_add_swatch)) {
@@ -110,26 +108,26 @@ internal fun LaserPanel(state: EditorState, modifier: Modifier = Modifier) {
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding - 8.dp).padding(bottom = 18.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding - Spacing.S8).padding(bottom = Spacing.S18),
         ) {
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-                for (color in LaserColors) {
+                for (color in Swatches.Laser) {
                     Box(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier.size(40.dp).tappable(radius = 20.dp) { state.selectLaserColor(color) },
                     ) {
-                        if (color == state.laserColor) Box(Modifier.size(35.dp).border(5.dp, colors.swatchRing, CircleShape))
+                        if (color == state.laserColor) Box(Modifier.size(35.dp).border(5.dp, colors.swatchRing, AppShapes.Circle))
                         ColorDot(color)
                     }
                 }
             }
-            Box(Modifier.padding(horizontal = 4.dp).size(2.dp, 28.dp).background(colors.panelDivider))
+            Box(Modifier.padding(horizontal = Spacing.S4).size(2.dp, 28.dp).background(colors.panelDivider))
             Box(
                 Modifier
-                    .padding(horizontal = 6.dp)
+                    .padding(horizontal = Spacing.S6)
                     .size(24.dp)
-                    .clip(CircleShape)
-                    .background(Brush.sweepGradient(HueStops))
+                    .clip(AppShapes.Circle)
+                    .background(Brush.sweepGradient(Swatches.Hues))
                     .clickable(role = Role.Button) { state.colorTarget = ColorTarget.LASER },
             )
         }
@@ -145,7 +143,7 @@ private fun RowScope.ModeCard(
     onClick: () -> Unit,
 ) {
     val colors = LocalEditorColors.current
-    val shape = RoundedCornerShape(16.dp)
+    val shape = AppShapes.Rounded16
     val tint = if (selected) colors.accent else colors.title
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -158,8 +156,8 @@ private fun RowScope.ModeCard(
             .border(if (selected) 2.dp else 1.dp, if (selected) colors.accent else colors.panelDivider, shape)
             .clickable(role = Role.RadioButton, onClick = onClick),
     ) {
-        Box(Modifier.size(glyphWidth, glyphHeight).background(tint, CircleShape))
-        Spacer(Modifier.height(10.dp))
-        Text(stringResource(label), color = tint, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Box(Modifier.size(glyphWidth, glyphHeight).background(tint, AppShapes.Circle))
+        Spacer(Modifier.height(Spacing.S10))
+        Text(stringResource(label), color = tint, fontSize = TextSize.S13, fontWeight = FontWeight.Medium)
     }
 }

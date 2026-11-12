@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -54,7 +53,6 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.handfont.GlyphSpace
 import app.betternotes.core.handfont.HandCharset
@@ -64,6 +62,10 @@ import app.betternotes.core.handfont.clampToSpace
 import app.betternotes.core.handfont.simplifyStroke
 import app.betternotes.core.text.FontFiles
 import app.betternotes.fonts.FontLibrary
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -135,11 +137,11 @@ internal fun HandFontEditor(draft: HandFontDraft, onDone: () -> Unit) {
         Text(
             stringResource(R.string.font_make_help),
             color = colors.secondary,
-            fontSize = 15.sp,
-            modifier = Modifier.padding(top = 4.dp, bottom = 16.dp),
+            fontSize = TextSize.S15,
+            modifier = Modifier.padding(top = Spacing.S4, bottom = Spacing.S16),
         )
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
-            Text(stringResource(R.string.font_make_name), color = colors.text, fontSize = 19.5.sp, modifier = Modifier.padding(end = 16.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = Spacing.S16)) {
+            Text(stringResource(R.string.font_make_name), color = colors.text, fontSize = TextSize.S19_5, modifier = Modifier.padding(end = Spacing.S16))
             BasicTextField(
                 draft.name,
                 {
@@ -148,11 +150,11 @@ internal fun HandFontEditor(draft: HandFontDraft, onDone: () -> Unit) {
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(),
-                textStyle = TextStyle(color = colors.text, fontSize = 19.5.sp),
+                textStyle = TextStyle(color = colors.text, fontSize = TextSize.S19_5),
                 cursorBrush = SolidColor(colors.accent),
-                modifier = Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(colors.inset).padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.weight(1f).clip(AppShapes.Rounded10).background(colors.inset).padding(horizontal = Spacing.S14, vertical = Spacing.S12),
                 decorationBox = { field ->
-                    if (draft.name.isEmpty()) Text(stringResource(R.string.font_make_name_hint), color = colors.secondary, fontSize = 19.5.sp)
+                    if (draft.name.isEmpty()) Text(stringResource(R.string.font_make_name_hint), color = colors.secondary, fontSize = TextSize.S19_5)
                     field()
                 },
             )
@@ -163,16 +165,16 @@ internal fun HandFontEditor(draft: HandFontDraft, onDone: () -> Unit) {
         Text(
             stringResource(R.string.font_make_draw_char, draft.selected.toString()),
             color = colors.text,
-            fontSize = 22.sp,
+            fontSize = TextSize.S22,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(bottom = 14.dp),
+            modifier = Modifier.padding(bottom = Spacing.S14),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.padding(bottom = 14.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S24), modifier = Modifier.padding(bottom = Spacing.S14)) {
             GlyphPad(draft, Modifier.size(PadSide))
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.S10)) {
                 ActionPill(stringResource(R.string.font_make_undo)) { draft.undo() }
                 ActionPill(stringResource(R.string.font_make_clear)) { draft.clear() }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(Spacing.S10))
                 ActionPill(stringResource(R.string.font_make_previous)) { draft.step(-1) }
                 ActionPill(stringResource(R.string.font_make_next)) { draft.step(1) }
             }
@@ -188,8 +190,8 @@ internal fun HandFontEditor(draft: HandFontDraft, onDone: () -> Unit) {
             R.string.font_make_spanish to HandCharset.SPANISH,
         )
         for ((title, chars) in sections) {
-            Text(stringResource(title), color = colors.secondary, fontSize = 16.sp, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 14.dp)) {
+            Text(stringResource(title), color = colors.secondary, fontSize = TextSize.S16, modifier = Modifier.padding(top = Spacing.S4, bottom = Spacing.S8))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.S8), verticalArrangement = Arrangement.spacedBy(Spacing.S8), modifier = Modifier.padding(bottom = Spacing.S14)) {
                 for (c in chars) GlyphCell(c, draft.glyphs[c], c == draft.selected) { draft.selected = c }
             }
         }
@@ -200,14 +202,14 @@ internal fun HandFontEditor(draft: HandFontDraft, onDone: () -> Unit) {
             Text(
                 stringResource(R.string.font_make_count, draft.drawn, HandCharset.ALL.length),
                 color = colors.text,
-                fontSize = 19.5.sp,
+                fontSize = TextSize.S19_5,
             )
-            if (problem != null) Text(stringResource(problem), color = colors.secondary, fontSize = 15.sp)
+            if (problem != null) Text(stringResource(problem), color = colors.secondary, fontSize = TextSize.S15)
         }
         val enabled = problem == null && !saving
         Box(
             Modifier
-                .clip(RoundedCornerShape(12.dp))
+                .clip(AppShapes.Rounded12)
                 .background(if (enabled) colors.accent else colors.chipIdle)
                 .clickable(enabled = enabled) {
                     saving = true
@@ -224,12 +226,12 @@ internal fun HandFontEditor(draft: HandFontDraft, onDone: () -> Unit) {
                         }
                     }
                 }
-                .padding(horizontal = 28.dp, vertical = 14.dp),
+                .padding(horizontal = Spacing.S28, vertical = Spacing.S14),
         ) {
             Text(
                 stringResource(R.string.font_make_save),
                 color = if (enabled) colors.onAccent else colors.chipIdleText,
-                fontSize = 19.5.sp,
+                fontSize = TextSize.S19_5,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -261,11 +263,11 @@ private fun ActionPill(label: String, onClick: () -> Unit) {
         Modifier
             .width(150.dp)
             .height(48.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(AppShapes.Rounded10)
             .background(colors.chipIdle)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { ShrinkText(label, colors.chipIdleText, 18.sp) }
+    ) { ShrinkText(label, colors.chipIdleText, TextSize.S18) }
 }
 
 /** One letter to choose: its drawing when there is one, and the plain letter, faint, while there is not. */
@@ -278,12 +280,12 @@ private fun GlyphCell(char: Char, glyph: HandGlyph?, selected: Boolean, onSelect
     Canvas(
         Modifier
             .size(CellSize)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(AppShapes.Rounded10)
             .background(if (selected) colors.chipSelected else colors.inset)
             .clickable(onClick = onSelect),
     ) {
         if (glyph == null || glyph.isEmpty) {
-            val layout = measurer.measure(char.toString(), TextStyle(color = faint, fontSize = 22.sp))
+            val layout = measurer.measure(char.toString(), TextStyle(color = faint, fontSize = TextSize.S22))
             drawText(layout, topLeft = Offset((size.width - layout.size.width) / 2, (size.height - layout.size.height) / 2))
         } else {
             val side = size.minDimension * 0.76f
@@ -324,7 +326,7 @@ private fun GlyphPad(draft: HandFontDraft, modifier: Modifier) {
     val side = with(density) { PadSide.toPx() }
     Canvas(
         modifier
-            .clip(RoundedCornerShape(14.dp))
+            .clip(AppShapes.Rounded14)
             .background(colors.inset)
             .pointerInput(side) {
                 val unit = GlyphSpace.SIZE / side

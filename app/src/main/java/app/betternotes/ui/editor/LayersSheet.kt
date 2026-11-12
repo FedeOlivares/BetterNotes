@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,13 +40,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import app.betternotes.R
 import app.betternotes.core.model.Layer
 import app.betternotes.core.model.PageContent
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlin.math.roundToInt
 
 private val LayerRowHeight = 48.dp
@@ -81,7 +82,7 @@ internal fun LayersSheet(state: EditorState, modifier: Modifier = Modifier) {
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.panelDivider))
         Row(
             horizontalArrangement = Arrangement.SpaceEvenly,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.S8),
         ) {
             LayerAction(EditorIcons.Plus, R.string.layers_add, true) { state.addLayer() }
             LayerAction(EditorIcons.Pencil, R.string.layers_rename, true) { renaming = !renaming }
@@ -110,7 +111,7 @@ private fun LayerRows(state: EditorState, content: PageContent, layers: List<Lay
     Box(
         Modifier
             .padding(horizontal = PanelPadding)
-            .padding(top = 6.dp, bottom = 10.dp)
+            .padding(top = Spacing.S6, bottom = Spacing.S10)
             .fillMaxWidth()
             .heightIn(max = 340.dp)
             .verticalScroll(rememberScrollState()),
@@ -171,7 +172,7 @@ private fun LayerRow(state: EditorState, content: PageContent, layer: Layer, isA
     val colors = LocalEditorColors.current
     val name = layer.name.ifEmpty { stringResource(R.string.layer_default_name, rank + 1) }
     val count = remember(content.version) { content.indicesOn(layer.id).size }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = AppShapes.Rounded16
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -182,7 +183,7 @@ private fun LayerRow(state: EditorState, content: PageContent, layer: Layer, isA
             .background(if (floating) colors.raisedButton else if (isActive) colors.accentContainer else colors.field)
             .then(if (isActive) Modifier.border(2.dp, colors.accent, shape) else Modifier)
             .clickable(enabled = !floating, role = Role.RadioButton, onClickLabel = stringResource(R.string.layers_work_on)) { state.selectLayer(layer.id) }
-            .padding(start = 12.dp),
+            .padding(start = Spacing.S12),
     ) {
         androidx.compose.material3.Icon(
             EditorIcons.Layers,
@@ -193,10 +194,10 @@ private fun LayerRow(state: EditorState, content: PageContent, layer: Layer, isA
         Text(
             name,
             color = if (layer.visible) colors.title else colors.iconDisabled,
-            fontSize = 15.sp,
+            fontSize = TextSize.S15,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 12.dp),
+            modifier = Modifier.weight(1f).padding(start = Spacing.S12),
         )
         // With something selected, the other layers offer to take it. The selection is on the layer being worked on.
         if (!isActive && !floating && !state.selection.isNullOrEmpty()) {
@@ -209,7 +210,7 @@ private fun LayerRow(state: EditorState, content: PageContent, layer: Layer, isA
                 androidx.compose.material3.Icon(EditorIcons.AddElement, stringResource(R.string.layers_move_here), tint = colors.accent, modifier = Modifier.size(22.dp))
             }
         }
-        Text(count.toString(), color = colors.label, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 6.dp))
+        Text(count.toString(), color = colors.label, fontSize = TextSize.S13, modifier = Modifier.padding(horizontal = Spacing.S6))
         // Every layer can be hidden and shown, the one being worked on too: hiding it moves the work to a layer that is still shown.
         Box(
             contentAlignment = Alignment.Center,
@@ -237,7 +238,7 @@ private fun LayerAction(icon: ImageVector, label: Int, enabled: Boolean, onClick
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(AppShapes.Rounded14)
             .background(colors.field)
             .clickable(enabled = enabled, role = Role.Button, onClickLabel = stringResource(label), onClick = onClick),
     ) {
@@ -252,23 +253,23 @@ private fun RenameRow(current: String, onDone: (String?) -> Unit) {
     var text by remember { mutableStateOf(current) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = Spacing.S6),
     ) {
         Box(
             contentAlignment = Alignment.CenterStart,
             modifier = Modifier
                 .weight(1f)
                 .height(40.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(AppShapes.Rounded12)
                 .background(colors.field)
-                .border(1.dp, colors.accent, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp),
+                .border(1.dp, colors.accent, AppShapes.Rounded12)
+                .padding(horizontal = Spacing.S12),
         ) {
             BasicTextField(
                 value = text,
                 onValueChange = { text = it.take(MAX_LAYER_NAME) },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.title, fontSize = 15.sp),
+                textStyle = TextStyle(color = colors.title, fontSize = TextSize.S15),
                 cursorBrush = SolidColor(colors.accent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onDone(text) }),
@@ -278,9 +279,9 @@ private fun RenameRow(current: String, onDone: (String?) -> Unit) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .padding(start = 10.dp)
+                .padding(start = Spacing.S10)
                 .size(40.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(AppShapes.Rounded20)
                 .background(colors.accentContainer)
                 .clickable(role = Role.Button) { onDone(text) },
         ) {

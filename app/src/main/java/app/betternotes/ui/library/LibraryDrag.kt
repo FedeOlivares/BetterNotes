@@ -32,9 +32,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.ui.theme.LocalAppColors
+import app.betternotes.ui.theme.TextSize
 
 /** Where a dragged item would land if let go now. */
 internal sealed interface DropTarget {
@@ -233,7 +233,7 @@ internal fun DragOverlay(drag: DragState, canMoveOut: Boolean, outZoneHeight: an
             Text(
                 stringResource(R.string.library_drop_out),
                 color = if (drag.target == DropTarget.Out) colors.onAccent else colors.accent,
-                fontSize = 17.sp,
+                fontSize = TextSize.S17,
                 fontWeight = FontWeight.Medium,
             )
         }

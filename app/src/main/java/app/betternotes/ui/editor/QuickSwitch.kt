@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,13 +30,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.library.LibraryRepository
 import app.betternotes.ui.icons.EditorIcons
 import app.betternotes.ui.library.Thumbnail
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.opensFrom
 
 private const val RECENT_LIMIT = 40
@@ -64,10 +64,10 @@ internal fun QuickSwitch(state: EditorState, actions: EditorActions, notices: No
                 state.quickSwitchOpen = false
             },
     ) {
-        val shape = RoundedCornerShape(22.dp)
+        val shape = AppShapes.Rounded22
         Column(
             Modifier
-                .padding(start = 6.dp, top = 62.dp, bottom = 8.dp)
+                .padding(start = Spacing.S6, top = 62.dp, bottom = Spacing.S8)
                 .opensFrom(OpenFrom.TopStart)
                 .width(PanelWidth)
                 .masksInk(state, "quick-switch")
@@ -80,16 +80,16 @@ internal fun QuickSwitch(state: EditorState, actions: EditorActions, notices: No
                 Text(
                     stringResource(R.string.quick_switch_title),
                     color = colors.title,
-                    fontSize = 16.sp,
+                    fontSize = TextSize.S16,
                     modifier = Modifier.align(Alignment.Center),
                 )
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 14.dp)
+                        .padding(end = Spacing.S14)
                         .size(27.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(colors.closeButton)
                         .clickable(role = Role.Button) { state.quickSwitchOpen = false },
                 ) {
@@ -101,16 +101,16 @@ internal fun QuickSwitch(state: EditorState, actions: EditorActions, notices: No
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .padding(horizontal = 14.dp)
+                            .padding(horizontal = Spacing.S14)
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(AppShapes.Rounded14)
                             .background(colors.field)
-                            .padding(horizontal = 16.dp, vertical = 16.dp),
+                            .padding(horizontal = Spacing.S16, vertical = Spacing.S16),
                     ) {
                         Text(
                             stringResource(R.string.quick_switch_pin),
                             color = colors.title,
-                            fontSize = 14.sp,
+                            fontSize = TextSize.S14,
                             modifier = Modifier.weight(1f),
                         )
                         Icon(
@@ -123,8 +123,8 @@ internal fun QuickSwitch(state: EditorState, actions: EditorActions, notices: No
                     Text(
                         stringResource(R.string.quick_switch_recents),
                         color = colors.label,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 10.dp),
+                        fontSize = TextSize.S14,
+                        modifier = Modifier.padding(start = Spacing.S20, top = Spacing.S20, bottom = Spacing.S10),
                     )
                 }
                 items(recents, key = { it.id }) { entry ->
@@ -132,20 +132,20 @@ internal fun QuickSwitch(state: EditorState, actions: EditorActions, notices: No
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .padding(horizontal = 14.dp)
+                            .padding(horizontal = Spacing.S14)
                             .fillMaxWidth()
                             .clickable(role = Role.Button) {
                                 state.quickSwitchOpen = false
                                 if (entry.id != currentId) actions.onOpenDocument(entry.id)
                             }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = Spacing.S14, vertical = Spacing.S8),
                     ) {
-                        Thumbnail(entry.id, info, repository.thumbnails, Modifier.size(40.dp).clip(RoundedCornerShape(4.dp)))
-                        Spacer(Modifier.width(12.dp))
+                        Thumbnail(entry.id, info, repository.thumbnails, Modifier.size(40.dp).clip(AppShapes.Rounded4))
+                        Spacer(Modifier.width(Spacing.S12))
                         Text(
                             entry.name,
                             color = if (entry.id == currentId) colors.accent else colors.title,
-                            fontSize = 15.sp,
+                            fontSize = TextSize.S15,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),

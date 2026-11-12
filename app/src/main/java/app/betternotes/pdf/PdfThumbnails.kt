@@ -1,7 +1,6 @@
 package app.betternotes.pdf
 
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -10,6 +9,7 @@ import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.model.PageSource
 import kotlin.math.roundToInt
 import android.util.LruCache
+import app.betternotes.ui.theme.CanvasColors
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,7 +28,7 @@ object PdfThumbnails {
                 val scale = widthPx.toFloat() / page.width
                 val height = (page.height * scale).roundToInt().coerceAtLeast(1)
                 val bitmap = createBitmap(widthPx, height)
-                bitmap.eraseColor(Color.WHITE)
+                bitmap.eraseColor(CanvasColors.PAPER)
                 page.render(bitmap, null, Matrix().apply { setScale(scale, scale) }, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                 bitmap
             }

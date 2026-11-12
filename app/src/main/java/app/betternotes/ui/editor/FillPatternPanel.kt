@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -27,7 +26,10 @@ import app.betternotes.core.model.FillPattern
 import app.betternotes.core.model.FillPatternKind
 import app.betternotes.core.tools.PatternMarks
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
 import kotlin.math.roundToInt
 
 /**
@@ -42,7 +44,7 @@ internal fun FillPatternSection(state: EditorState) {
     }
     if (!state.fillPatternOn) return
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S8),
         modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding),
     ) {
         for (kind in FillPatternKind.entries.filter { it != FillPatternKind.SOLID }) {
@@ -74,11 +76,11 @@ private fun Float.roundToHalf() = (this * 2f).roundToInt() / 2f
 /** Black, white and the colors of the bucket's bar, and the wheel for any other. */
 @Composable
 private fun PatternColors(state: EditorState) {
-    val colors = (listOf(0xFF000000.toInt(), 0xFFFFFFFF.toInt()) + state.fillColors).distinct()
+    val colors = (Swatches.PatternBase + state.fillColors).distinct()
     Row(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S6),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = Spacing.S4),
     ) {
         for (color in colors.take(MAX_PATTERN_COLORS)) {
             ToolbarCellBox(onClick = { state.updateFillPattern { it.copy(color = color) } }) {
@@ -97,7 +99,7 @@ private const val MAX_PATTERN_COLORS = 7
 private fun PatternCell(kind: FillPatternKind, current: FillPattern, base: Int, modifier: Modifier, onClick: () -> Unit) {
     val colors = LocalEditorColors.current
     val selected = kind == current.kind
-    val shape = RoundedCornerShape(8.dp)
+    val shape = AppShapes.Rounded8
     val marks = remember { PatternMarks() }
     val label = stringResource(patternName(kind))
     Box(

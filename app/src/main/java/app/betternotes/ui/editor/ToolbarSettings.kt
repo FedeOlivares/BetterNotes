@@ -28,8 +28,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -53,24 +51,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.graphics.ColorUtils
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.DarkEditorColors
 import app.betternotes.ui.theme.EditorColors
+import app.betternotes.ui.theme.LightEditorColors
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.OPAQUE_ALPHA
+import app.betternotes.ui.theme.RGB_MASK
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 
-/** The ready-made colors for the toolbar: white, dark and a few pastels. Null in the saved setting means the theme's own. */
-internal val ToolbarPresets = listOf(
-    0xFFFFFFFF.toInt(),
-    0xFF25282D.toInt(),
-    0xFFFFD9E0.toInt(),
-    0xFFFFE7C7.toInt(),
-    0xFFFFF6BF.toInt(),
-    0xFFD6F2D3.toInt(),
-    0xFFD0EAFB.toInt(),
-    0xFFE3D9F7.toInt(),
-)
 
 /**
  * The editor colors with the toolbars painted [toolbar]. The icons and the lines in the toolbar follow the
@@ -78,20 +73,22 @@ internal val ToolbarPresets = listOf(
  */
 internal fun EditorColors.withToolbar(toolbar: Int?): EditorColors {
     if (toolbar == null) return this
-    val opaque = toolbar or ALPHA_OPAQUE
+    val opaque = toolbar or OPAQUE_ALPHA
     val light = ColorUtils.calculateLuminance(opaque) > LIGHT_LUMINANCE
-    val edge = if (light) Color.Black else Color.White
+    val edge = if (light) UiColors.Black else UiColors.White
+    // A light bar takes the light theme's icons and a dark bar the dark theme's, whatever the app's theme is.
+    val on = if (light) LightEditorColors else DarkEditorColors
     fun shade(amount: Float) = Color(ColorUtils.blendARGB(opaque, edge.toArgb(), amount))
     return copy(
         pill = Color(opaque),
         pillBorder = shade(0.10f),
         pillDivider = shade(0.22f),
         raisedButton = shade(0.10f),
-        icon = if (light) Color(0xFF25282D) else Color(0xFFE6E7EA),
-        iconDisabled = if (light) Color(0xFFA5A8AE) else Color(0xFF676A71),
-        toolSelected = if (light) Color(0xFFD8E5FC) else Color(0xFF174A72),
-        toolSelectedIcon = if (light) Color(0xFF2F6FE0) else Color(0xFFB9D8F7),
-        swatchEdge = if (light) Color(0x33000000) else Color(0x33FFFFFF),
+        icon = on.icon,
+        iconDisabled = on.iconDisabled,
+        toolSelected = on.toolSelected,
+        toolSelectedIcon = on.toolSelectedIcon,
+        swatchEdge = on.swatchEdge,
     )
 }
 
@@ -116,19 +113,19 @@ internal fun ToolbarSettingsPanel(state: EditorState, notices: Notices, modifier
             Text(
                 stringResource(R.string.toolbar_move_hint),
                 color = colors.label,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = PanelPadding).padding(bottom = 8.dp),
+                fontSize = TextSize.S13,
+                modifier = Modifier.padding(horizontal = PanelPadding).padding(bottom = Spacing.S8),
             )
         }
         GridRows(state)
         OrganizeRow(state)
-        Box(Modifier.padding(horizontal = PanelPadding, vertical = 6.dp).fillMaxWidth().height(1.dp).background(colors.panelDivider))
+        Box(Modifier.padding(horizontal = PanelPadding, vertical = Spacing.S6).fillMaxWidth().height(1.dp).background(colors.panelDivider))
         Text(
             stringResource(R.string.toolbar_color),
             color = colors.label,
-            fontSize = 14.sp,
+            fontSize = TextSize.S14,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = PanelPadding, top = 8.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = PanelPadding, top = Spacing.S8, bottom = Spacing.S8),
         )
         ToolbarColorRow(state)
         HexField(state)
@@ -144,8 +141,8 @@ private fun GridRows(state: EditorState) {
     }
     if (!grid.on) return
     Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S10),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = Spacing.S4),
     ) {
         GridChoice(EditorIcons.GridCross, R.string.toolbar_grid_cross, grid.cross) { state.updateGrid { it.copy(cross = !it.cross) } }
         GridChoice(EditorIcons.GridThirds, R.string.toolbar_grid_thirds, grid.thirds) { state.updateGrid { it.copy(thirds = !it.thirds) } }
@@ -159,9 +156,9 @@ private fun GridChoice(icon: androidx.compose.ui.graphics.vector.ImageVector, la
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(AppShapes.Rounded14)
             .background(if (on) colors.accentContainer else colors.field)
-            .border(if (on) 2.dp else 1.dp, if (on) colors.accent else colors.panelDivider, RoundedCornerShape(14.dp))
+            .border(if (on) 2.dp else 1.dp, if (on) colors.accent else colors.panelDivider, AppShapes.Rounded14)
             .clickable(role = Role.Checkbox, onClickLabel = stringResource(label), onClick = onClick),
     ) {
         androidx.compose.material3.Icon(icon, stringResource(label), tint = if (on) colors.accent else colors.icon, modifier = Modifier.size(26.dp))
@@ -183,7 +180,7 @@ private fun OrganizeRow(state: EditorState) {
             }
             .padding(horizontal = PanelPadding),
     ) {
-        Text(stringResource(R.string.toolbar_organize_icons), color = colors.title, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.toolbar_organize_icons), color = colors.title, fontSize = TextSize.S15, modifier = Modifier.weight(1f))
         androidx.compose.material3.Icon(EditorIcons.ChevronRight, null, tint = colors.label, modifier = Modifier.size(20.dp))
     }
 }
@@ -200,14 +197,14 @@ internal fun CustomizeToolbarSheet(state: EditorState, modifier: Modifier = Modi
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .padding(horizontal = PanelPadding)
-                .padding(bottom = 14.dp)
+                .padding(bottom = Spacing.S14)
                 .fillMaxWidth()
                 .height(48.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(AppShapes.Rounded24)
                 .background(colors.accentContainer)
                 .clickable(role = Role.Button, onClick = state::resetToolbarOrganization),
         ) {
-            Text(stringResource(R.string.toolbar_reset), color = colors.accent, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.toolbar_reset), color = colors.accent, fontSize = TextSize.S15, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -222,14 +219,14 @@ private fun PositionRow(state: EditorState) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().height(49.dp).padding(horizontal = PanelPadding),
     ) {
-        Text(stringResource(R.string.toolbar_position), color = colors.title, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.toolbar_position), color = colors.title, fontSize = TextSize.S15, modifier = Modifier.weight(1f))
         Box {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.DropdownList) { open = true }.padding(horizontal = 8.dp, vertical = 8.dp),
+                modifier = Modifier.clip(AppShapes.Rounded12).clickable(role = Role.DropdownList) { open = true }.padding(horizontal = Spacing.S8, vertical = Spacing.S8),
             ) {
-                Text(stringResource(edgeName(edge)), color = colors.title, fontSize = 15.sp)
-                androidx.compose.material3.Icon(EditorIcons.ChevronDown, null, tint = colors.title, modifier = Modifier.padding(start = 6.dp).size(18.dp))
+                Text(stringResource(edgeName(edge)), color = colors.title, fontSize = TextSize.S15)
+                androidx.compose.material3.Icon(EditorIcons.ChevronDown, null, tint = colors.title, modifier = Modifier.padding(start = Spacing.S6).size(18.dp))
             }
             androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
                 for (choice in ToolbarEdge.entries) {
@@ -328,14 +325,14 @@ private fun ReorderRows(state: EditorState, modifier: Modifier) {
     Text(
         stringResource(R.string.toolbar_reorder),
         color = colors.title,
-        fontSize = 15.sp,
+        fontSize = TextSize.S15,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(horizontal = PanelPadding).padding(top = 6.dp, bottom = 10.dp),
+        modifier = Modifier.padding(horizontal = PanelPadding).padding(top = Spacing.S6, bottom = Spacing.S10),
     )
     Box(
         modifier
             .padding(horizontal = PanelPadding)
-            .padding(bottom = 10.dp)
+            .padding(bottom = Spacing.S10)
             .fillMaxWidth()
             .onSizeChanged { viewport = it.height }
             .verticalScroll(scroll),
@@ -404,17 +401,17 @@ private fun ReorderRow(item: StripItem, state: EditorState, grouped: Boolean, pl
             .fillMaxWidth()
             .height(ReorderRowHeight)
             .graphicsLayer { alpha = if (placeholder) 0.35f else 1f }
-            .clip(RoundedCornerShape(16.dp))
+            .clip(AppShapes.Rounded16)
             .background(if (floating) colors.raisedButton else colors.field)
-            .then(if (grouped) Modifier.border(1.dp, colors.accent.copy(alpha = 0.5f), RoundedCornerShape(16.dp)) else Modifier)
-            .padding(start = 12.dp),
+            .then(if (grouped) Modifier.border(1.dp, colors.accent.copy(alpha = 0.5f), AppShapes.Rounded16) else Modifier)
+            .padding(start = Spacing.S12),
     ) {
         androidx.compose.material3.Icon(item.icon, null, tint = if (hidden) colors.iconDisabled else colors.icon, modifier = Modifier.size(24.dp))
         Text(
             stringResource(item.label),
             color = if (hidden) colors.iconDisabled else colors.title,
-            fontSize = 15.sp,
-            modifier = Modifier.weight(1f).padding(start = 12.dp),
+            fontSize = TextSize.S15,
+            modifier = Modifier.weight(1f).padding(start = Spacing.S12),
         )
         val canHide = item.key !in ALWAYS_SHOWN_TOOLS
         Box(
@@ -442,18 +439,18 @@ private fun ToolbarColorRow(state: EditorState) {
     val colors = LocalEditorColors.current
     val current = state.toolbarColor
     Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S10),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = PanelPadding, vertical = 4.dp),
+            .padding(horizontal = PanelPadding, vertical = Spacing.S4),
     ) {
         Swatch(null, current == null, stringResource(R.string.toolbar_color_default), colors.raisedButton) { state.chooseToolbarColor(null) }
-        for (preset in ToolbarPresets) {
+        for (preset in Swatches.Toolbar) {
             Swatch(preset, current == preset, hex(preset), Color(preset)) { state.chooseToolbarColor(preset) }
         }
-        val custom = current != null && current !in ToolbarPresets
+        val custom = current != null && current !in Swatches.Toolbar
         Swatch(
             if (custom) current else null,
             custom,
@@ -471,12 +468,12 @@ private fun Swatch(color: Int?, selected: Boolean, description: String, fill: Co
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(38.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(color?.let { Color(it) } ?: fill)
-            .border(if (selected) 3.dp else 1.dp, if (selected) colors.accent else colors.swatchRing, CircleShape)
+            .border(if (selected) 3.dp else 1.dp, if (selected) colors.accent else colors.swatchRing, AppShapes.Circle)
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
     ) {
-        if (label != null && color == null) Text(label, color = colors.label, fontSize = 20.sp)
+        if (label != null && color == null) Text(label, color = colors.label, fontSize = TextSize.S20)
     }
 }
 
@@ -489,23 +486,23 @@ private fun HexField(state: EditorState) {
     fun commit() = parsed?.let(state::chooseToolbarColor)
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = 10.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding, vertical = Spacing.S10),
     ) {
-        Text(stringResource(R.string.toolbar_color_hex), color = colors.label, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(stringResource(R.string.toolbar_color_hex), color = colors.label, fontSize = TextSize.S14, modifier = Modifier.weight(1f))
         Box(
             contentAlignment = Alignment.CenterStart,
             modifier = Modifier
                 .size(width = 130.dp, height = 40.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(AppShapes.Rounded12)
                 .background(colors.field)
-                .border(1.dp, if (text.isEmpty() || parsed != null) colors.panelDivider else colors.accent, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp),
+                .border(1.dp, if (text.isEmpty() || parsed != null) colors.panelDivider else colors.accent, AppShapes.Rounded12)
+                .padding(horizontal = Spacing.S12),
         ) {
             BasicTextField(
                 value = text,
                 onValueChange = { text = it.take(MAX_HEX_CHARS) },
                 singleLine = true,
-                textStyle = TextStyle(color = colors.title, fontSize = 15.sp),
+                textStyle = TextStyle(color = colors.title, fontSize = TextSize.S15),
                 cursorBrush = SolidColor(colors.accent),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { commit() }),
@@ -515,34 +512,33 @@ private fun HexField(state: EditorState) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .padding(start = 10.dp)
+                .padding(start = Spacing.S10)
                 .height(40.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(AppShapes.Rounded20)
                 .background(if (parsed != null) colors.accentContainer else colors.field)
                 .clickable(enabled = parsed != null, role = Role.Button) { commit() }
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = Spacing.S16),
         ) {
             Text(
                 stringResource(R.string.toolbar_color_apply),
                 color = if (parsed != null) colors.accent else colors.iconDisabled,
-                fontSize = 14.sp,
+                fontSize = TextSize.S14,
                 fontWeight = FontWeight.Medium,
             )
         }
     }
 }
 
-private fun hex(color: Int) = "#%06X".format(color and 0xFFFFFF)
+private fun hex(color: Int) = "#%06X".format(color and RGB_MASK)
 
 /** Reads "#RRGGBB" or "RRGGBB" as an opaque color, or null when it is not one. */
 internal fun parseHex(text: String): Int? {
     val digits = text.trim().removePrefix("#")
     if (digits.length != HEX_DIGITS || !digits.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
-    return digits.toInt(HEX_RADIX) or ALPHA_OPAQUE
+    return digits.toInt(HEX_RADIX) or OPAQUE_ALPHA
 }
 
 private const val HEX_DIGITS = 6
 private const val HEX_RADIX = 16
 private const val MAX_HEX_CHARS = 7
 private const val LIGHT_LUMINANCE = 0.5
-private val ALPHA_OPAQUE = 0xFF000000.toInt()

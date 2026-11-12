@@ -562,4 +562,55 @@ class GestureRecognizerTest {
         assertEquals(GestureRecognizer.NO_DEADLINE, recognizer.nextDeadlineMs)
         assertTrue(events.none { it == "undo" })
     }
+
+    @Test
+    fun `with the finger in scroll mode a finger never starts a drawing, whatever it does`() {
+        recognizer.mode = InputMode.STYLUS_DRAW
+        // A drag, a long hold, a circle round and round, and a tap and a half.
+        fingerDown(1, 100f, 100f)
+        for (step in 1..40) {
+            now += 10
+            move(1, 100f + step * 6f, 100f)
+        }
+        up(1)
+        now += 20
+        fingerDown(1, 300f, 300f)
+        now += 1_500
+        drive()
+        up(1)
+        now += 20
+        fingerDown(1, 400f, 400f)
+        for (step in 0..60) {
+            now += 8
+            val angle = step * 0.4
+            move(1, 400f + 60f * Math.cos(angle).toFloat(), 400f + 60f * Math.sin(angle).toFloat())
+        }
+        up(1)
+        now += 40
+        fingerDown(1, 50f, 50f)
+        now += 30
+        up(1)
+        now += 30
+        fingerDown(1, 52f, 50f)
+        drive(now + 1_000)
+        assertTrue(events.filter { it.startsWith("start") || it.startsWith("move") }.toString(), events.none { it.startsWith("start") || it.startsWith("move") })
+    }
+
+    @Test
+    fun `the finger draws in finger mode, and the stylus draws in either`() {
+        recognizer.mode = InputMode.FINGER_DRAW
+        fingerDown(1, 100f, 100f)
+        for (step in 1..10) {
+            now += 10
+            move(1, 100f + step * 6f, 100f)
+        }
+        up(1)
+        drive(now + 1_000)
+        assertTrue(events.any { it.startsWith("start 1 FINGER") })
+        events.clear()
+        recognizer.mode = InputMode.STYLUS_DRAW
+        stylusDown()
+        up(9)
+        assertEquals("start 9 STYLUS", events.first())
+    }
 }

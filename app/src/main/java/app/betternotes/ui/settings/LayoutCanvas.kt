@@ -33,6 +33,8 @@ import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.bounds
 import app.betternotes.core.template.corners
 import app.betternotes.core.template.frameLines
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.UiColors
 import kotlin.math.abs
 import kotlin.math.min
 
@@ -206,12 +208,12 @@ internal fun LayoutCanvas(
         translate(now.x, now.y) { paintPage(layout, width, height, now.scale, mirrored = false, shadow) }
         for (handle in layout.frameHandles()) {
             val center = Offset(now.x + handle.x * now.scale, now.y + handle.y * now.scale)
-            drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
+            drawCircle(UiColors.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
             drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
         }
         for (point in layout.handles(selected)) {
             val center = Offset(now.x + point.x * now.scale, now.y + point.y * now.scale)
-            drawCircle(Color.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
+            drawCircle(UiColors.White, HANDLE_RADIUS_DP.dp.toPx() + 2.dp.toPx(), center)
             drawCircle(colors.accent, HANDLE_RADIUS_DP.dp.toPx(), center)
         }
         val index = selected

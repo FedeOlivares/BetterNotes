@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,7 +48,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.canvas.CanvasView
 import app.betternotes.canvas.NoteEditor
@@ -57,7 +55,11 @@ import app.betternotes.core.search.TextMatch
 import app.betternotes.core.search.TextSource
 import app.betternotes.export.exporter
 import app.betternotes.search.DocumentSearch
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -172,11 +174,11 @@ internal fun SearchPanel(
         }
     }
 
-    val shape = RoundedCornerShape(32.dp)
+    val shape = AppShapes.Rounded32
     Column(modifier.opensFrom(OpenFrom.Center).shadow(16.dp, shape, clip = false).clip(shape).background(colors.sheet).imePadding()) {
         Box(Modifier.fillMaxWidth().height(80.dp)) {
-            Text(stringResource(R.string.search_title), color = colors.title, fontSize = 20.sp, modifier = Modifier.align(Alignment.Center))
-            CloseButton(onClose, Modifier.align(Alignment.CenterEnd).padding(end = 22.dp))
+            Text(stringResource(R.string.search_title), color = colors.title, fontSize = TextSize.S20, modifier = Modifier.align(Alignment.Center))
+            CloseButton(onClose, Modifier.align(Alignment.CenterEnd).padding(end = Spacing.S22))
         }
         SearchField(query, { query = it }, focus, onPrevious = { step(-1) }, onNext = { step(1) }, hasMatches = matches.isNotEmpty())
         val pending = search?.pendingLines ?: 0
@@ -188,7 +190,7 @@ internal fun SearchPanel(
             else -> null
         }
         if (note != null) {
-            Text(note, color = colors.secondary, fontSize = 15.sp, modifier = Modifier.padding(start = 31.dp, end = 31.dp, top = 16.dp))
+            Text(note, color = colors.secondary, fontSize = TextSize.S15, modifier = Modifier.padding(start = Spacing.S31, end = Spacing.S31, top = Spacing.S16))
         }
         val groups = remember(matches) { matches.groupBy { it.pageId }.entries.toList() }
         LazyColumn(
@@ -235,26 +237,26 @@ private fun SearchField(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .padding(horizontal = 22.dp)
+            .padding(horizontal = Spacing.S22)
             .fillMaxWidth()
             .height(56.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .clip(AppShapes.Rounded18)
             .background(colors.inset)
-            .padding(start = 16.dp, end = 4.dp),
+            .padding(start = Spacing.S16, end = Spacing.S4),
     ) {
         Icon(SettingsIcons.Search, null, tint = colors.secondary, modifier = Modifier.size(24.dp))
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(Spacing.S10))
         BasicTextField(
             value,
             onChange,
             singleLine = true,
-            textStyle = TextStyle(color = colors.text, fontSize = 18.sp),
+            textStyle = TextStyle(color = colors.text, fontSize = TextSize.S18),
             cursorBrush = SolidColor(colors.accent),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onNext() }),
             modifier = Modifier.weight(1f).focusRequester(focus),
             decorationBox = { inner ->
-                if (value.isEmpty()) Text(stringResource(R.string.search_hint), color = colors.secondary, fontSize = 18.sp)
+                if (value.isEmpty()) Text(stringResource(R.string.search_hint), color = colors.secondary, fontSize = TextSize.S18)
                 inner()
             },
         )
@@ -270,13 +272,13 @@ private fun PageHitRow(page: Int, count: Int, snippet: String?, selected: Boolea
     val colors = LocalSettingsColors.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(15.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S15),
         modifier = Modifier
             .fillMaxWidth()
             .height(82.dp)
             .clickable(role = Role.Button, onClick = onClick),
     ) {
-        Box(Modifier.size(50.dp).clip(RoundedCornerShape(6.dp)).background(colors.inset)) {
+        Box(Modifier.size(50.dp).clip(AppShapes.Rounded6).background(colors.inset)) {
             if (thumbnail != null) {
                 Image(thumbnail.asImageBitmap(), null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
@@ -285,14 +287,14 @@ private fun PageHitRow(page: Int, count: Int, snippet: String?, selected: Boolea
             Text(
                 stringResource(R.string.search_page, page),
                 color = if (selected) colors.accent else colors.title,
-                fontSize = 17.5.sp,
+                fontSize = TextSize.S17_5,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
                 listOfNotNull(pluralStringResource(R.plurals.search_matches, count, count), snippet).joinToString(" · "),
                 color = colors.secondary,
-                fontSize = 14.sp,
+                fontSize = TextSize.S14,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -310,7 +312,7 @@ internal fun SearchHost(editor: NoteEditor, search: DocumentSearch?, canvas: Can
             search,
             canvas,
             onDismiss,
-            Modifier.padding(top = 80.dp, end = 22.dp, bottom = 22.dp).width(440.dp).fillMaxHeight(),
+            Modifier.padding(top = 80.dp, end = Spacing.S22, bottom = Spacing.S22).width(440.dp).fillMaxHeight(),
         )
     }
 }

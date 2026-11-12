@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -63,97 +61,18 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextAlign
 import app.betternotes.R
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.DarkSettings
+import app.betternotes.ui.theme.LightSettings
+import app.betternotes.ui.theme.LocalSettingsColors
 import app.betternotes.ui.theme.ReferenceScale
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 import kotlin.math.min
 import kotlin.math.roundToInt
-
-/** Colors of the settings screens. The dark set is measured from the owner's screenshots. */
-@Immutable
-internal data class SettingsColors(
-    val screen: Color,
-    val sheet: Color,
-    val card: Color,
-    val closeButton: Color,
-    val field: Color,
-    val inset: Color,
-    val kindSelected: Color,
-    val title: Color,
-    val text: Color,
-    val secondary: Color,
-    val accent: Color,
-    val onAccent: Color,
-    val switchOffTrack: Color,
-    val switchOff: Color,
-    val chipSelected: Color,
-    val chipSelectedText: Color,
-    val chipIdle: Color,
-    val chipIdleText: Color,
-    val sliderIdle: Color,
-    val sliderDotOn: Color,
-    val sliderDotOff: Color,
-    val divider: Color,
-    val menu: Color,
-    val danger: Color,
-)
-
-private val DarkSettings = SettingsColors(
-    screen = Color(0xFF000000),
-    sheet = Color(0xFF1E1F23),
-    card = Color(0xFF333746),
-    closeButton = Color(0xFF2C2C2E),
-    field = Color(0xFF3D4455),
-    inset = Color(0xFF26282D),
-    kindSelected = Color(0xFF1F3560),
-    title = Color(0xFFE6E7EA),
-    text = Color(0xFFE3E4E9),
-    secondary = Color(0xFFC6C8D0),
-    accent = Color(0xFF6D9CF8),
-    onAccent = Color(0xFF0E2B71),
-    switchOffTrack = Color(0xFF3F4553),
-    switchOff = Color(0xFF90909A),
-    chipSelected = Color(0xFF224970),
-    chipSelectedText = Color(0xFFD6E6FB),
-    chipIdle = Color(0xFF252D3A),
-    chipIdleText = Color(0xFFA9B3C2),
-    sliderIdle = Color(0xFF4F5052),
-    sliderDotOn = Color(0xFF0E2B71),
-    sliderDotOff = Color(0xFFD9DADD),
-    divider = Color(0xFF466FC1),
-    menu = Color(0xFF2A2D35),
-    danger = Color(0xFFF2B8B5),
-)
-
-/** No light screenshot exists, so this is the same set of roles on a light ground. */
-private val LightSettings = SettingsColors(
-    screen = Color(0xFFF2F3F6),
-    sheet = Color(0xFFFFFFFF),
-    card = Color(0xFFE6E9F2),
-    closeButton = Color(0xFFE3E4E8),
-    field = Color(0xFFE2E5EE),
-    inset = Color(0xFFEDEFF3),
-    kindSelected = Color(0xFFDCE7FB),
-    title = Color(0xFF1B1C20),
-    text = Color(0xFF1F2026),
-    secondary = Color(0xFF55585F),
-    accent = Color(0xFF3E78EE),
-    onAccent = Color(0xFFFFFFFF),
-    switchOffTrack = Color(0xFFD8DAE2),
-    switchOff = Color(0xFF7C7E87),
-    chipSelected = Color(0xFFD3E2FB),
-    chipSelectedText = Color(0xFF1B3F86),
-    chipIdle = Color(0xFFE7E9EE),
-    chipIdleText = Color(0xFF50535B),
-    sliderIdle = Color(0xFFCDCFD6),
-    sliderDotOn = Color(0xFFFFFFFF),
-    sliderDotOff = Color(0xFF5B5E66),
-    divider = Color(0xFFA9C2F4),
-    menu = Color(0xFFF7F8FA),
-    danger = Color(0xFFB3261E),
-)
-
-internal val LocalSettingsColors = staticCompositionLocalOf { DarkSettings }
 
 /** Colors plus [ReferenceScale], so a measurement from a screenshot lands in the same place on the tablet. */
 @Composable
@@ -176,7 +95,7 @@ private fun icon(name: String, path: String, width: Float = 1.6f) =
     ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
         addPath(
             pathData = addPathNodes(path),
-            stroke = SolidColor(Color.Black),
+            stroke = SolidColor(UiColors.IconMask),
             strokeLineWidth = width,
             strokeLineCap = StrokeCap.Round,
             strokeLineJoin = StrokeJoin.Round,
@@ -223,11 +142,11 @@ internal fun SettingsSheet(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(32.dp)
+    val shape = AppShapes.Rounded32
     Column(modifier.opensFrom(OpenFrom.Center).shadow(16.dp, shape, clip = false).clip(shape).background(colors.sheet)) {
         Box(Modifier.fillMaxWidth().height(headerHeight)) {
-            Text(title, color = colors.title, fontSize = 27.sp, modifier = Modifier.align(Alignment.Center))
-            CloseButton(onClose, Modifier.align(Alignment.CenterEnd).padding(end = 30.dp))
+            Text(title, color = colors.title, fontSize = TextSize.S27, modifier = Modifier.align(Alignment.Center))
+            CloseButton(onClose, Modifier.align(Alignment.CenterEnd).padding(end = Spacing.S30))
         }
         content()
     }
@@ -240,7 +159,7 @@ internal fun CloseButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
         contentAlignment = Alignment.Center,
         modifier = modifier
             .size(34.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(colors.closeButton)
             .clickable(role = Role.Button, onClick = onClick),
     ) {
@@ -261,7 +180,7 @@ internal fun SettingsCard(
     Column(
         modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(AppShapes.Rounded18)
             .background(colors.card)
             .padding(start = horizontal, end = horizontal, top = top, bottom = bottom),
         content = content,
@@ -279,7 +198,7 @@ internal fun CardTitle(text: String) {
     Text(
         text,
         color = LocalSettingsColors.current.text,
-        fontSize = 30.sp,
+        fontSize = TextSize.S30,
         fontWeight = FontWeight.Bold,
     )
 }
@@ -288,10 +207,10 @@ internal fun CardTitle(text: String) {
 @Composable
 internal fun IconCardTitle(icon: ImageVector, text: String) {
     val colors = LocalSettingsColors.current
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = Spacing.S12)) {
         Icon(icon, null, tint = colors.text, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.width(18.dp))
-        Text(text, color = colors.text, fontSize = 22.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.width(Spacing.S18))
+        Text(text, color = colors.text, fontSize = TextSize.S22, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -313,8 +232,8 @@ internal fun SettingRow(
             .height(66.dp),
     ) {
         Column(Modifier.weight(1f)) {
-            Text(label, color = colors.text, fontSize = 19.5.sp)
-            if (detail != null) Text(detail, color = colors.secondary, fontSize = 15.sp, lineHeight = 18.sp)
+            Text(label, color = colors.text, fontSize = TextSize.S19_5)
+            if (detail != null) Text(detail, color = colors.secondary, fontSize = TextSize.S15, lineHeight = TextSize.S18)
         }
         end()
     }
@@ -348,14 +267,14 @@ internal fun <T> DropdownRow(
     SettingRow(label, detail = detail, onClick = { open = true }) {
         Box {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(optionLabel(value), color = colors.text, fontSize = 19.5.sp, fontWeight = FontWeight.Medium)
-                Spacer(Modifier.width(8.dp))
+                Text(optionLabel(value), color = colors.text, fontSize = TextSize.S19_5, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.width(Spacing.S8))
                 Icon(SettingsIcons.Down, null, tint = colors.text, modifier = Modifier.size(22.dp))
             }
             DropdownMenu(open, { open = false }) {
                 for (option in options) {
                     DropdownMenuItem(
-                        text = { Text(optionLabel(option), fontSize = 20.sp) },
+                        text = { Text(optionLabel(option), fontSize = TextSize.S20) },
                         onClick = {
                             open = false
                             onChange(option)
@@ -376,12 +295,12 @@ internal fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(start = 8.dp).size(27.dp).border(2.dp, colors.accent, CircleShape),
+            modifier = Modifier.padding(start = Spacing.S8).size(27.dp).border(2.dp, colors.accent, AppShapes.Circle),
         ) {
-            if (selected) Box(Modifier.size(16.dp).background(colors.accent, CircleShape))
+            if (selected) Box(Modifier.size(16.dp).background(colors.accent, AppShapes.Circle))
         }
-        Spacer(Modifier.width(9.dp))
-        Text(label, color = colors.text, fontSize = 19.5.sp)
+        Spacer(Modifier.width(Spacing.S9))
+        Text(label, color = colors.text, fontSize = TextSize.S19_5)
     }
 }
 
@@ -394,9 +313,9 @@ internal fun SettingsSwitch(checked: Boolean, description: String, onChange: (Bo
     Box(
         Modifier
             .size(72.dp, 44.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(if (checked) colors.accent else colors.switchOffTrack)
-            .then(if (checked) Modifier else Modifier.border(2.dp, colors.switchOff, CircleShape))
+            .then(if (checked) Modifier else Modifier.border(2.dp, colors.switchOff, AppShapes.Circle))
             .clickable(role = Role.Switch, onClickLabel = description) { onChange(!checked) },
     ) {
         Box(
@@ -404,7 +323,7 @@ internal fun SettingsSwitch(checked: Boolean, description: String, onChange: (Bo
                 .align(Alignment.CenterStart)
                 .offset { IntOffset(thumbX.roundToPx(), 0) }
                 .size(thumbSize)
-                .background(if (checked) colors.onAccent else colors.switchOff, CircleShape),
+                .background(if (checked) colors.onAccent else colors.switchOff, AppShapes.Circle),
         )
     }
 }
@@ -415,9 +334,9 @@ internal fun ValuePill(text: String, modifier: Modifier = Modifier) {
     val colors = LocalSettingsColors.current
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier.widthIn(min = 60.dp).height(44.dp).clip(CircleShape).background(colors.sheet).padding(horizontal = 14.dp),
+        modifier = modifier.widthIn(min = 60.dp).height(44.dp).clip(AppShapes.Circle).background(colors.sheet).padding(horizontal = Spacing.S14),
     ) {
-        Text(text, color = colors.text, fontSize = 20.sp)
+        Text(text, color = colors.text, fontSize = TextSize.S20)
     }
 }
 
@@ -487,7 +406,7 @@ internal fun ValueSlider(
             Modifier
                 .weight(1f)
                 .height(44.dp)
-                .padding(horizontal = 12.dp)
+                .padding(horizontal = Spacing.S12)
                 .pointerInput(Unit) {
                     awaitEachGesture {
                         val down = awaitFirstDown()
@@ -522,7 +441,7 @@ internal fun ValueSlider(
 internal fun RoundIcon(icon: ImageVector, size: Dp, description: String? = null, onClick: () -> Unit) {
     Box(
         contentAlignment = Alignment.Center,
-        modifier = Modifier.size(size + 14.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick),
+        modifier = Modifier.size(size + 14.dp).clip(AppShapes.Circle).clickable(role = Role.Button, onClick = onClick),
     ) {
         Icon(icon, description, tint = LocalSettingsColors.current.text, modifier = Modifier.size(size))
     }
@@ -592,15 +511,15 @@ internal fun ChoiceChip(label: String, selected: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .height(44.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(AppShapes.Rounded10)
             .background(if (selected) colors.chipSelected else colors.chipIdle)
             .clickable(role = Role.Tab, onClick = onClick)
             .padding(start = if (selected) 16.dp else 22.dp, end = 22.dp),
     ) {
         if (selected) {
             Icon(SettingsIcons.Check, null, tint = colors.chipSelectedText, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(Spacing.S8))
         }
-        ShrinkText(label, if (selected) colors.chipSelectedText else colors.chipIdleText, 19.5.sp)
+        ShrinkText(label, if (selected) colors.chipSelectedText else colors.chipIdleText, TextSize.S19_5)
     }
 }

@@ -51,6 +51,7 @@ import app.betternotes.core.tools.resizeTransform
 import app.betternotes.core.tools.isCoverBackground
 import app.betternotes.core.tools.selectWithLasso
 import app.betternotes.core.tools.snapToAlign
+import app.betternotes.ui.theme.CanvasColors
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.ceil
@@ -108,8 +109,6 @@ internal class LassoController(
         redraw()
     }
 
-    val isEditingTable get() = tableEditingId != null
-
     /** Called when the "..." button next to delete and copy is pressed. */
     var onMenu: () -> Unit = {}
 
@@ -166,10 +165,10 @@ internal class LassoController(
         strokeWidth = SELECTION_WIDTH_DP * density
     }
     private val buttonFill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CanvasColors.ACTION_GLYPH }
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        color = 0xFFFFFFFF.toInt()
+        color = CanvasColors.ACTION_GLYPH
         strokeWidth = 1.6f * density
         strokeCap = Paint.Cap.ROUND
     }
@@ -262,11 +261,11 @@ internal class LassoController(
         marquee.pathEffect = DashPathEffect(floatArrayOf(dash, dash), 0f)
     }
 
-    /** Shows [selected], found elsewhere, with its handles. */
-    fun select(pageIndex: Int, selected: Selection) {
+    /** Shows [selected], found elsewhere, with its handles. A cover's background is shown selected only when held for ([coverBackgroundToo]). */
+    fun select(pageIndex: Int, selected: Selection, coverBackgroundToo: Boolean = false) {
         leaveScope()
         this.pageIndex = pageIndex
-        selection = withoutCoverBackground(pageIndex, selected, null)
+        selection = if (coverBackgroundToo) selected else withoutCoverBackground(pageIndex, selected, null)
         drag = Drag.NONE
         redraw()
     }
@@ -674,9 +673,6 @@ internal class LassoController(
     }
 
     private var adjustFrom: List<PageItem>? = null
-
-    /** What the selection holds, or null if nothing is selected. */
-    fun selectedItems(): List<PageItem>? = selection?.items
 
     /** Changes every selected item as one edit that can be undone, and keeps them selected. */
     fun changeSelected(change: (PageItem) -> PageItem) {
@@ -1310,14 +1306,14 @@ internal class LassoController(
     private companion object {
         const val MAX_DRAG_NODE_PX = 8192
         const val MAX_DRAG_NODE_AREA = 24_000_000L
-        const val MARQUEE_COLOR = 0xFF4A9BF5.toInt()
-        const val HANDLE_FILL = 0xFFFFFFFF.toInt()
+        const val MARQUEE_COLOR = CanvasColors.SELECTION
+        const val HANDLE_FILL = CanvasColors.SELECTION_HANDLE
         const val MARQUEE_WIDTH_DP = 1.2f
         const val DASH_DP = 3f
         const val ANTS_MS = 540L
         const val ANT_SPEED_DP_PER_MS = 0.032f
         const val SELECTION_WIDTH_DP = 1f
-        const val GUIDE_COLOR = 0xFFE5408F.toInt()
+        const val GUIDE_COLOR = CanvasColors.SNAP_GUIDE
         const val SNAP_REACH_DP = 6f
         const val HANDLE_HALF_DP = 4f
         const val HANDLE_EDGE_DP = 1f
@@ -1327,8 +1323,8 @@ internal class LassoController(
         const val ROTATE_STEP_DEGREES = 15f
         const val ROTATE_SETTLE_DEGREES = 3f
         const val DIVIDER_OUT_DP = 14f
-        const val BUTTON_GLYPH_COLOR = 0xFFFFFFFF.toInt()
-        const val PARAM_COLOR = 0xFFF28B30.toInt()
+        const val BUTTON_GLYPH_COLOR = CanvasColors.ACTION_GLYPH
+        const val PARAM_COLOR = CanvasColors.SHAPE_PARAMETER_HANDLE
         const val BUTTON_RADIUS_DP = 18f
 
         /** How far in from the screen's edge the buttons keep when they have to be moved onto it. */
@@ -1337,10 +1333,10 @@ internal class LassoController(
         /** The symbols in the buttons are this share of their drawn size, so they do not crowd the circle's edge. */
         const val GLYPH_SCALE = 0.8f
         const val BUTTON_GAP_DP = 8f
-        const val DELETE_COLOR = 0xFFE5483F.toInt()
-        const val COPY_COLOR = 0xFF3F7FE5.toInt()
-        const val MORE_COLOR = 0xFF5B6270.toInt()
-        const val STICKER_COLOR = 0xFF8E63D9.toInt()
+        const val DELETE_COLOR = CanvasColors.ACTION_DELETE
+        const val COPY_COLOR = CanvasColors.ACTION_COPY
+        const val MORE_COLOR = CanvasColors.ACTION_MORE
+        const val STICKER_COLOR = CanvasColors.ACTION_STICKER
         const val DUPLICATE_OFFSET_PT = 18f
 
         /** Less than this is a tap on the selection, not a drag of it. */

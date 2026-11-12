@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,10 +24,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
@@ -59,14 +60,14 @@ internal fun RotationBadge(state: EditorState, modifier: Modifier = Modifier) {
         modifier = modifier
             .graphicsLayer { this.alpha = alpha.value }
             .height(48.dp)
-            .shadow(4.dp, RoundedCornerShape(24.dp), clip = false)
-            .clip(RoundedCornerShape(24.dp))
+            .shadow(4.dp, AppShapes.Rounded24, clip = false)
+            .clip(AppShapes.Rounded24)
             .background(colors.pill)
-            .border(1.dp, colors.pillBorder, RoundedCornerShape(24.dp))
+            .border(1.dp, colors.pillBorder, AppShapes.Rounded24)
             .clickable(enabled = !state.rotating, role = Role.Button, onClickLabel = stringResource(R.string.rotation_reset)) {
                 state.resetRotation()
             }
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = Spacing.S14),
     ) {
         Icon(
             EditorIcons.Rotate,
@@ -77,9 +78,9 @@ internal fun RotationBadge(state: EditorState, modifier: Modifier = Modifier) {
         Text(
             "$degrees°",
             color = colors.title,
-            fontSize = 15.sp,
+            fontSize = TextSize.S15,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.padding(start = 8.dp),
+            modifier = Modifier.padding(start = Spacing.S8),
         )
     }
 }

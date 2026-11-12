@@ -67,6 +67,18 @@ private const val TAG_PATTERN_FILL = 18
 /** A text box that is a list. A tag far from the others, so that tags added elsewhere cannot collide with it. */
 private const val TAG_LIST_TEXT = 40
 
+/** A text box with a background color. Page format 16. */
+private const val TAG_COLORED_TEXT = 42
+
+/** A text box whose letters can have colors of their own, with a background color or none. Page format 17. Laid out as [TAG_COLORED_TEXT] is, with a color after each part. */
+private const val TAG_SPAN_COLORED_TEXT = 43
+
+/**
+ * The first layout of a colored text box, written by an early build of format 16: it also held an outline color, which no longer exists.
+ * Pages saved that way are still read, and the outline color is dropped. It is never written.
+ */
+private const val TAG_OUTLINED_TEXT = 41
+
 /** An item takes at least a tag and an id. */
 private const val MIN_ITEM_BYTES = 1 + Long.SIZE_BYTES
 
@@ -153,7 +165,11 @@ object PageCodec {
         val all = placed + placed.flatMap { (it as? StickyNoteItem)?.items.orEmpty() }
         val usesTools = all.any { (it is TableItem && it.headerColor != 0) || (it is ShapeItem && it.mirrored) }
         val usesPatterns = all.any { it is FillItem && !it.pattern.isSolid }
+        val usesSpanColors = all.any { it is TextItem && it.spans.any { span -> span.look.color != null } }
+        val usesTextColors = all.any { it is TextItem && (it.style.hasBackground) }
         val written = when {
+            usesSpanColors -> maxOf(version, PAGE_SPAN_COLORS_FORMAT_VERSION)
+            usesTextColors -> maxOf(version, PAGE_TEXT_COLORS_FORMAT_VERSION)
             usesPatterns -> maxOf(version, PAGE_PATTERN_FILL_FORMAT_VERSION)
             usesTools -> maxOf(version, PAGE_TOOLS_FORMAT_VERSION)
             layers.isDefault -> version
@@ -167,7 +183,7 @@ object PageCodec {
 
     fun decode(bytes: ByteArray): List<PageItem> = decodePage(bytes).items
 
-    fun decodePage(bytes: ByteArray): DecodedPage = decodeFile(bytes, PAGE_MAGIC, PAGE_PATTERN_FILL_FORMAT_VERSION) {
+    fun decodePage(bytes: ByteArray): DecodedPage = decodeFile(bytes, PAGE_MAGIC, PAGE_SPAN_COLORS_FORMAT_VERSION) {
         val items = items()
         if (version >= PAGE_LAYERS_FORMAT_VERSION) layers(items) else DecodedPage(items, PageLayers.Single)
     }
@@ -315,13 +331,15 @@ private fun ByteWriter.item(item: PageItem) {
             if (version >= 5) float(item.opacity)
         }
         is TextItem -> {
-            val listed = version >= 10 && item.style.list != null
-            val fonted = listed || version >= 8 && (item.style.font.isNotEmpty() || item.spans.any { it.look.font != null })
+            val spanColored = version >= PAGE_SPAN_COLORS_FORMAT_VERSION && item.spans.any { it.look.color != null }
+            val colored = spanColored || version >= PAGE_TEXT_COLORS_FORMAT_VERSION && item.style.hasBackground
+            val listed = !colored && version >= 10 && item.style.list != null
+            val fonted = colored || listed || version >= 8 && (item.style.font.isNotEmpty() || item.spans.any { it.look.font != null })
             // Without a font to keep, the parts are written as before, minus any that only differed by font.
             val spans = if (fonted) item.spans else item.spans.map { it.copy(look = it.look.copy(font = null)) }.filter { !it.look.isPlain }
             val spanned = fonted || (spans.isNotEmpty() && version >= 7)
-            val styled = spanned || item.style.copy(font = "", list = null) != TextStyle()
-            byte(if (listed) TAG_LIST_TEXT else if (fonted) TAG_FONT_TEXT else if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
+            val styled = spanned || item.style.copy(font = "", list = null, backgroundColor = 0) != TextStyle()
+            byte(if (spanColored) TAG_SPAN_COLORED_TEXT else if (colored) TAG_COLORED_TEXT else if (listed) TAG_LIST_TEXT else if (fonted) TAG_FONT_TEXT else if (spanned) TAG_SPANNED_TEXT else if (styled) TAG_STYLED_TEXT else TAG_TEXT)
             long(item.id)
             locked(item)
             frame(item.frame)
@@ -348,14 +366,20 @@ private fun ByteWriter.item(item: PageItem) {
                         bool(span.look.font != null)
                         span.look.font?.let { string(it) }
                     }
+                    if (spanColored) {
+                        bool(span.look.color != null)
+                        span.look.color?.let { int(it) }
+                    }
                 }
                 if (fonted) string(item.style.font)
-                item.style.list?.takeIf { listed }?.let { list ->
+                if (colored) bool(item.style.list != null)
+                item.style.list?.takeIf { listed || colored }?.let { list ->
                     LIST_KINDS.write(this, list.kind)
                     int(list.dotColor)
                     float(list.dotSize)
                     float(list.dotOpacity)
                 }
+                if (colored) int(item.style.backgroundColor)
             }
         }
         is StickyNoteItem -> {
@@ -529,9 +553,14 @@ private fun ByteReader.itemBody(): PageItem = when (val tag = byte()) {
             verticalAlign = VERTICAL_ALIGNS.read(this),
         ),
     )
-    TAG_SPANNED_TEXT, TAG_FONT_TEXT, TAG_LIST_TEXT -> {
+    TAG_SPANNED_TEXT, TAG_FONT_TEXT, TAG_LIST_TEXT, TAG_COLORED_TEXT, TAG_OUTLINED_TEXT, TAG_SPAN_COLORED_TEXT -> {
+        val outlined = tag.toInt() == TAG_OUTLINED_TEXT
+        val spanColored = tag.toInt() == TAG_SPAN_COLORED_TEXT
+        if (spanColored && version < PAGE_SPAN_COLORS_FORMAT_VERSION) throw CorruptFileException("A letter color in page format $version")
+        val colored = outlined || spanColored || tag.toInt() == TAG_COLORED_TEXT
+        if (colored && version < PAGE_TEXT_COLORS_FORMAT_VERSION) throw CorruptFileException("A text color in page format $version")
         val listed = tag.toInt() == TAG_LIST_TEXT
-        val fonted = listed || tag.toInt() == TAG_FONT_TEXT
+        val fonted = colored || listed || tag.toInt() == TAG_FONT_TEXT
         val id = long()
         val locked = locked()
         val frame = frame()
@@ -552,15 +581,19 @@ private fun ByteReader.itemBody(): PageItem = when (val tag = byte()) {
             val packed = byte().toInt()
             val sized = if (bool()) float() else null
             val font = if (fonted && bool()) string() else null
-            TextSpan(start, end, unpackLook(packed, sized).copy(font = font))
+            val letterColor = if (spanColored && bool()) int() else null
+            TextSpan(start, end, unpackLook(packed, sized).copy(font = font, color = letterColor))
         }
         val withFont = if (fonted) style.copy(font = string()) else style
-        val withList = if (listed) {
+        val hasList = listed || colored && bool()
+        val withList = if (hasList) {
             withFont.copy(list = ListStyle(LIST_KINDS.read(this), dotColor = int(), dotSize = float(), dotOpacity = float()).clamped())
         } else {
             withFont
         }
-        TextItem(id, frame, text, size, color, withList, locked, spans)
+        if (outlined) int()
+        val withColors = if (colored) withList.copy(backgroundColor = int()) else withList
+        TextItem(id, frame, text, size, color, withColors, locked, spans)
     }
     TAG_TEXT -> TextItem(
         id = long(),

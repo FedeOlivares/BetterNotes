@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,7 +30,6 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.graphics.withMatrix
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import app.betternotes.canvas.BrushTextures
@@ -43,9 +41,14 @@ import app.betternotes.R
 import app.betternotes.canvas.InkBrushes
 import app.betternotes.core.model.BrushKind
 import app.betternotes.core.model.InkStyle
+import app.betternotes.core.model.InkTool
 import app.betternotes.core.tools.InkPreset
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.Swatches
+import app.betternotes.ui.theme.TextSize
 
 @StringRes
 private fun BrushKind.label() = when (this) {
@@ -71,18 +74,18 @@ internal fun BrushTypeSelector(preset: InkPreset, screenDpi: Float, onSelect: (B
     Text(
         stringResource(R.string.panel_brush_type),
         color = colors.label,
-        fontSize = 14.sp,
+        fontSize = TextSize.S14,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = PanelPadding, top = 6.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = PanelPadding, top = Spacing.S6, bottom = Spacing.S8),
     )
     Column(Modifier.fillMaxWidth().padding(horizontal = PanelPadding)) {
         BrushRow(preset.brush, preset.color, screenDpi, selected = false, chevron = true) { open = !open }
         if (open) {
             Column(
                 Modifier
-                    .padding(top = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .border(1.dp, colors.panelDivider, RoundedCornerShape(16.dp)),
+                    .padding(top = Spacing.S6)
+                    .clip(AppShapes.Rounded16)
+                    .border(1.dp, colors.panelDivider, AppShapes.Rounded16),
             ) {
                 for (kind in BrushKind.entries) {
                     BrushRow(kind, preset.color, screenDpi, selected = kind == preset.brush, chevron = false) {
@@ -93,7 +96,7 @@ internal fun BrushTypeSelector(preset: InkPreset, screenDpi: Float, onSelect: (B
             }
         }
     }
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(Spacing.S12))
 }
 
 @Composable
@@ -104,19 +107,19 @@ private fun BrushRow(kind: BrushKind, color: Int, screenDpi: Float, selected: Bo
         modifier = Modifier
             .fillMaxWidth()
             .height(54.dp)
-            .then(if (chevron) Modifier.clip(RoundedCornerShape(27.dp)).border(1.dp, colors.panelDivider, RoundedCornerShape(27.dp)) else Modifier)
+            .then(if (chevron) Modifier.clip(AppShapes.Rounded27).border(1.dp, colors.panelDivider, AppShapes.Rounded27) else Modifier)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = Spacing.S20),
     ) {
         Text(
             stringResource(kind.label()),
             color = if (selected) colors.accent else colors.title,
-            fontSize = 16.sp,
+            fontSize = TextSize.S16,
             fontWeight = FontWeight.Medium,
             modifier = Modifier.width(96.dp),
         )
         BrushSample(kind, screenDpi, Modifier.weight(1f).height(36.dp))
-        if (chevron) Icon(EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.padding(start = 10.dp).size(22.dp))
+        if (chevron) Icon(EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.padding(start = Spacing.S10).size(22.dp))
     }
 }
 
@@ -126,7 +129,7 @@ private fun BrushSample(kind: BrushKind, screenDpi: Float, modifier: Modifier) {
     val renderer = remember { CanvasStrokeRenderer.create(BrushTextures) }
     val matrix = remember { Matrix() }
     val pxPerPt = screenDpi / POINTS_PER_INCH
-    val stroke = remember(kind) { sampleLine(InkStyle(tool = app.betternotes.core.model.InkTool.PENCIL, color = 0xFFE6E7EA.toInt(), width = SAMPLE_WIDTH, brush = kind)) }
+    val stroke = remember(kind) { sampleLine(InkStyle(tool = InkTool.PENCIL, color = Swatches.BRUSH_SAMPLE, width = SAMPLE_WIDTH, brush = kind)) }
     Canvas(modifier) {
         matrix.setScale(pxPerPt, pxPerPt)
         matrix.postTranslate(0f, size.height / 2f)

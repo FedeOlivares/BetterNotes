@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -21,12 +20,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.planner.PlannerPages
 import app.betternotes.core.planner.RoleSlot
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlin.math.roundToInt
 
 /**
@@ -73,7 +74,7 @@ private fun PlannerRecolorContent(state: EditorState, slots: List<RoleSlot>) {
             BarChip(stringResource(R.string.planner_style_done), selected = false) { state.clearPlannerPick() }
         }
         if (state.plannerMoreOpen) {
-            Pill(Modifier.padding(top = 6.dp)) {
+            Pill(Modifier.padding(top = Spacing.S6)) {
                 for (slot in more) if (slot != RoleSlot.FONT) SlotChip(state, slot)
                 if (RoleSlot.FONT in more) {
                     BarChip(stringResource(R.string.planner_style_font), selected = state.plannerFontOpen) { state.plannerFontOpen = !state.plannerFontOpen }
@@ -85,11 +86,11 @@ private fun PlannerRecolorContent(state: EditorState, slots: List<RoleSlot>) {
         if (state.plannerMoreOpen && state.plannerFontOpen && RoleSlot.FONT in slots) {
             Box(
                 Modifier
-                    .padding(top = 6.dp)
+                    .padding(top = Spacing.S6)
                     .width(FONT_PANEL_WIDTH)
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(AppShapes.Rounded16)
                     .background(colors.pill)
-                    .border(1.dp, colors.pillBorder, RoundedCornerShape(16.dp)),
+                    .border(1.dp, colors.pillBorder, AppShapes.Rounded16),
             ) {
                 FontSelector(state.plannerFont().orEmpty()) { name -> state.restylePlanner(PlannerPages.StyleChange(RoleSlot.FONT, font = name)) }
             }
@@ -110,7 +111,7 @@ private fun SlotChip(state: EditorState, slot: RoleSlot) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         BarChip(stringResource(label), selected = selected) { state.pickPlannerColor(slot) }
         ColorDot(state.plannerColorOf(slot) ?: 0, diameter = 16.dp)
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(Spacing.S6))
     }
 }
 
@@ -120,13 +121,13 @@ private fun BarChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
         color = if (selected) colors.accent else colors.title,
-        fontSize = 14.sp,
+        fontSize = TextSize.S14,
         fontWeight = FontWeight.Medium,
         modifier = Modifier
-            .padding(horizontal = 2.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .padding(horizontal = Spacing.S2)
+            .clip(AppShapes.Rounded16)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = Spacing.S10, vertical = Spacing.S8),
     )
 }
 

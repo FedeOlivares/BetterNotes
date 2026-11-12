@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,14 +43,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.tools.EraserOptions
 import app.betternotes.core.tools.ItemKind
 import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.tools.toggled
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import kotlin.math.roundToInt
 
 /** The eraser's row: partial or whole, three sizes, clear page, and the way into its panel. */
@@ -96,7 +97,7 @@ private fun CheckerDot(size: Int, selected: Boolean) {
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChecker(middle: Offset, radius: Float) {
     val cell = radius / CHECKER_CELLS_PER_RADIUS
-    drawCircle(CHECKER_LIGHT, radius, middle)
+    drawCircle(UiColors.CheckerLight, radius, middle)
     val first = -(CHECKER_CELLS_PER_RADIUS)
     for (row in first until CHECKER_CELLS_PER_RADIUS) {
         for (column in first until CHECKER_CELLS_PER_RADIUS) {
@@ -106,7 +107,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawChecker(middle:
             val dx = x + cell / 2f - middle.x
             val dy = y + cell / 2f - middle.y
             if (dx * dx + dy * dy < radius * radius) {
-                drawRect(CHECKER_DARK, Offset(x, y), Size(cell, cell))
+                drawRect(UiColors.CheckerDark, Offset(x, y), Size(cell, cell))
             }
         }
     }
@@ -122,7 +123,7 @@ internal fun EraserPanel(state: EditorState, options: EraserOptions, notices: No
             drawCircle(colors.accent, radius, style = Stroke(2.5.dp.toPx()))
         }
         LabeledRow(R.string.panel_size) { ValuePill { ValueText(options.size.toString()) } }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - Spacing.S6)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) {
                 state.updateEraser { it.withSize(it.size - 1) }
             }
@@ -163,14 +164,14 @@ internal fun EraserPanel(state: EditorState, options: EraserOptions, notices: No
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(role = Role.Button, onClick = state::clearPage)
-                .padding(horizontal = PanelPadding, vertical = 14.dp),
+                .padding(horizontal = PanelPadding, vertical = Spacing.S14),
         ) {
-            Icon(EditorIcons.Broom, null, tint = CLEAR_COLOR, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
+            Icon(EditorIcons.Broom, null, tint = UiColors.ClearPage, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(Spacing.S6))
             Text(
                 stringResource(R.string.panel_clear_page),
-                color = CLEAR_COLOR,
-                fontSize = 14.sp,
+                color = UiColors.ClearPage,
+                fontSize = TextSize.S14,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -236,7 +237,7 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
             }
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S10),
             modifier = Modifier.fillMaxWidth().padding(horizontal = PanelPadding),
         ) {
             ChoiceCard(EditorIcons.LassoFreeform, R.string.panel_freeform, !options.rectangle) {
@@ -246,7 +247,7 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
                 state.updateLasso { it.copy(rectangle = true) }
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(Spacing.S4))
         LabeledRow(R.string.panel_select_locked, info = { notices.say(R.string.info_select_locked) }) {
             PanelSwitch(options.lockedToo, stringResource(R.string.panel_select_locked)) { on ->
                 state.updateLasso { it.copy(lockedToo = on) }
@@ -294,7 +295,7 @@ internal fun LassoPanel(state: EditorState, options: LassoOptions, notices: Noti
         }
         LabeledRow(R.string.panel_select_following) {}
         KindFilters(options.kinds) { kind -> state.updateLasso { it.copy(kinds = it.kinds.toggled(kind)) } }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(Spacing.S18))
     }
 }
 
@@ -316,7 +317,7 @@ private inline fun androidx.compose.ui.graphics.drawscope.DrawScope.translateAnd
 private fun KindFilters(kinds: Set<ItemKind>, onToggle: (ItemKind) -> Unit) {
     val colors = LocalEditorColors.current
     Row(
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S2),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = PanelPadding)
@@ -328,7 +329,7 @@ private fun KindFilters(kinds: Set<ItemKind>, onToggle: (ItemKind) -> Unit) {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(36.dp)
-                    .clip(CircleShape)
+                    .clip(AppShapes.Circle)
                     .background(if (on) colors.field else Color.Transparent)
                     .clickable(role = Role.Checkbox, onClickLabel = stringResource(label)) { onToggle(kind) },
             ) {
@@ -363,7 +364,7 @@ internal fun androidx.compose.foundation.layout.RowScope.ChoiceCard(
     onClick: () -> Unit,
 ) {
     val colors = LocalEditorColors.current
-    val shape = RoundedCornerShape(16.dp)
+    val shape = AppShapes.Rounded16
     val tint = if (selected) colors.accent else colors.title
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -377,8 +378,8 @@ internal fun androidx.compose.foundation.layout.RowScope.ChoiceCard(
             .clickable(role = Role.RadioButton, onClick = onClick),
     ) {
         Icon(icon, null, tint = tint, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.height(4.dp))
-        Text(stringResource(label), color = tint, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Spacer(Modifier.height(Spacing.S4))
+        Text(stringResource(label), color = tint, fontSize = TextSize.S13, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -406,7 +407,7 @@ internal fun DottedPreview(sample: androidx.compose.ui.graphics.drawscope.DrawSc
 
 @Composable
 internal fun PanelDivider() {
-    Spacer(Modifier.height(14.dp))
+    Spacer(Modifier.height(Spacing.S14))
     Box(
         Modifier
             .padding(horizontal = PanelPadding)
@@ -414,12 +415,9 @@ internal fun PanelDivider() {
             .height(1.dp)
             .background(LocalEditorColors.current.panelDivider),
     )
-    Spacer(Modifier.height(6.dp))
+    Spacer(Modifier.height(Spacing.S6))
 }
 
-private val CHECKER_LIGHT = Color(0xFFD9D9DC)
-private val CHECKER_DARK = Color(0xFF8D8D93)
-private val CLEAR_COLOR = Color(0xFFF2A49B)
 private const val CHECKER_CELLS_PER_RADIUS = 2
 private const val DOT_MIN_DP = 3f
 private const val DOT_DP_PER_SIZE = 1f

@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -64,9 +63,11 @@ import androidx.compose.ui.unit.dp
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
 import kotlin.math.roundToInt
-import androidx.compose.ui.unit.sp
 import app.betternotes.core.model.LineKind
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 
 internal val PillHeight = 48.dp
 internal val ToolbarCell = 40.dp
@@ -93,7 +94,7 @@ internal fun Pill(modifier: Modifier = Modifier, content: @Composable () -> Unit
             .clip(PillShape)
             .background(colors.pill)
             .border(1.dp, colors.pillBorder, PillShape)
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = Spacing.S6),
     ) { content() }
 }
 
@@ -122,7 +123,7 @@ internal fun PillRow(modifier: Modifier = Modifier, content: @Composable RowScop
             .clip(PillShape)
             .background(colors.pill)
             .border(1.dp, colors.pillBorder, PillShape)
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = Spacing.S6),
         content = content,
     )
 }
@@ -139,10 +140,10 @@ internal fun PillBox(modifier: Modifier = Modifier, content: @Composable () -> U
     if (LocalToolbarVertical.current) {
         androidx.compose.foundation.layout.Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = decorated.width(PillHeight).padding(vertical = 6.dp),
+            modifier = decorated.width(PillHeight).padding(vertical = Spacing.S6),
         ) { content() }
     } else {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = decorated.height(PillHeight).padding(horizontal = 6.dp)) { content() }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = decorated.height(PillHeight).padding(horizontal = Spacing.S6)) { content() }
     }
 }
 
@@ -158,7 +159,7 @@ internal fun PillColumn(modifier: Modifier = Modifier, content: @Composable andr
             .background(colors.pill)
             .border(1.dp, colors.pillBorder, PillShape)
             .width(PillHeight)
-            .padding(vertical = 6.dp),
+            .padding(vertical = Spacing.S6),
         content = content,
     )
 }
@@ -215,7 +216,7 @@ internal fun ToolbarIcon(
                         scaleX = grow
                         scaleY = grow
                     }
-                    .background(colors.toolSelected, CircleShape),
+                    .background(colors.toolSelected, AppShapes.Circle),
             )
         }
         Icon(
@@ -236,9 +237,9 @@ internal fun ToolbarIcon(
 @Composable
 internal fun PillDivider() {
     if (LocalToolbarVertical.current) {
-        Box(Modifier.padding(vertical = 4.dp).size(28.dp, 2.dp).background(LocalEditorColors.current.pillDivider))
+        Box(Modifier.padding(vertical = Spacing.S4).size(28.dp, 2.dp).background(LocalEditorColors.current.pillDivider))
     } else {
-        Box(Modifier.padding(horizontal = 4.dp).size(2.dp, 28.dp).background(LocalEditorColors.current.pillDivider))
+        Box(Modifier.padding(horizontal = Spacing.S4).size(2.dp, 28.dp).background(LocalEditorColors.current.pillDivider))
     }
 }
 
@@ -250,7 +251,7 @@ internal fun BoxScope.SelectedDot() {
             .align(Alignment.Center)
             .offset(y = 15.dp)
             .size(4.dp)
-            .background(LocalEditorColors.current.accent, CircleShape),
+            .background(LocalEditorColors.current.accent, AppShapes.Circle),
     )
 }
 
@@ -261,8 +262,8 @@ internal fun ColorDot(color: Int, diameter: Dp = 22.dp) {
     Box(
         Modifier
             .size(diameter)
-            .background(Color(color), CircleShape)
-            .border(1.dp, edge, CircleShape),
+            .background(Color(color), AppShapes.Circle)
+            .border(1.dp, edge, AppShapes.Circle),
     )
 }
 
@@ -287,7 +288,7 @@ internal fun LineTypeGlyph(kind: LineKind, tint: Color, modifier: Modifier = Mod
 @Composable
 internal fun ValuePill(onClick: (() -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
     val colors = LocalEditorColors.current
-    val shape = RoundedCornerShape(18.dp)
+    val shape = AppShapes.Rounded18
     var modifier = Modifier
         .size(71.dp, 35.dp)
         .clip(shape)
@@ -298,7 +299,7 @@ internal fun ValuePill(onClick: (() -> Unit)? = null, content: @Composable BoxSc
 
 @Composable
 internal fun ValueText(text: String) {
-    Text(text, color = LocalEditorColors.current.title, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    Text(text, color = LocalEditorColors.current.title, fontSize = TextSize.S14, fontWeight = FontWeight.Medium)
 }
 
 /** An on or off switch, drawn to the screenshot's proportions. */
@@ -309,7 +310,7 @@ internal fun PanelSwitch(checked: Boolean, description: String, onChange: (Boole
     Box(
         Modifier
             .size(58.dp, 35.dp)
-            .clip(CircleShape)
+            .clip(AppShapes.Circle)
             .background(if (checked) colors.switchOn else colors.switchOff)
             .clickable(role = Role.Switch, onClickLabel = description) { onChange(!checked) },
     ) {
@@ -318,7 +319,7 @@ internal fun PanelSwitch(checked: Boolean, description: String, onChange: (Boole
                 .align(Alignment.CenterStart)
                 .offset { IntOffset(thumbOffset.roundToPx(), 0) }
                 .size(26.dp)
-                .background(if (checked) colors.switchOnThumb else colors.switchOffThumb, CircleShape),
+                .background(if (checked) colors.switchOnThumb else colors.switchOffThumb, AppShapes.Circle),
         )
     }
 }
@@ -401,7 +402,7 @@ internal fun StepperSlider(
         onChange(((fraction * steps).roundToInt() + direction).coerceIn(0, steps).toFloat() / steps)
         onChangeFinished()
     }
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.padding(horizontal = PanelPadding - 6.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.padding(horizontal = PanelPadding - Spacing.S6)) {
         PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_decrease)) { step(-1) }
         PanelSlider(fraction, onChange, Modifier.weight(1f), onChangeFinished)
         PanelIconButton(EditorIcons.Plus, stringResource(R.string.panel_increase)) { step(1) }

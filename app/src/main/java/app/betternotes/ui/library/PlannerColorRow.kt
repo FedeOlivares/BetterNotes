@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,9 +24,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.planner.PlannerColors
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 
 /**
  * The four colors a planner lets its owner change (cover, spine, stripe, page accent) as labelled swatches. Tapping one opens the swatch
@@ -52,13 +54,13 @@ internal fun PlannerColorRow(colors: List<Int>, compact: Boolean, label: Color, 
                 Box(
                     Modifier
                         .size(if (compact) 24.dp else 34.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(Color(colors[index]))
-                        .border(if (changed) 3.dp else 1.dp, if (changed) Color(0xFF0A84FF) else border, CircleShape)
+                        .border(if (changed) 3.dp else 1.dp, if (changed) UiColors.SystemBlue else border, AppShapes.Circle)
                         .clickable { picking = index },
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(stringResource(names[index]), color = label, fontSize = if (compact) 10.sp else 12.sp)
+                Spacer(Modifier.height(Spacing.S2))
+                Text(stringResource(names[index]), color = label, fontSize = if (compact) TextSize.S10 else TextSize.S12)
             }
         }
     }

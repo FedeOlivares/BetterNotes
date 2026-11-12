@@ -12,6 +12,7 @@ import androidx.core.graphics.withClip
 import androidx.core.graphics.withTranslation
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.layout.DocumentLayout
+import app.betternotes.ui.theme.CanvasColors
 
 /**
  * The loupe's magnified window, which shows a small box of a page across a larger area of the screen.
@@ -82,7 +83,7 @@ internal class LoupeView(context: Context) : View(context) {
 
     private companion object {
         const val RADIUS_DP = 20f
-        const val EDGE_COLOR = 0x33000000
-        const val BACKDROP = 0xFFE3E4E8.toInt()
+        const val EDGE_COLOR = CanvasColors.LOUPE_EDGE
+        const val BACKDROP = CanvasColors.LOUPE_BACKDROP
     }
 }

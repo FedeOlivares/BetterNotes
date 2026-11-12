@@ -41,6 +41,7 @@ import app.betternotes.core.tools.LassoOptions
 import app.betternotes.core.model.ListKind
 import app.betternotes.core.model.ListStyle
 import app.betternotes.core.tools.NoteOptions
+import app.betternotes.core.tools.ReturnTarget
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.core.tools.TableOptions
 import app.betternotes.canvas.TapeLook
@@ -49,6 +50,9 @@ import app.betternotes.core.clipboard.ImageClip
 import app.betternotes.core.clipboard.ItemsClip
 import app.betternotes.core.clipboard.TextClip
 import app.betternotes.core.tools.TapeOptions
+import app.betternotes.ui.theme.ALPHA_SHIFT
+import app.betternotes.ui.theme.OPAQUE_ALPHA
+import app.betternotes.ui.theme.Swatches
 import kotlin.math.roundToInt
 
 /** The tools the strip can put in the pen's hand so far. */
@@ -75,7 +79,7 @@ private val ActiveTool.hasPanel get() = true
 private val TOOLS_THAT_MAKE_ITEMS = setOf(ActiveTool.SHAPE, ActiveTool.STICKY, ActiveTool.TABLE, ActiveTool.IMAGE, ActiveTool.EMOJI)
 
 /** What the color wheel's result is for. */
-internal enum class ColorTarget { FILL_PATTERN, TAPE, CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, TABLE_HEADER, SELECTED_TABLE_LINE, SELECTED_TABLE_FILL, SELECTED_TABLE_HEADER, LASER, TOOLBAR, SELECTED_NOTE, FILL, LIST_DOT, PLANNER_ELEMENT }
+internal enum class ColorTarget { FILL_PATTERN, TAPE, CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, TABLE_HEADER, SELECTED_TABLE_LINE, SELECTED_TABLE_FILL, SELECTED_TABLE_HEADER, LASER, TOOLBAR, SELECTED_NOTE, FILL, LIST_DOT, TEXT_COLOR, TEXT_BACKGROUND, PLANNER_ELEMENT }
 
 /** What the toolbars show, and the one place that passes their choices on to the canvas. */
 @Stable
@@ -424,7 +428,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     /** Puts a color on the bar, unless it is there, and chooses it. */
     fun addFillColor(color: Int) {
-        val opaque = color or OPAQUE
+        val opaque = color or OPAQUE_ALPHA
         if (opaque !in fillColors) {
             fillColors = fillColors + opaque
             store.saveFillColors(fillColors)
@@ -507,7 +511,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     }
 
     /**
-     * Whether the highlighter, eraser, lasso, text and sticker tools give the tool in use before back once they have been used, and the delay
+     * Whether the highlighter, eraser, lasso, text, tape and sticker tools give the tool in use before back once they have been used, and the delay
      * in tenths of a second, each on its own. The use that ends it is a stroke, an erase, a selection let go, the text left, a sticker put down.
      */
     private val returns = mutableStateMapOf<ActiveTool, ToolReturn>().apply {
@@ -569,7 +573,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         val choice = if (made == ActiveTool.EMOJI) toolReturn(made) else ToolReturn(createReturn, createReturnDelay)
         if (!choice.on) return lentFrom
         val kept = android.os.SystemClock.uptimeMillis() - createdAtMs < choice.tenths * 100L
-        return if (kept) lentFrom else previousTool
+        return if (kept) lentFrom else toolToReturnTo()
     }
 
     /** A fill was made: the delay starts again, so that using the bucket again keeps it in hand. */
@@ -579,7 +583,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     }
 
     fun chooseFillColor(color: Int) {
-        fillColor = color or OPAQUE
+        fillColor = color or OPAQUE_ALPHA
         store.saveFill(fillColor, fillOpacity)
         applyTool()
     }
@@ -784,10 +788,11 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.onTextToolLeft = { toolUsed(ActiveTool.TEXT) }
         canvas.onInkDrawn = { toolUsed(ActiveTool.HIGHLIGHTER) }
         canvas.onEraseDone = { toolUsed(ActiveTool.ERASER) }
+        canvas.onTapeLaid = { toolUsed(ActiveTool.TAPE) }
         canvas.onItemCreated = ::itemCreated
         canvas.onSelectionLeft = {
             // A tool that makes items gives way, once its selection is let go, to the tool in hand before it.
-            if (activeTool in TOOLS_THAT_MAKE_ITEMS && previousTool != activeTool) {
+            if (activeTool in TOOLS_THAT_MAKE_ITEMS && toolToReturnTo() != activeTool) {
                 returnToPreviousTool()
                 true
             } else {
@@ -874,13 +879,16 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     private var lassoPicked = false
 
     /** The tool in use before the one in use now, which a note or sticker made by holding and dragging gives back. */
-    private var previousTool = ActiveTool.PEN
+    private var previousTool: ActiveTool? = null
+
+    /** The tool a tool that gives the one before back goes to now: the one before it, or the pen when there is none. */
+    private fun toolToReturnTo() = ReturnTarget.target(previousTool, activeTool, ActiveTool.PEN)
 
     /** True while a tool is lent for a moment, as the lasso is to move a sticker just put down: it is not the tool to come back to. */
     private var lendingTool = false
 
     fun returnToPreviousTool() {
-        val back = previousTool
+        val back = toolToReturnTo()
         panelOpen = false
         if (back != activeTool) select(back)
     }
@@ -1022,10 +1030,14 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     }
 
     /** The open text box with letters selected in it, which the text row buttons then change instead of the whole text. */
+    /** The text box selected on its own, which the text row and panel then show and change. */
+    val selectedText: TextItem? get() = if (activeTool == ActiveTool.LASSO) selection?.singleOrNull() as? TextItem else null
+
     private fun selectedLetters() = textEdit?.takeIf { activeTool == ActiveTool.TEXT && it.hasSelection }
 
     /** The look the text row shows: that of the selected letters when some are selected, else the look of the whole text. */
     fun shownTextStyle(options: NoteOptions): TextStyle {
+        selectedText?.let { return it.style }
         val request = selectedLetters() ?: return options.style
         return options.style.copy(
             bold = request.selectionAll { look, base -> look.bold ?: base.bold },
@@ -1035,10 +1047,38 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         )
     }
 
-    fun shownTextSize(options: NoteOptions): Int = selectedLetters()?.shownSize()?.roundToInt() ?: options.textSize
+    /** The color the text row shows: that of the text box selected, else the color new text is written in. */
+    fun shownTextColor(options: NoteOptions): Int = selectedText?.color ?: selectedLetters()?.let { textEdit?.shownColor() } ?: options.textColor
+
+    /**
+     * Sets a color of text. For a text box selected it is the color of all of it, whatever colors single letters had. In a box being typed in it
+     * is the color of the letters selected, or of all the text when all of it is, or of an empty box; with nothing selected it is the color
+     * of what is typed next. Otherwise it is the color new text boxes are written in.
+     */
+    fun setTextColor(color: Int) {
+        if (selectedText != null) {
+            changeSelectedText { it.copy(color = color, spans = it.spans.map { span -> span.copy(look = span.look.copy(color = null)) }.filter { span -> !span.look.isPlain }) }
+            return
+        }
+        val request = textEdit?.takeIf { activeTool == ActiveTool.TEXT }
+        when {
+            request == null -> Unit
+            request.selectionIsAll || (!request.hasSelection && request.text.isEmpty()) -> request.recolorAll(color)
+            request.hasSelection -> request.colorSelection(color)
+            else -> request.typingColor = color.takeIf { it != request.color }
+        }
+        // The tool keeps the color for the boxes it makes next, unless only some letters of a box were colored.
+        if (request == null || !request.hasSelection || request.selectionIsAll) updateNote { it.copy(textColor = color) }
+    }
+
+    fun shownTextSize(options: NoteOptions): Int = selectedText?.textSize?.roundToInt() ?: selectedLetters()?.shownSize()?.roundToInt() ?: options.textSize
 
     /** Switches bold, italic, underline or strike for the selected letters, or for the whole text when none are selected. */
     fun toggleStyle(kind: StyleKind) {
+        if (selectedText != null) {
+            changeSelectedText { it.copy(style = it.style.toggled(kind)) }
+            return
+        }
         val request = selectedLetters()
         if (request == null) {
             updateNoteStyle { it.toggled(kind) }
@@ -1057,18 +1097,27 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     /** The font the text row shows: that of the first selected letter when some are selected, else the whole text's. */
     fun shownFont(options: NoteOptions): String {
+        selectedText?.let { return it.style.font }
         val request = selectedLetters() ?: return options.style.font
         return TextSpans.looks(request.spans, request.text.length)[request.selectionStart].font ?: request.style.font
     }
 
     /** Sets the font of the selected letters, or of the whole text when none are selected. */
     fun setFont(name: String) {
+        if (selectedText != null) {
+            changeSelectedText { it.copy(style = it.style.copy(font = name)) }
+            return
+        }
         val request = selectedLetters()
         if (request == null) updateNoteStyle { it.copy(font = name) } else request.styleSelection { it.copy(font = name) }
     }
 
     /** Sets the size of the selected letters, or of the whole text when none are selected. */
     fun setTextSize(size: Int) {
+        if (selectedText != null) {
+            changeSelectedText { it.copy(textSize = size.toFloat()) }
+            return
+        }
         val request = selectedLetters()
         if (request == null) updateNote { it.copy(textSize = size) } else request.styleSelection { it.copy(size = size.toFloat()) }
     }
@@ -1076,7 +1125,10 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     /** Changes the selected text box, as one step that can be undone. */
     fun changeSelectedText(change: (TextItem) -> TextItem) = canvas.changeSelection { if (it is TextItem) change(it) else it }
 
-    fun updateNoteStyle(change: (TextStyle) -> TextStyle) = updateNote { it.copy(style = change(it.style)) }
+    /** Changes the style of the text box selected, or else of what the text tool writes next. */
+    fun updateNoteStyle(change: (TextStyle) -> TextStyle) {
+        if (selectedText != null) changeSelectedText { it.copy(style = change(it.style)) } else updateNote { it.copy(style = change(it.style)) }
+    }
 
     fun updateTable(change: (TableOptions) -> TableOptions) {
         table = change(table)
@@ -1234,12 +1286,6 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     val canAddPages get() = canvas.canAddPages
 
-    /** Whether the pages run side by side, so that the end of the document is to the right (or left) and not below. */
-    val scrollsSideways get() = canvas.scrollDirection != app.betternotes.core.layout.ScrollDirection.VERTICAL
-
-    /** Whether the pages run right to left. */
-    val scrollsLeft get() = canvas.scrollDirection == app.betternotes.core.layout.ScrollDirection.RIGHT_TO_LEFT
-
     /** Where the add-page button goes, or null when there is no room for it. */
     fun addPageSpot() = canvas.addPageSpot()
 
@@ -1288,7 +1334,9 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.FILL -> fillColor
             ColorTarget.FILL_PATTERN -> fillPattern.color
             ColorTarget.TOOLBAR -> toolbarColor ?: DEFAULT_FILL
-            ColorTarget.LIST_DOT -> note.style.list?.dotColor ?: ListStyle.DEFAULT_DOT_COLOR
+            ColorTarget.LIST_DOT -> shownTextStyle(note).list?.dotColor ?: ListStyle.DEFAULT_DOT_COLOR
+            ColorTarget.TEXT_COLOR -> shownTextColor(note)
+            ColorTarget.TEXT_BACKGROUND -> shownTextStyle(note).backgroundColor.takeIf { it ushr ALPHA_SHIFT != 0 } ?: DEFAULT_FILL
             ColorTarget.SELECTED_NOTE -> selection?.filterIsInstance<StickyNoteItem>()?.firstOrNull()?.color ?: DEFAULT_FILL
             ColorTarget.PLANNER_ELEMENT -> plannerSlot?.let { canvas.plannerPickColor(it) } ?: DEFAULT_FILL
             else -> preset?.color ?: DEFAULT_FILL
@@ -1350,16 +1398,18 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.TABLE_BORDER -> updateTable { it.withColor(color) }
             ColorTarget.TABLE_FILL -> updateTable { it.copy(fillColor = color) }
             ColorTarget.TABLE_HEADER -> updateTable { it.copy(headerColor = color) }
-            ColorTarget.SELECTED_TABLE_LINE -> recolorSelectedTables { it.copy(lineColor = color or OPAQUE) }
+            ColorTarget.SELECTED_TABLE_LINE -> recolorSelectedTables { it.copy(lineColor = color or OPAQUE_ALPHA) }
             ColorTarget.SELECTED_TABLE_FILL -> recolorSelectedTables { it.copy(fillColor = color) }
             ColorTarget.SELECTED_TABLE_HEADER -> recolorSelectedTables { it.copy(headerColor = color) }
             ColorTarget.LASER -> selectLaserColor(color)
             ColorTarget.FILL -> addFillColor(color)
-            ColorTarget.FILL_PATTERN -> updateFillPattern { it.copy(color = color or OPAQUE) }
+            ColorTarget.FILL_PATTERN -> updateFillPattern { it.copy(color = color or OPAQUE_ALPHA) }
             ColorTarget.SELECTED_NOTE -> recolorSelectedNotes(NoteOptions.argb(color, opacity ?: stickyOpacity))
-            ColorTarget.TOOLBAR -> chooseToolbarColor(color or OPAQUE)
-            ColorTarget.LIST_DOT -> updateNoteStyle { it.copy(list = (it.list ?: ListStyle(ListKind.DOT)).copy(dotColor = color or OPAQUE)) }
-            ColorTarget.PLANNER_ELEMENT -> plannerSlot?.let { restylePlanner(app.betternotes.core.planner.PlannerPages.StyleChange(it, color or OPAQUE)) }
+            ColorTarget.TOOLBAR -> chooseToolbarColor(color or OPAQUE_ALPHA)
+            ColorTarget.LIST_DOT -> updateNoteStyle { it.copy(list = (it.list ?: ListStyle(ListKind.DOT)).copy(dotColor = color or OPAQUE_ALPHA)) }
+            ColorTarget.TEXT_COLOR -> setTextColor(color or OPAQUE_ALPHA)
+            ColorTarget.TEXT_BACKGROUND -> updateNoteStyle { it.copy(backgroundColor = color or OPAQUE_ALPHA) }
+            ColorTarget.PLANNER_ELEMENT -> plannerSlot?.let { restylePlanner(app.betternotes.core.planner.PlannerPages.StyleChange(it, color or OPAQUE_ALPHA)) }
             null -> Unit
         }
         colorTarget = null
@@ -1477,7 +1527,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     companion object {
         private const val EXTERNAL_STORAGE_AUTHORITY = "com.android.externalstorage.documents"
         const val MIN_LASER_LENGTH = 1
-        val RETURNING_TOOLS = listOf(ActiveTool.HIGHLIGHTER, ActiveTool.ERASER, ActiveTool.LASSO, ActiveTool.TEXT, ActiveTool.EMOJI)
+        val RETURNING_TOOLS = listOf(ActiveTool.HIGHLIGHTER, ActiveTool.ERASER, ActiveTool.LASSO, ActiveTool.TEXT, ActiveTool.EMOJI, ActiveTool.TAPE)
         const val MIN_FILL_RETURN_TENTHS = 0
         const val MAX_FILL_RETURN_TENTHS = 100
         const val MAX_LASER_LENGTH = 5
@@ -1486,12 +1536,10 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         val LASER_SCALES = floatArrayOf(0.5f, 1f, 1.6f)
         private const val RECENT_EMOJI = 5
         private const val DEFAULT_EMOJI = 28
-        const val ALPHA_SHIFT = 24
         const val MIN_FILL_OPACITY = 0.1f
         private const val AFTER_GESTURE_MS = 1000L
         private const val AFTER_TAP_MS = 4000L
-        private val OPAQUE = 0xFF000000.toInt()
-        const val DEFAULT_FILL = 0xFF5F9FFB.toInt()
+        const val DEFAULT_FILL = Swatches.SHAPE_FILL_DEFAULT
     }
 }
 

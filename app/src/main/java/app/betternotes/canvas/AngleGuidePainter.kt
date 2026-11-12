@@ -5,6 +5,7 @@ import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.RectF
 import app.betternotes.core.tools.AngleGuide
+import app.betternotes.ui.theme.CanvasColors
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -16,7 +17,7 @@ import kotlin.math.sin
  * screen pixels, and goes when the pen lifts.
  */
 internal class AngleGuidePainter(private val density: Float) {
-    private val red = 0xFFE53935.toInt()
+    private val red = CanvasColors.ANGLE_GUIDE
     private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         color = red

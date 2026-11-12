@@ -24,12 +24,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.settings.AppSettings
 import app.betternotes.core.settings.PomodoroPhase
 import app.betternotes.core.settings.PomodoroSettings
 import app.betternotes.pomodoro.PomodoroTimer
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -67,12 +69,12 @@ internal fun PomodoroCard(settings: AppSettings, onChange: ((AppSettings) -> App
 
     SettingsCard {
         CardTitle(stringResource(R.string.pomodoro_title))
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.S12)) {
             Column(Modifier.weight(1f)) {
-                Text(stringResource(phaseName(state.phase)), color = colors.secondary, fontSize = 17.sp)
-                Text(clock(state.remainingMs(pomodoro, now)), color = colors.text, fontSize = 44.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(phaseName(state.phase)), color = colors.secondary, fontSize = TextSize.S17)
+                Text(clock(state.remainingMs(pomodoro, now)), color = colors.text, fontSize = TextSize.S44, fontWeight = FontWeight.Medium)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S6)) {
                 TimerAction(stringResource(R.string.pomodoro_reset)) { timer.reset() }
                 TimerAction(stringResource(R.string.pomodoro_skip)) { timer.skip(pomodoro) }
                 TimerAction(stringResource(if (state.isRunning) R.string.pomodoro_pause else R.string.pomodoro_start)) {
@@ -117,9 +119,9 @@ private fun TimerAction(label: String, onClick: () -> Unit) {
     Text(
         label,
         color = LocalSettingsColors.current.accent,
-        fontSize = 19.5.sp,
+        fontSize = TextSize.S19_5,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 16.dp),
+        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = Spacing.S12, vertical = Spacing.S16),
     )
 }
 

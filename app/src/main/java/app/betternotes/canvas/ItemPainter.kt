@@ -40,6 +40,9 @@ import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.model.TextSpan
 import app.betternotes.fonts.FontLibrary
+import app.betternotes.ui.theme.ALPHA_SHIFT
+import app.betternotes.ui.theme.CanvasColors
+import app.betternotes.ui.theme.RGB_MASK
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -76,6 +79,10 @@ internal class ItemPainter(
             is TapePathItem -> paintTapePath(canvas, item)
             is TableItem -> inFrame(canvas, item.frame) { paintTable(canvas, item) }
             is TextItem -> inFrame(canvas, item.frame) {
+                if (item.style.hasBackground) {
+                    fill.color = item.style.backgroundColor
+                    canvas.drawRect(0f, 0f, item.frame.width, item.frame.height, fill)
+                }
                 paintText(canvas, item.text, item.textSize, item.color, item.frame.width, item.frame.height, item.style, item.spans)
             }
             is StickyNoteItem -> paintSticky(canvas, item)
@@ -204,7 +211,7 @@ internal class ItemPainter(
             val radians = Math.toRadians((shadow.angleDegrees - item.frame.rotation).toDouble())
             val dx = (shadow.distance * Math.cos(radians)).toFloat()
             val dy = (shadow.distance * Math.sin(radians)).toFloat()
-            fill.color = 0xFF000000.toInt()
+            fill.color = CanvasColors.ITEM_SHADOW
             fill.alpha = (shadow.opacity * alpha).roundToInt().coerceIn(0, 255)
             canvas.save()
             // Only what falls outside the strip shows, so see-through tape is not darkened by it.
@@ -214,7 +221,7 @@ internal class ItemPainter(
             // A second, slightly fatter copy at lower strength softens the edge.
             line.pathEffect = null
             line.style = Paint.Style.STROKE
-            line.color = 0xFF000000.toInt()
+            line.color = CanvasColors.ITEM_SHADOW
             line.strokeWidth = SHADOW_SOFTNESS
             line.alpha = (shadow.opacity * alpha * 0.4f).roundToInt().coerceIn(0, 255)
             canvas.drawPath(path, line)
@@ -249,7 +256,7 @@ internal class ItemPainter(
         val shadow = item.shadow
         if (shadow.isVisible) {
             val radians = Math.toRadians(shadow.angleDegrees.toDouble())
-            fill.color = 0xFF000000.toInt()
+            fill.color = CanvasColors.ITEM_SHADOW
             fill.alpha = (shadow.opacity * alpha).roundToInt().coerceIn(0, 255)
             canvas.save()
             canvas.clipOutPath(strip)
@@ -257,7 +264,7 @@ internal class ItemPainter(
             canvas.drawPath(strip, fill)
             line.pathEffect = null
             line.style = Paint.Style.STROKE
-            line.color = 0xFF000000.toInt()
+            line.color = CanvasColors.ITEM_SHADOW
             line.strokeWidth = SHADOW_SOFTNESS
             line.alpha = (shadow.opacity * alpha * 0.4f).roundToInt().coerceIn(0, 255)
             canvas.drawPath(strip, line)
@@ -333,7 +340,7 @@ internal class ItemPainter(
 
     /** White marks laid out along the strip, in its own frame, so they bend with it. */
     private fun paintPathPattern(canvas: Canvas, pattern: TapePattern, width: Float) {
-        mark.color = 0xFFFFFFFF.toInt()
+        mark.color = CanvasColors.TAPE_PATTERN
         mark.alpha = PATTERN_ALPHA
         val half = width / 2f
         val gap = maxOf(width * PATTERN_GAP, MIN_PATTERN_GAP)
@@ -383,7 +390,7 @@ internal class ItemPainter(
 
     /** White marks over a strip: tiny dots, thin slanted lines, or two sets of lines crossing. */
     private fun paintPattern(canvas: Canvas, pattern: TapePattern, width: Float, height: Float) {
-        mark.color = 0xFFFFFFFF.toInt()
+        mark.color = CanvasColors.TAPE_PATTERN
         mark.alpha = PATTERN_ALPHA
         val gap = maxOf(height * PATTERN_GAP, MIN_PATTERN_GAP)
         when (pattern) {
@@ -458,7 +465,7 @@ internal class ItemPainter(
             fill.color = item.fillColor
             canvas.drawRect(0f, 0f, width, height, fill)
         }
-        fill.color = if (item.headerColor != 0) item.headerColor else TABLE_HEADER
+        fill.color = if (item.headerColor != 0) item.headerColor else CanvasColors.TABLE_HEADER
         if (item.headerRow) canvas.drawRect(0f, 0f, width, item.rowWeights[0] / rowTotal * height, fill)
         if (item.headerColumn) canvas.drawRect(0f, 0f, item.columnWeights[0] / columnTotal * width, height, fill)
         applyLine(item.lineColor, item.lineWidth, LineStyle.Solid)
@@ -476,7 +483,7 @@ internal class ItemPainter(
                             this,
                             cell,
                             item.textSize,
-                            CELL_TEXT,
+                            CanvasColors.TABLE_CELL_TEXT,
                             columnWidth - 2 * CELL_PADDING,
                             rowHeight - 2 * CELL_PADDING,
                             CELL_STYLE,
@@ -539,8 +546,8 @@ internal class ItemPainter(
 
     /** The fold's shade, as see-through as the note it is on. */
     private fun shadeOver(note: Int): Int {
-        val alpha = (FOLD_SHADE ushr ALPHA_SHIFT) * (note ushr ALPHA_SHIFT) / 255
-        return (alpha shl ALPHA_SHIFT) or (FOLD_SHADE and 0xFFFFFF)
+        val alpha = (CanvasColors.NOTE_FOLD_SHADE ushr ALPHA_SHIFT) * (note ushr ALPHA_SHIFT) / 255
+        return (alpha shl ALPHA_SHIFT) or (CanvasColors.NOTE_FOLD_SHADE and RGB_MASK)
     }
 
     private fun paintSticky(canvas: Canvas, item: StickyNoteItem) {
@@ -581,13 +588,13 @@ internal class ItemPainter(
             bitmapPaint.alpha = OPAQUE.toInt()
             canvas.drawBitmap(poster, null, box, bitmapPaint)
         } else {
-            fill.color = VIDEO_BACK
+            fill.color = CanvasColors.VIDEO_BACK
             canvas.drawRect(box, fill)
         }
         val radius = min(min(width, height) / 2f, VIDEO_BUTTON_PT)
-        fill.color = VIDEO_BUTTON
+        fill.color = CanvasColors.VIDEO_BUTTON
         canvas.drawCircle(width / 2f, height / 2f, radius, fill)
-        fill.color = VIDEO_TRIANGLE
+        fill.color = CanvasColors.VIDEO_TRIANGLE
         path.reset()
         val tip = radius * 0.5f
         path.moveTo(width / 2f - tip * 0.7f, height / 2f - tip)
@@ -614,7 +621,7 @@ internal class ItemPainter(
             if (bitmap != null) {
                 drawBitmap(bitmap, null, box, bitmapPaint)
             } else {
-                fill.color = IMAGE_PLACEHOLDER
+                fill.color = CanvasColors.IMAGE_PLACEHOLDER
                 drawRect(box, fill)
             }
         }
@@ -641,20 +648,12 @@ internal class ItemPainter(
         const val TEXT_LAYOUT_SCALE = 8f
         const val FOLD_OF_NOTE = 0.12f
         const val FOLD_TIP = 0.2f
-        const val FOLD_SHADE = 0x40FFFFFF
-        const val ALPHA_SHIFT = 24
-        const val VIDEO_BACK = 0xFF25282D.toInt()
-        const val VIDEO_BUTTON = 0xB3000000.toInt()
-        const val VIDEO_TRIANGLE = 0xFFFFFFFF.toInt()
 
         /** The largest the play button gets, and how far from the video's middle a tap starts it. */
         const val VIDEO_BUTTON_PT = 22f
-        const val TABLE_HEADER = 0x55808080
-        const val CELL_TEXT = 0xFF1E1F24.toInt()
         val CELL_STYLE = TextStyle()
         val ITALIC: Typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
         val BOLD_ITALIC: Typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
-        const val IMAGE_PLACEHOLDER = 0x22000000
     }
 }
 

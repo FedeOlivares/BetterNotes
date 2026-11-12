@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -54,7 +53,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.fonts.FontLibrary
 import app.betternotes.library.LibraryPreferences
@@ -71,6 +69,10 @@ import app.betternotes.ui.theme.TemplateLanguage
 import app.betternotes.core.settings.ScreenCalibration
 import app.betternotes.search.InkModels
 import android.view.KeyEvent
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
@@ -142,18 +144,18 @@ private fun SettingsPageFrame(title: String, onBack: () -> Unit, modifier: Modif
     val colors = LocalSettingsColors.current
     Column(modifier.fillMaxSize().background(colors.screen)) {
         Box(Modifier.fillMaxWidth().padding(top = 52.dp).height(72.dp)) {
-            Box(Modifier.align(Alignment.CenterStart).padding(start = 22.dp)) {
+            Box(Modifier.align(Alignment.CenterStart).padding(start = Spacing.S22)) {
                 RoundIcon(SettingsIcons.Back, 30.dp, stringResource(R.string.settings_back), onBack)
             }
-            Text(title, color = colors.title, fontSize = 24.5.sp, modifier = Modifier.align(Alignment.Center))
+            Text(title, color = colors.title, fontSize = TextSize.S24_5, modifier = Modifier.align(Alignment.Center))
         }
         Column(
-            verticalArrangement = Arrangement.spacedBy(27.dp),
+            verticalArrangement = Arrangement.spacedBy(Spacing.S27),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 137.dp, vertical = 25.dp),
+                .padding(horizontal = 137.dp, vertical = Spacing.S25),
             content = content,
         )
     }
@@ -208,7 +210,7 @@ private fun MainPage(
     HandwritingCard()
     StorageCard()
     SettingsCard { LinkRow(stringResource(R.string.settings_privacy)) { open(SettingsPage.PRIVACY) } }
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(Spacing.S12))
 }
 
 /** Plain statements, each checked against the manifest and the code. */
@@ -224,11 +226,11 @@ private fun PrivacyPage() {
             R.string.settings_privacy_contact_title to R.string.settings_privacy_contact,
         )
         sections.forEachIndexed { index, (title, body) ->
-            if (index > 0) Spacer(Modifier.height(18.dp))
-            Text(stringResource(title), color = colors.text, fontSize = 19.5.sp, fontWeight = FontWeight.Medium)
-            Text(stringResource(body), color = colors.secondary, fontSize = 17.sp)
+            if (index > 0) Spacer(Modifier.height(Spacing.S18))
+            Text(stringResource(title), color = colors.text, fontSize = TextSize.S19_5, fontWeight = FontWeight.Medium)
+            Text(stringResource(body), color = colors.secondary, fontSize = TextSize.S17)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.S12))
     }
 }
 
@@ -312,7 +314,7 @@ private fun HandwritingCard() {
                 Text(
                     stringResource(R.string.settings_models_download),
                     color = colors.accent,
-                    fontSize = 19.5.sp,
+                    fontSize = TextSize.S19_5,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier
                         .clickable {
@@ -332,7 +334,7 @@ private fun HandwritingCard() {
                                 working = false
                             }
                         }
-                        .padding(8.dp),
+                        .padding(Spacing.S8),
                 )
             }
         }
@@ -361,14 +363,14 @@ private fun StorageCard() {
     }
     SettingsCard {
         CardTitle(stringResource(R.string.settings_storage))
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(Spacing.S12))
         StorageLine(stringResource(R.string.settings_storage_notes), notes, stringResource(R.string.settings_storage_notes_detail))
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(Spacing.S18))
         StorageLine(stringResource(R.string.settings_storage_cache), cache, stringResource(R.string.settings_storage_cache_detail))
         Text(
             stringResource(R.string.settings_clear_cache),
             color = colors.accent,
-            fontSize = 19.5.sp,
+            fontSize = TextSize.S19_5,
             fontWeight = FontWeight.Medium,
             modifier = Modifier
                 .align(Alignment.End)
@@ -380,7 +382,7 @@ private fun StorageCard() {
                         }
                     }
                 }
-                .padding(16.dp),
+                .padding(Spacing.S16),
         )
     }
 }
@@ -389,10 +391,10 @@ private fun StorageCard() {
 private fun StorageLine(label: String, bytes: Long, detail: String) {
     val colors = LocalSettingsColors.current
     Row {
-        Text(label, color = colors.text, fontSize = 19.5.sp, modifier = Modifier.width(122.dp))
-        Text(stringResource(R.string.settings_storage_size, bytes / BYTES_PER_MB), color = colors.text, fontSize = 19.5.sp)
+        Text(label, color = colors.text, fontSize = TextSize.S19_5, modifier = Modifier.width(122.dp))
+        Text(stringResource(R.string.settings_storage_size, bytes / BYTES_PER_MB), color = colors.text, fontSize = TextSize.S19_5)
     }
-    Text(detail, color = colors.secondary, fontSize = 17.sp)
+    Text(detail, color = colors.secondary, fontSize = TextSize.S17)
 }
 
 private fun sizeOf(root: File): Long = root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
@@ -444,8 +446,8 @@ private fun ShortcutsPage(settings: AppSettings, onChange: ((AppSettings) -> App
                 else -> stringResource(R.string.shortcuts_hint)
             },
             color = colors.secondary,
-            fontSize = 18.sp,
-            modifier = Modifier.padding(bottom = 10.dp),
+            fontSize = TextSize.S18,
+            modifier = Modifier.padding(bottom = Spacing.S10),
         )
         for (action in EditorAction.entries) {
             val chord = bindings.chordFor(action)
@@ -461,12 +463,12 @@ private fun ShortcutsPage(settings: AppSettings, onChange: ((AppSettings) -> App
         Text(
             stringResource(R.string.shortcuts_reset),
             color = colors.accent,
-            fontSize = 19.5.sp,
+            fontSize = TextSize.S19_5,
             fontWeight = FontWeight.Medium,
             modifier = Modifier
                 .align(Alignment.End)
                 .clickable { onChange { it.copy(keyBindings = app.betternotes.core.settings.KeyBindings.Default) } }
-                .padding(16.dp),
+                .padding(Spacing.S16),
         )
     }
 }
@@ -496,7 +498,7 @@ private fun CalibrationPage(settings: AppSettings, reportedDpi: Float, onChange:
     var measured by remember { mutableStateOf("") }
     val measuredCm = measured.replace(',', '.').toFloatOrNull()?.takeIf { it > 0f }
     SettingsCard {
-        Text(stringResource(R.string.calibration_hint, CALIBRATION_LINE_CM.toInt()), color = colors.text, fontSize = 20.sp, modifier = Modifier.padding(bottom = 20.dp))
+        Text(stringResource(R.string.calibration_hint, CALIBRATION_LINE_CM.toInt()), color = colors.text, fontSize = TextSize.S20, modifier = Modifier.padding(bottom = Spacing.S20))
         val lineWidthPx = CALIBRATION_LINE_CM / CM_PER_INCH * dpi
         Canvas(Modifier.fillMaxWidth().height(40.dp)) {
             val y = size.height / 2f
@@ -505,7 +507,7 @@ private fun CalibrationPage(settings: AppSettings, reportedDpi: Float, onChange:
             drawLine(colors.accent, Offset(0f, 0f), Offset(0f, size.height), stroke)
             drawLine(colors.accent, Offset(lineWidthPx, 0f), Offset(lineWidthPx, size.height), stroke)
         }
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(Spacing.S20))
         SettingRow(stringResource(R.string.calibration_density)) {
             ValuePill(dpi.roundToInt().toString())
         }
@@ -515,16 +517,16 @@ private fun CalibrationPage(settings: AppSettings, reportedDpi: Float, onChange:
                 { measured = it.take(MAX_MEASURE_CHARS) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                textStyle = TextStyle(color = colors.text, fontSize = 19.5.sp),
+                textStyle = TextStyle(color = colors.text, fontSize = TextSize.S19_5),
                 cursorBrush = SolidColor(colors.accent),
                 modifier = Modifier
                     .width(120.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(AppShapes.Rounded10)
                     .background(colors.sheet)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = Spacing.S14, vertical = Spacing.S10),
             )
         }
-        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth().padding(top = Spacing.S10)) {
             if (settings.calibration != null) {
                 TextAction(stringResource(R.string.calibration_reset)) {
                     onChange { it.copy(calibration = null) }
@@ -549,8 +551,8 @@ private fun TextAction(label: String, onClick: () -> Unit) {
     Text(
         label,
         color = LocalSettingsColors.current.accent,
-        fontSize = 19.5.sp,
+        fontSize = TextSize.S19_5,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.clickable(onClick = onClick).padding(16.dp),
+        modifier = Modifier.clickable(onClick = onClick).padding(Spacing.S16),
     )
 }

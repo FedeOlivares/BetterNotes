@@ -25,8 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -53,7 +51,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.canvas.NoteEditor
 import app.betternotes.core.export.ExportFrame
@@ -69,6 +66,10 @@ import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.model.Page
 import app.betternotes.export.DocumentExporter
 import app.betternotes.export.exporter
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -152,14 +153,14 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
     }
 
     SettingsSheet(stringResource(R.string.export_title), onClose, modifier, headerHeight = 96.dp) {
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 28.dp).padding(bottom = 26.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
-                Text(stringResource(R.string.export_select_pages), color = colors.text, fontSize = 21.sp, modifier = Modifier.weight(1f))
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = Spacing.S28).padding(bottom = Spacing.S26)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(top = Spacing.S14)) {
+                Text(stringResource(R.string.export_select_pages), color = colors.text, fontSize = TextSize.S21, modifier = Modifier.weight(1f))
                 val allSelected = selected.size == pages.size
                 Text(
                     stringResource(if (allSelected) R.string.export_deselect_all else R.string.export_select_all),
                     color = colors.text,
-                    fontSize = 19.5.sp,
+                    fontSize = TextSize.S19_5,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable {
                         selected = if (allSelected) emptySet() else pages.indices.toSet()
@@ -167,24 +168,24 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
                     },
                 )
             }
-            Spacer(Modifier.height(36.dp))
+            Spacer(Modifier.height(Spacing.S36))
             // The cover, when there is one, is page 0, as in the editor.
             val firstNumber = if (pages.firstOrNull()?.isCover == true) 0 else 1
             PageChooser(pages, exporter, worker, selected, firstNumber) { index ->
                 selected = if (index in selected) selected - index else selected + index
                 rangeText = ""
             }
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(Spacing.S20))
             RangeField(rangeText) { text ->
                 rangeText = text
                 val parsed = parsePageRange(text, pages.size, firstNumber)
                 if (parsed != null) selected = parsed.toSet()
             }
-            Spacer(Modifier.height(36.dp))
-            Text(stringResource(R.string.export_as), color = colors.text, fontSize = 21.sp)
-            Spacer(Modifier.height(20.dp))
-            Column(Modifier.fillMaxWidth().padding(horizontal = 55.dp), verticalArrangement = Arrangement.spacedBy(21.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            Spacer(Modifier.height(Spacing.S36))
+            Text(stringResource(R.string.export_as), color = colors.text, fontSize = TextSize.S21)
+            Spacer(Modifier.height(Spacing.S20))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 55.dp), verticalArrangement = Arrangement.spacedBy(Spacing.S21)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S11)) {
                     KindCard(ExportIcons.Pdf, stringResource(R.string.export_pdf), kind == ExportKind.PDF, Modifier.weight(1f)) { kind = ExportKind.PDF }
                     KindCard(ExportIcons.Image, stringResource(R.string.export_image), kind == ExportKind.IMAGE, Modifier.weight(1f)) { kind = ExportKind.IMAGE }
                     KindCard(ExportIcons.Notebook, stringResource(R.string.export_notebook), kind == ExportKind.NOTEBOOK, Modifier.weight(1f)) { kind = ExportKind.NOTEBOOK }
@@ -197,19 +198,19 @@ internal fun ExportSheet(editor: NoteEditor, onClose: () -> Unit, modifier: Modi
                     }
                     ExportKind.NOTEBOOK -> SettingsCard(horizontal = 27.dp, top = 16.dp, bottom = 16.dp) {
                         // The whole notebook, whatever pages are chosen above: someone with this app can open it and edit everything.
-                        Text(stringResource(R.string.export_notebook_detail), color = colors.secondary, fontSize = 17.sp, modifier = Modifier.padding(vertical = 10.dp))
+                        Text(stringResource(R.string.export_notebook_detail), color = colors.secondary, fontSize = TextSize.S17, modifier = Modifier.padding(vertical = Spacing.S10))
                     }
                     ExportKind.IMAGE -> SettingsCard(horizontal = 27.dp, top = 16.dp, bottom = 16.dp) {
                         ScaleRow(scale, sizeLabel(pages, selected, scale, inPixels = true)) { scale = it }
                         ToggleRow(stringResource(R.string.export_invert), invert) { invert = it }
-                        Row(horizontalArrangement = Arrangement.spacedBy(11.dp), modifier = Modifier.padding(vertical = 10.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S11), modifier = Modifier.padding(vertical = Spacing.S10)) {
                             ChoiceChip(stringResource(R.string.export_png), format == ImageFormat.PNG) { format = ImageFormat.PNG }
                             ChoiceChip(stringResource(R.string.export_jpeg), format == ImageFormat.JPEG) { format = ImageFormat.JPEG }
                         }
                     }
                 }
             }
-            Spacer(Modifier.height(30.dp))
+            Spacer(Modifier.height(Spacing.S30))
             Row(horizontalArrangement = Arrangement.spacedBy(38.dp, Alignment.End), modifier = Modifier.fillMaxWidth()) {
                 TextButton(stringResource(R.string.export_cancel), enabled = !working, onClick = onClose)
                 val ready = !working && (selected.isNotEmpty() || kind == ExportKind.NOTEBOOK)
@@ -250,7 +251,7 @@ private fun PageChooser(
 ) {
     val thumbnails = remember { mutableStateMapOf<Int, Bitmap>() }
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.S20, Alignment.CenterHorizontally),
         modifier = Modifier.fillMaxWidth(),
     ) {
         items(pages.indices.toList(), key = { it }) { index ->
@@ -274,7 +275,7 @@ private fun PageChooser(
 @Composable
 private fun PageTile(index: Int, thumbnail: Bitmap?, selected: Boolean, onClick: () -> Unit) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(9.dp)
+    val shape = AppShapes.Rounded9
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(role = Role.Checkbox, onClick = onClick)) {
         Box(
             Modifier
@@ -291,16 +292,16 @@ private fun PageTile(index: Int, thumbnail: Bitmap?, selected: Boolean, onClick:
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(bottom = 9.dp)
+                        .padding(bottom = Spacing.S9)
                         .size(28.dp)
-                        .background(colors.accent, CircleShape),
+                        .background(colors.accent, AppShapes.Circle),
                 ) {
                     Icon(SettingsIcons.Check, null, tint = colors.onAccent, modifier = Modifier.size(22.dp))
                 }
             }
         }
-        Spacer(Modifier.height(24.dp))
-        Text((index + 1).toString(), color = colors.secondary, fontSize = 19.5.sp)
+        Spacer(Modifier.height(Spacing.S24))
+        Text((index + 1).toString(), color = colors.secondary, fontSize = TextSize.S19_5)
     }
 }
 
@@ -312,18 +313,18 @@ private fun RangeField(value: String, onChange: (String) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .height(76.dp)
-            .background(colors.field, RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp)),
+            .background(colors.field, AppShapes.TopRounded6),
     ) {
         BasicTextField(
             value,
             onChange,
             singleLine = true,
-            textStyle = TextStyle(color = colors.text, fontSize = 21.sp),
+            textStyle = TextStyle(color = colors.text, fontSize = TextSize.S21),
             cursorBrush = SolidColor(colors.accent),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(top = 18.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.S22).padding(top = Spacing.S18),
             decorationBox = { inner ->
                 if (value.isEmpty()) {
-                    Text(stringResource(R.string.export_range_hint), color = colors.secondary, fontSize = 21.sp)
+                    Text(stringResource(R.string.export_range_hint), color = colors.secondary, fontSize = TextSize.S21)
                 }
                 inner()
             },
@@ -335,7 +336,7 @@ private fun RangeField(value: String, onChange: (String) -> Unit) {
 @Composable
 private fun KindCard(icon: ImageVector, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(22.dp)
+    val shape = AppShapes.Rounded22
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
@@ -347,8 +348,8 @@ private fun KindCard(icon: ImageVector, label: String, selected: Boolean, modifi
             .clickable(role = Role.RadioButton, onClick = onClick),
     ) {
         Icon(icon, null, tint = if (selected) colors.accent else colors.text, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.height(8.dp))
-        Text(label, color = if (selected) colors.accent else colors.text, fontSize = 17.sp)
+        Spacer(Modifier.height(Spacing.S8))
+        Text(label, color = if (selected) colors.accent else colors.text, fontSize = TextSize.S17)
     }
 }
 
@@ -361,17 +362,17 @@ private fun ScaleRow(scale: Float, size: String?, onChange: (Float) -> Unit) {
         return ((raw / SCALE_STEP).roundToInt() * SCALE_STEP).coerceIn(range)
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().height(62.dp)) {
-        Text(stringResource(R.string.export_page_scale), color = colors.text, fontSize = 19.5.sp)
-        Spacer(Modifier.width(10.dp))
+        Text(stringResource(R.string.export_page_scale), color = colors.text, fontSize = TextSize.S19_5)
+        Spacer(Modifier.width(Spacing.S10))
         PlainSlider(
             (scale - range.start) / (range.endInclusive - range.start),
             { onChange(fromFraction(it)) },
             Modifier.weight(1f),
         )
-        Spacer(Modifier.width(10.dp))
+        Spacer(Modifier.width(Spacing.S10))
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(140.dp)) {
-            Text(stringResource(R.string.export_percent, (scale * 100f).roundToInt()), color = colors.text, fontSize = 16.5.sp, fontWeight = FontWeight.Medium)
-            if (size != null) Text(size, color = colors.text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+            Text(stringResource(R.string.export_percent, (scale * 100f).roundToInt()), color = colors.text, fontSize = TextSize.S16_5, fontWeight = FontWeight.Medium)
+            if (size != null) Text(size, color = colors.text, fontSize = TextSize.S16, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -397,9 +398,9 @@ private fun TextButton(label: String, enabled: Boolean, onClick: () -> Unit) {
     Text(
         label,
         color = if (enabled) colors.text else colors.secondary,
-        fontSize = 19.5.sp,
+        fontSize = TextSize.S19_5,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(8.dp),
+        modifier = Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(Spacing.S8),
     )
 }
 

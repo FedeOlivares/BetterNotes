@@ -123,4 +123,47 @@ class NoteScopeTest {
         scope.restore(page)
         assertEquals(older, page[0])
     }
+
+    /** A post-it at 100, 100, 200 across, holding a box that hangs 20 past its right edge (at 180, 40 of its own, 40 across). */
+    private fun noteWithOverhang() =
+        StickyNoteItem(1, Frame(100f, 100f, 200f, 200f), color = 0, closedWidth = 20f, closedHeight = 20f, isOpen = true, items = listOf(
+            ShapeItem(12, Frame(180f, 40f, 40f, 40f), ShapeKind.RECTANGLE, strokeColor = 0, strokeWidth = 1f, fillColor = 0),
+        ))
+
+    @Test
+    fun `a loop round only the part of an item that hangs past the post-it's edge works on the post-it, and grabs the item`() {
+        page.splice(IntArray(0), intArrayOf(0), listOf(noteWithOverhang()))
+        // The item is at 280..320 across and 140..180 down on the page; the post-it ends at 300.
+        val hangingBit = floatArrayOf(305f, 145f, 318f, 145f, 318f, 175f, 305f, 175f)
+        assertEquals(0, NoteScope.noteHolding(page, hangingBit))
+        val scope = NoteScope.forLoop(pageId, page, hangingBit)!!
+        assertEquals(listOf(12L), selectWithLasso(pageId, scope.content, hangingBit, anyPortion = true).items.map { it.id })
+        // A loop that crosses the edge but stays on the item does too.
+        assertEquals(0, NoteScope.noteHolding(page, floatArrayOf(290f, 150f, 312f, 150f, 312f, 170f, 290f, 170f)))
+    }
+
+    @Test
+    fun `a loop beside the overhang, or round more than the item, is still the page's`() {
+        page.splice(IntArray(0), intArrayOf(0), listOf(noteWithOverhang()))
+        // Outside the item's box altogether.
+        assertEquals(-1, NoteScope.noteHolding(page, floatArrayOf(330f, 145f, 345f, 145f, 345f, 175f, 330f, 175f)))
+        // Round the whole item and some page beside it.
+        assertEquals(-1, NoteScope.noteHolding(page, floatArrayOf(270f, 130f, 340f, 130f, 340f, 190f, 270f, 190f)))
+        // A turned post-it keeps the old rule.
+        val turned = noteWithOverhang().copy(frame = Frame(100f, 100f, 200f, 200f, rotation = 30f))
+        page.splice(intArrayOf(0), intArrayOf(0), listOf(turned))
+        assertEquals(-1, NoteScope.noteHolding(page, floatArrayOf(305f, 145f, 318f, 145f, 318f, 175f, 305f, 175f)))
+    }
+
+    @Test
+    fun `a small loop over a bit of an item that hangs off the post-it works on the post-it, though it reaches past the item's box a little`() {
+        page.splice(IntArray(0), intArrayOf(0), listOf(noteWithOverhang()))
+        // The item is at 280..320 across and 140..180 down on the page. A loop over its hanging end, a few points wider than the box.
+        val tiny = floatArrayOf(302f, 150f, 324f, 150f, 324f, 170f, 302f, 170f)
+        assertEquals(0, NoteScope.noteHolding(page, tiny))
+        // Far from the item, outside the post-it, it is the page's.
+        assertEquals(-1, NoteScope.noteHolding(page, floatArrayOf(302f, 250f, 324f, 250f, 324f, 270f, 302f, 270f)))
+        // A loop wholly in the post-it is as before.
+        assertEquals(0, NoteScope.noteHolding(page, floatArrayOf(150f, 150f, 200f, 150f, 200f, 200f, 150f, 200f)))
+    }
 }

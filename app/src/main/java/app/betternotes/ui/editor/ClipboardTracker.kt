@@ -1,6 +1,5 @@
 package app.betternotes.ui.editor
 
-import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
@@ -95,6 +94,3 @@ internal class ClipboardTracker(context: Context) {
 }
 
 private var cleared = false
-
-/** True when the clip description says the clip holds a picture. */
-internal fun ClipData.holdsImage() = description.hasMimeType("image/*")

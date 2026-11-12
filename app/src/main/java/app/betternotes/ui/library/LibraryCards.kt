@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -48,19 +47,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.library.DocumentInfo
 import app.betternotes.core.library.LibraryEntry
 import app.betternotes.library.ThumbnailStore
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalAppColors
+import app.betternotes.ui.theme.OPAQUE_ALPHA
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import java.time.Instant
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 
-private val CardShape = RoundedCornerShape(25.dp)
-private val RowShape = RoundedCornerShape(18.dp)
 private val HeaderHeight = 64.dp
 private val FooterHeight = 52.dp
 /** A tile is a tall rectangle, a fifth shorter than the Goodnotes reference (624 by 900), which is 624 by 720. */
@@ -85,7 +86,7 @@ internal fun DocumentCard(
         Modifier
             .fillMaxWidth()
             .aspectRatio(CARD_RATIO)
-            .clip(CardShape)
+            .clip(AppShapes.LibraryCard)
             .background(colors.surface)
             .clickable(onClick = onClick),
     ) {
@@ -94,15 +95,15 @@ internal fun DocumentCard(
             Text(
                 entry.name,
                 color = colors.title,
-                fontSize = 19.sp,
-                lineHeight = 22.sp,
+                fontSize = TextSize.S19,
+                lineHeight = TextSize.S22,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 48.dp),
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = Spacing.S16, end = 48.dp),
             )
             if (selected == null) {
-                CardMenu(actions, colors.secondaryText, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp))
+                CardMenu(actions, colors.secondaryText, Modifier.align(Alignment.CenterEnd).padding(end = Spacing.S4))
             }
         }
         Thumbnail(entry.id, info, thumbnails, Modifier.fillMaxWidth().weight(1f))
@@ -110,9 +111,9 @@ internal fun DocumentCard(
             Text(
                 formatDate(entry.modifiedAtMs, nowMs),
                 color = colors.secondaryText,
-                fontSize = 16.sp,
+                fontSize = TextSize.S16,
                 maxLines = 1,
-                modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 12.dp),
+                modifier = Modifier.align(Alignment.CenterStart).padding(start = Spacing.S16, end = Spacing.S12),
             )
         }
     }
@@ -136,7 +137,7 @@ internal fun FolderCard(
         Modifier
             .fillMaxWidth()
             .aspectRatio(CARD_RATIO)
-            .clip(CardShape)
+            .clip(AppShapes.LibraryCard)
             .clickable(onClick = onClick),
     ) {
         FolderArt(Modifier.fillMaxSize(), entry.style)
@@ -144,22 +145,22 @@ internal fun FolderCard(
         Text(
             pluralStringResource(R.plurals.library_folder_items, itemCount, itemCount),
             color = look.dim ?: colors.folderDim,
-            fontSize = 16.sp,
-            lineHeight = 20.sp,
-            modifier = Modifier.padding(start = 14.dp, top = 17.dp),
+            fontSize = TextSize.S16,
+            lineHeight = TextSize.S20,
+            modifier = Modifier.padding(start = Spacing.S14, top = Spacing.S17),
         )
         if (selected == null) {
-            CardMenu(actions, look.dots ?: colors.folderDots, Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp))
+            CardMenu(actions, look.dots ?: colors.folderDots, Modifier.align(Alignment.TopEnd).padding(top = Spacing.S5, end = Spacing.S4))
         }
         Text(
             entry.name,
             color = look.text ?: colors.folderText,
-            fontSize = 19.sp,
-            lineHeight = 22.sp,
+            fontSize = TextSize.S19,
+            lineHeight = TextSize.S22,
             fontWeight = FontWeight.Medium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.BottomStart).padding(start = 19.dp, end = 19.dp, bottom = 19.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(start = Spacing.S19, end = Spacing.S19, bottom = Spacing.S19),
         )
     }
     SelectionMark(selected)
@@ -183,19 +184,19 @@ internal fun LibraryRow(
         modifier = Modifier
             .fillMaxWidth()
             .height(92.dp)
-            .clip(RowShape)
+            .clip(AppShapes.LibraryRow)
             .background(if (selected == true) colors.accentContainer else colors.surface)
             .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 8.dp),
+            .padding(start = Spacing.S12, end = Spacing.S8),
     ) {
-        val pictureModifier = Modifier.size(68.dp).clip(RoundedCornerShape(10.dp))
+        val pictureModifier = Modifier.size(68.dp).clip(AppShapes.Rounded10)
         if (info != null) Thumbnail(entry.id, info, thumbnails, pictureModifier) else FolderArt(pictureModifier, entry.style)
-        Column(Modifier.padding(start = 16.dp).weight(1f)) {
-            Text(entry.name, color = colors.title, fontSize = 19.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.padding(start = Spacing.S16).weight(1f)) {
+            Text(entry.name, color = colors.title, fontSize = TextSize.S19, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 if (info != null) formatDate(entry.modifiedAtMs, nowMs) else pluralStringResource(R.plurals.library_folder_items, itemCount, itemCount),
                 color = colors.secondaryText,
-                fontSize = 16.sp,
+                fontSize = TextSize.S16,
                 maxLines = 1,
             )
         }
@@ -208,12 +209,12 @@ internal fun LibraryRow(
 private fun SelectionMark(selected: Boolean?) {
     if (selected == null) return
     val colors = LocalAppColors.current
-    Box(Modifier.fillMaxWidth().aspectRatio(CARD_RATIO).then(if (selected) Modifier.border(3.dp, colors.accent, CardShape) else Modifier)) {
+    Box(Modifier.fillMaxWidth().aspectRatio(CARD_RATIO).then(if (selected) Modifier.border(3.dp, colors.accent, AppShapes.LibraryCard) else Modifier)) {
         Icon(
             if (selected) LibraryIcons.CheckCircle else LibraryIcons.EmptyCircle,
             null,
             tint = if (selected) colors.accent else colors.secondaryText,
-            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp).size(32.dp),
+            modifier = Modifier.align(Alignment.TopEnd).padding(Spacing.S10).size(32.dp),
         )
     }
 }
@@ -270,7 +271,7 @@ private fun CardBorder() {
         Modifier
             .fillMaxWidth()
             .aspectRatio(CARD_RATIO)
-            .border(1.5.dp, colors.border, CardShape),
+            .border(1.5.dp, colors.border, AppShapes.LibraryCard),
     )
 }
 
@@ -302,7 +303,7 @@ private fun CardMenu(actions: @Composable () -> List<CardAction>, dotColor: Colo
         Canvas(
             Modifier
                 .size(44.dp, 44.dp)
-                .clip(RoundedCornerShape(22.dp))
+                .clip(AppShapes.Rounded22)
                 .clickable { open = true }
                 .semantics { contentDescription = description },
         ) {
@@ -356,20 +357,19 @@ internal class FolderLook(val back: Color?, val front: Color?, val paper: Color?
 
 internal fun folderLook(style: FolderStyle): FolderLook {
     if (style.color == FolderStyle.DEFAULT_COLOR) return FolderLook(null, null, null, null, null, null)
-    val front = Color(style.color or OPAQUE)
+    val front = Color(style.color or OPAQUE_ALPHA)
     val light = front.luminance() > LIGHT_FOLDER
-    val ink = if (light) Color(0xFF1F2328) else Color.White
+    val ink = if (light) UiColors.FolderInkDark else UiColors.FolderInkLight
     return FolderLook(
-        back = lerp(front, Color.Black, 0.12f),
+        back = lerp(front, UiColors.Black, 0.12f),
         front = front,
-        paper = lerp(front, Color.White, 0.55f),
+        paper = lerp(front, UiColors.White, 0.55f),
         text = ink,
         dim = ink.copy(alpha = 0.72f),
         dots = ink,
     )
 }
 
-private const val OPAQUE = 0xFF000000.toInt()
 private const val LIGHT_FOLDER = 0.55f
 
 /**
@@ -392,13 +392,12 @@ private fun FolderPreviews(documents: List<LibraryEntry>, thumbnails: ThumbnailS
                 Modifier
                     .offset(unit * inset, unit * top)
                     .size(unit * (319f - 2 * inset), unit * (242f - top))
-                    .shadow(3.dp, PreviewShape)
-                    .clip(PreviewShape)
-                    .border(1.dp, Color(0x22000000), PreviewShape),
+                    .shadow(3.dp, AppShapes.FolderPreview)
+                    .clip(AppShapes.FolderPreview)
+                    .border(1.dp, UiColors.HairlineDark, AppShapes.FolderPreview),
             )
         }
     }
 }
 
-private val PreviewShape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp)
 private const val PREVIEWS = 3

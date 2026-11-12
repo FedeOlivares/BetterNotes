@@ -98,6 +98,9 @@
     <string name="panel_corner_radius">Radio de las esquinas</string>
     <string name="panel_border_color">Color del borde</string>
     <string name="panel_fill_color">Color de relleno</string>
+    <string name="panel_text_stroke_color">Color del contorno</string>
+    <string name="panel_text_background_color">Color de fondo</string>
+    <string name="panel_color_none">Ninguno</string>
     <string name="panel_more_shapes">Más formas</string>
     <string name="panel_size">Tamaño</string>
     <string name="panel_erase_entire">Borrar el objeto completo</string>

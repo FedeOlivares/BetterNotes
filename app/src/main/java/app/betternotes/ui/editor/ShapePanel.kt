@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -38,14 +37,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.canvas.ShapePaths
 import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.ShapeKind
 import app.betternotes.core.tools.ShapeOptions
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -101,6 +102,7 @@ internal fun ShapeRow(state: EditorState, options: ShapeOptions, modifier: Modif
                 if (slot == options.selectedColor) SelectedDot()
             }
         }
+        ToolbarIcon(EditorIcons.AddColor, stringResource(R.string.editor_add_color)) { state.colorTarget = ColorTarget.SHAPE_BORDER }
         PillDivider()
         ToolbarCellBox(onClick = { state.tapShapeFill() }) { FillSwatch(options.fillColor) }
         PillDivider()
@@ -145,7 +147,7 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
                 for (row in SHAPE_PAGES[page].chunked(SHAPES_PER_ROW)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(SHAPE_GAP),
-                        modifier = Modifier.padding(horizontal = PanelPadding + 8.dp, vertical = 2.dp),
+                        modifier = Modifier.padding(horizontal = PanelPadding + Spacing.S8, vertical = Spacing.S2),
                     ) {
                         for (kind in row) {
                             val selected = kind == options.kind
@@ -154,13 +156,13 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier
                                     .size(SHAPE_CELL)
-                                    .clip(CircleShape)
+                                    .clip(AppShapes.Circle)
                                     .background(if (selected) colors.accentContainer else Color.Transparent)
                                     .clickable(role = Role.RadioButton) { state.updateShape { it.withKind(kind) } },
                             ) {
                                 val label = SHAPE_LABELS[kind]
                                 if (label != null) {
-                                    Text(label, color = tint, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                    Text(label, color = tint, fontSize = TextSize.S16, fontWeight = FontWeight.Medium)
                                 } else {
                                     ShapeGlyph(kind, tint)
                                 }
@@ -171,23 +173,23 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
             }
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.S12, Alignment.CenterHorizontally),
+            modifier = Modifier.fillMaxWidth().padding(vertical = Spacing.S4),
         ) {
             for (page in SHAPE_PAGES.indices) {
                 val current = page == pager.currentPage
                 Box(
                     Modifier
                         .size(10.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(if (current) colors.accent else Color.Transparent)
-                        .then(if (current) Modifier else Modifier.border(2.dp, colors.label, CircleShape))
+                        .then(if (current) Modifier else Modifier.border(2.dp, colors.label, AppShapes.Circle))
                         .clickable(role = Role.Button) { scope.launch { pager.animateScrollToPage(page) } },
                 )
             }
         }
         LabeledRow(R.string.panel_border_width) { ValuePill { ValueText(options.width.toString()) } }
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = PanelPadding - Spacing.S6)) {
             PanelIconButton(EditorIcons.Minus, stringResource(R.string.panel_thinner)) {
                 state.updateShape { it.withWidth(it.width - 1) }
             }
@@ -230,17 +232,17 @@ internal fun ShapePanel(state: EditorState, options: ShapeOptions, modifier: Mod
             modifier = Modifier.fillMaxWidth(),
         )
         LabeledRow(R.string.panel_border_color) {
-            Box(Modifier.size(36.dp).clip(CircleShape).clickable { state.colorTarget = ColorTarget.SHAPE_BORDER }, Alignment.Center) {
+            Box(Modifier.size(36.dp).clip(AppShapes.Circle).clickable { state.colorTarget = ColorTarget.SHAPE_BORDER }, Alignment.Center) {
                 ColorRing(options.color)
             }
         }
         LabeledRow(R.string.panel_fill_color) {
-            Box(Modifier.size(36.dp).clip(CircleShape).clickable { state.tapShapeFill() }, Alignment.Center) {
+            Box(Modifier.size(36.dp).clip(AppShapes.Circle).clickable { state.tapShapeFill() }, Alignment.Center) {
                 FillSwatch(options.fillColor)
             }
         }
         CreateReturnRows(state)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(Spacing.S10))
     }
 }
 

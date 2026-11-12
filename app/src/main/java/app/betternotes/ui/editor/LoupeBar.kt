@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -31,7 +29,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.betternotes.R
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
 
 /**
  * The loupe's title bar, over the empty space that the canvas draws its magnified window into. The empty
@@ -50,7 +50,7 @@ internal fun LoupeBar(state: EditorState, modifier: Modifier) {
             .fillMaxWidth()
             .fillMaxHeight(share.coerceAtLeast(MIN_DRAWN_SHARE))
             .graphicsLayer { alpha = shrink }
-            .padding(4.dp),
+            .padding(Spacing.S4),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -58,9 +58,9 @@ internal fun LoupeBar(state: EditorState, modifier: Modifier) {
                 .fillMaxWidth()
                 .height(BAR_HEIGHT)
                 .masksInk(state, "loupe-bar")
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .clip(AppShapes.TopRounded20)
                 .background(colors.panel)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = Spacing.S8),
         ) {
             ToolbarIcon(EditorIcons.Crosshair, stringResource(R.string.loupe_center), onClick = state::recenterLoupe)
             Spacer(Modifier.weight(1f))
@@ -89,7 +89,7 @@ internal fun LoupeBar(state: EditorState, modifier: Modifier) {
                     Modifier
                         .width(36.dp)
                         .height(4.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(colors.iconDisabled),
                 )
             }

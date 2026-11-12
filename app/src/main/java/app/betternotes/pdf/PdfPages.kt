@@ -2,7 +2,6 @@ package app.betternotes.pdf
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import app.betternotes.core.format.DocumentStore
@@ -13,6 +12,7 @@ import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageSource
 import app.betternotes.core.search.SearchableText
 import app.betternotes.core.search.TextMatch
+import app.betternotes.ui.theme.CanvasColors
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.max
@@ -48,7 +48,7 @@ internal class PdfPages(store: DocumentStore, private val document: Document) {
     private var search: SearchJob? = null
     private var skippedWhilePinching = false
 
-    private val paper = Paint().apply { color = Color.WHITE }
+    private val paper = Paint().apply { color = CanvasColors.PAPER }
     private val sharp = Paint()
     private val smooth = Paint(Paint.FILTER_BITMAP_FLAG)
     private val destination = RectF()

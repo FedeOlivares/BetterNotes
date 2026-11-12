@@ -23,8 +23,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -46,12 +44,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.model.Page
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
+import app.betternotes.ui.theme.UiColors
 import app.betternotes.ui.theme.opensFrom
 import kotlinx.coroutines.yield
 
@@ -66,7 +67,7 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(SCRIM)
+            .background(UiColors.Scrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 state.pagesOpen = false
             },
@@ -83,11 +84,11 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth().height(62.dp).padding(start = 16.dp, end = 10.dp),
+                modifier = Modifier.fillMaxWidth().height(62.dp).padding(start = Spacing.S16, end = Spacing.S10),
             ) {
                 Icon(EditorIcons.PageGrid, null, tint = colors.iconDisabled, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.pages_all), color = colors.title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Spacer(Modifier.width(Spacing.S8))
+                Text(stringResource(R.string.pages_all), color = colors.title, fontSize = TextSize.S15, fontWeight = FontWeight.Medium)
                 Icon(EditorIcons.ChevronDown, null, tint = colors.icon, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.weight(1f))
                 if (state.canAddPages) {
@@ -99,9 +100,9 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .padding(start = 4.dp)
+                        .padding(start = Spacing.S4)
                         .size(27.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(colors.closeButton)
                         .clickable(role = Role.Button) { state.pagesOpen = false },
                 ) {
@@ -154,7 +155,7 @@ internal fun AllPagesPanel(state: EditorState, notices: Notices) {
 private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Boolean, isDragged: Boolean) {
     val colors = LocalEditorColors.current
     var menu by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = AppShapes.Rounded8
     val thumbnail by produceState<Bitmap?>(null, page.id, state.historyVersion) {
         // A long document paints its pages a few at a time, not all in one frame.
         yield()
@@ -162,7 +163,7 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
     }
     val pdf by produceState<Bitmap?>(null, page.id) { value = state.pdfThumbnail(page.id, THUMBNAIL_PX) }
     val size = page.size
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = Spacing.S12, vertical = Spacing.S8)) {
         Box(
             Modifier
                 .fillMaxWidth()
@@ -178,15 +179,15 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
         Box {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable(role = Role.Button) { menu = true }.padding(8.dp),
+                modifier = Modifier.clickable(role = Role.Button) { menu = true }.padding(Spacing.S8),
             ) {
-                Text("${index + 1 - state.coverOffset}", color = colors.title, fontSize = 13.sp)
+                Text("${index + 1 - state.coverOffset}", color = colors.title, fontSize = TextSize.S13)
                 Icon(EditorIcons.ChevronDown, stringResource(R.string.editor_more), tint = colors.icon, modifier = Modifier.size(16.dp))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 if (state.canAddPages) {
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.pages_add_after), fontSize = 14.sp) },
+                        text = { Text(stringResource(R.string.pages_add_after), fontSize = TextSize.S14) },
                         onClick = {
                             menu = false
                             state.addPage(index)
@@ -195,7 +196,7 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
                 }
                 if (state.pageCount > 1 && !page.isCover) {
                     DropdownMenuItem(
-                        text = { Text(stringResource(R.string.pages_delete), fontSize = 14.sp) },
+                        text = { Text(stringResource(R.string.pages_delete), fontSize = TextSize.S14) },
                         onClick = {
                             menu = false
                             state.deletePage(index)
@@ -207,7 +208,6 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
     }
 }
 
-private val SCRIM = Color(0x66000000)
 private val PANEL_SIDE_MARGIN = 86.dp
 private val PANEL_END_MARGIN = 29.dp
 private val THUMBNAIL_WIDTH = 150.dp

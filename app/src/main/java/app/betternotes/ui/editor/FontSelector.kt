@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -28,12 +27,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.fonts.FontLibrary
 import app.betternotes.fonts.rememberFontPicker
 import app.betternotes.ui.icons.EditorIcons
+import app.betternotes.ui.theme.AppShapes
 import app.betternotes.ui.theme.LocalEditorColors
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 
 /**
  * The text's font, in the way of the brush type: the one in use, each name in its own typeface, and a list of the
@@ -51,27 +52,27 @@ internal fun FontSelector(current: String, onSelect: (String) -> Unit) {
     Text(
         stringResource(R.string.panel_font),
         color = colors.label,
-        fontSize = 14.sp,
+        fontSize = TextSize.S14,
         fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(start = PanelPadding, top = 6.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = PanelPadding, top = Spacing.S6, bottom = Spacing.S8),
     )
     Column(Modifier.fillMaxWidth().padding(horizontal = PanelPadding)) {
         FontRow(current.ifEmpty { null }, selected = false, chevron = true) { open = !open }
         if (open) {
             Column(
                 Modifier
-                    .padding(top = 6.dp)
-                    .clip(RoundedCornerShape(16.dp))
-                    .border(1.dp, colors.panelDivider, RoundedCornerShape(16.dp))
+                    .padding(top = Spacing.S6)
+                    .clip(AppShapes.Rounded16)
+                    .border(1.dp, colors.panelDivider, AppShapes.Rounded16)
                     .heightIn(max = LIST_MAX_HEIGHT)
                     .verticalScroll(rememberScrollState()),
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().height(ROW_HEIGHT).clickable(onClick = addFont).padding(horizontal = 20.dp),
+                    modifier = Modifier.fillMaxWidth().height(ROW_HEIGHT).clickable(onClick = addFont).padding(horizontal = Spacing.S20),
                 ) {
-                    Icon(EditorIcons.Plus, null, tint = colors.accent, modifier = Modifier.padding(end = 12.dp).size(22.dp))
-                    Text(stringResource(R.string.font_add), color = colors.accent, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Icon(EditorIcons.Plus, null, tint = colors.accent, modifier = Modifier.padding(end = Spacing.S12).size(22.dp))
+                    Text(stringResource(R.string.font_add), color = colors.accent, fontSize = TextSize.S16, fontWeight = FontWeight.Medium)
                 }
                 FontRow(null, selected = current.isEmpty(), chevron = false) {
                     open = false
@@ -86,7 +87,7 @@ internal fun FontSelector(current: String, onSelect: (String) -> Unit) {
             }
         }
     }
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(Spacing.S12))
 }
 
 /** A font's name written in that font; null is the app's own font. A name whose file has gone is written in the app's own. */
@@ -100,20 +101,20 @@ private fun FontRow(name: String?, selected: Boolean, chevron: Boolean, onClick:
         modifier = Modifier
             .fillMaxWidth()
             .height(ROW_HEIGHT)
-            .then(if (chevron) Modifier.clip(RoundedCornerShape(27.dp)).border(1.dp, colors.panelDivider, RoundedCornerShape(27.dp)) else Modifier)
+            .then(if (chevron) Modifier.clip(AppShapes.Rounded27).border(1.dp, colors.panelDivider, AppShapes.Rounded27) else Modifier)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp),
+            .padding(horizontal = Spacing.S20),
     ) {
         Text(
             name ?: stringResource(R.string.font_default),
             color = if (selected) colors.accent else colors.title,
-            fontSize = 18.sp,
+            fontSize = TextSize.S18,
             fontFamily = family,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (chevron) Icon(EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.padding(start = 10.dp).size(22.dp))
+        if (chevron) Icon(EditorIcons.ChevronDown, null, tint = colors.label, modifier = Modifier.padding(start = Spacing.S10).size(22.dp))
     }
 }
 

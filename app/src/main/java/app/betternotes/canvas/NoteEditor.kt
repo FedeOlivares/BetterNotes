@@ -9,6 +9,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.ink.strokes.Stroke
 import app.betternotes.core.edit.Edit
+import app.betternotes.core.edit.StepKind
 import app.betternotes.core.format.DocumentSession
 import app.betternotes.core.format.DocumentStore
 import app.betternotes.core.format.PendingSave
@@ -155,8 +156,9 @@ class NoteEditor(
     /** The page's items if they are in memory, with no side effects. */
     fun loadedPageOrNull(pageId: Long): PageContent? = session.loadedContent(pageId)
 
-    fun perform(edit: Edit) {
-        session.history.perform(edit, session)
+    /** Makes [edit] and records it; of a [kind] other than a step, it is not a step of undo and redo of its own, as a post-it opening or closing is not. */
+    fun perform(edit: Edit, kind: StepKind = StepKind.STEP) {
+        session.history.perform(edit, session, kind)
         scheduleSave()
         onHistoryChanged()
     }

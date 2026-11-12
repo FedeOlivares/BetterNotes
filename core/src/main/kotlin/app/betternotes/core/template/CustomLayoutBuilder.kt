@@ -28,9 +28,6 @@ fun LayoutElement.translated(dx: Float, dy: Float): LayoutElement = when (this) 
 /** The smallest a box element can be dragged to, in points, so it never collapses to nothing. */
 const val MIN_BOX_PT = 12f
 
-/** Corners of a box element by index: top-left, top-right, bottom-right, bottom-left. */
-const val CORNER_COUNT = 4
-
 /** The corner points of a box element in the order of [withCorner], or none for a line. */
 val LayoutElement.corners: List<Pair<Float, Float>>
     get() {

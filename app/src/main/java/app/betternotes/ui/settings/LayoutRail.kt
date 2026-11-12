@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +25,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import app.betternotes.R
 import app.betternotes.core.geometry.PageSize
 import app.betternotes.core.template.LINE_COLORS
@@ -40,7 +37,14 @@ import app.betternotes.core.template.PageTemplate
 import app.betternotes.core.template.density
 import app.betternotes.core.template.kind
 import app.betternotes.core.template.withDensity
+import app.betternotes.ui.theme.AppShapes
+import app.betternotes.ui.theme.LocalSettingsColors
 import app.betternotes.ui.theme.OpenFrom
+import app.betternotes.ui.theme.RGB_MASK
+import app.betternotes.ui.theme.OPAQUE_ALPHA
+import app.betternotes.ui.common.AddCustomColor
+import app.betternotes.ui.theme.Spacing
+import app.betternotes.ui.theme.TextSize
 import app.betternotes.ui.theme.opensFrom
 
 /** What the rail on the left opens beside it. Book style is a switch and opens nothing. */
@@ -70,15 +74,15 @@ internal fun LayoutRail(
 ) {
     val colors = LocalSettingsColors.current
     Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(Spacing.S12),
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.width(RailWidth).background(colors.menu).padding(horizontal = 10.dp, vertical = 12.dp),
+        modifier = modifier.width(RailWidth).background(colors.menu).padding(horizontal = Spacing.S10, vertical = Spacing.S12),
     ) {
         RailButton(stringResource(R.string.layout_book_style), bookStyle, onToggleBook) {
             Icon(LayoutIcons.Book, null, tint = it, modifier = Modifier.size(36.dp))
         }
         RailButton(stringResource(R.string.layout_background), open == LayoutPanel.BACKGROUND, { onOpen(LayoutPanel.BACKGROUND) }) {
-            Box(Modifier.size(34.dp).clip(CircleShape).background(Color(paper)).border(2.dp, it, CircleShape))
+            Box(Modifier.size(34.dp).clip(AppShapes.Circle).background(Color(paper)).border(2.dp, it, AppShapes.Circle))
         }
         RailButton(stringResource(R.string.layout_pattern), open == LayoutPanel.PATTERN, { onOpen(LayoutPanel.PATTERN) }) {
             Icon(LayoutIcons.Pattern, null, tint = it, modifier = Modifier.size(36.dp))
@@ -94,9 +98,9 @@ internal fun LayoutRail(
             Text(
                 stringResource(R.string.layout_delete),
                 color = colors.danger,
-                fontSize = 16.sp,
+                fontSize = TextSize.S16,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onDelete).padding(10.dp),
+                modifier = Modifier.clip(AppShapes.Rounded10).clickable(role = Role.Button, onClick = onDelete).padding(Spacing.S10),
             )
         }
     }
@@ -112,13 +116,13 @@ private fun RailButton(label: String, selected: Boolean, onClick: () -> Unit, ic
         modifier = Modifier
             .fillMaxWidth()
             .height(96.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(AppShapes.Rounded16)
             .background(if (selected) colors.chipSelected else colors.chipIdle)
             .clickable(role = Role.Button, onClick = onClick),
     ) {
         icon(tint)
-        Spacer(Modifier.height(6.dp))
-        ShrinkText(label, tint, 16.sp, textAlign = TextAlign.Center)
+        Spacer(Modifier.height(Spacing.S6))
+        ShrinkText(label, tint, TextSize.S16, textAlign = TextAlign.Center)
     }
 }
 
@@ -126,7 +130,7 @@ private fun RailButton(label: String, selected: Boolean, onClick: () -> Unit, ic
 @Composable
 internal fun RailPanel(title: String, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(24.dp)
+    val shape = AppShapes.Rounded24
     Column(
         modifier
             .opensFrom(OpenFrom.Start)
@@ -134,10 +138,10 @@ internal fun RailPanel(title: String, modifier: Modifier = Modifier, content: @C
             .clip(shape)
             .background(colors.sheet)
             .clickable(enabled = false) {}
-            .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .padding(Spacing.S24),
+        verticalArrangement = Arrangement.spacedBy(Spacing.S18),
     ) {
-        Text(title, color = colors.title, fontSize = 22.sp)
+        Text(title, color = colors.title, fontSize = TextSize.S22)
         content()
     }
 }
@@ -146,17 +150,18 @@ internal fun RailPanel(title: String, modifier: Modifier = Modifier, content: @C
 internal fun BackgroundPanel(paper: Int, onPick: (Int) -> Unit) {
     val colors = LocalSettingsColors.current
     RailPanel(stringResource(R.string.layout_background)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S12)) {
             for (color in PAPER_COLORS) {
                 Box(
                     Modifier
                         .size(56.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(Color(color))
-                        .border(if (color == paper) 3.dp else 1.dp, if (color == paper) colors.accent else colors.divider, CircleShape)
+                        .border(if (color == paper) 3.dp else 1.dp, if (color == paper) colors.accent else colors.divider, AppShapes.Circle)
                         .clickable(role = Role.RadioButton) { onPick(color) },
                 )
             }
+            AddCustomColor(paper, colors.title, onPick, 56.dp)
         }
     }
 }
@@ -218,19 +223,20 @@ internal fun LineStyleRows(width: Float?, color: Int?, onWidth: (Float) -> Unit,
         }
     }
     if (color != null) {
-        val rgb = color and 0x00FFFFFF
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+        val rgb = color and RGB_MASK
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S10), modifier = Modifier.padding(vertical = Spacing.S8)) {
             for (choice in LINE_COLORS) {
-                val selected = (choice and 0x00FFFFFF) == rgb
+                val selected = (choice and RGB_MASK) == rgb
                 Box(
                     Modifier
                         .size(40.dp)
-                        .clip(CircleShape)
+                        .clip(AppShapes.Circle)
                         .background(Color(choice))
-                        .border(if (selected) 3.dp else 1.dp, if (selected) colors.accent else colors.divider, CircleShape)
+                        .border(if (selected) 3.dp else 1.dp, if (selected) colors.accent else colors.divider, AppShapes.Circle)
                         .clickable(role = Role.RadioButton) { onColor(choice) },
                 )
             }
+            AddCustomColor(color or OPAQUE_ALPHA, colors.title, onColor)
         }
     }
 }
@@ -240,8 +246,8 @@ private fun formatWidth(value: Float): String = if (value % 1f == 0f) value.toIn
 @Composable
 private fun TemplateTiles(options: List<Pair<Int, PageTemplate>>, current: PageTemplate, paper: Int, onPick: (PageTemplate) -> Unit) {
     val colors = LocalSettingsColors.current
-    val shape = RoundedCornerShape(10.dp)
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    val shape = AppShapes.Rounded10
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.S16)) {
         for ((label, template) in options) {
             val selected = current.kind == template.kind
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(110.dp)) {
@@ -254,8 +260,8 @@ private fun TemplateTiles(options: List<Pair<Int, PageTemplate>>, current: PageT
                 ) {
                     TemplatePreview(template, paper, PatternPage, Modifier.size(110.dp))
                 }
-                Spacer(Modifier.height(8.dp))
-                ShrinkText(stringResource(label), if (selected) colors.accent else colors.text, 16.sp)
+                Spacer(Modifier.height(Spacing.S8))
+                ShrinkText(stringResource(label), if (selected) colors.accent else colors.text, TextSize.S16)
             }
         }
     }
@@ -264,7 +270,7 @@ private fun TemplateTiles(options: List<Pair<Int, PageTemplate>>, current: PageT
 @Composable
 internal fun ElementsPanel(tools: List<Pair<LayoutTool, String>>, current: LayoutTool, onPick: (LayoutTool) -> Unit) {
     RailPanel(stringResource(R.string.layout_elements), Modifier.width(220.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(Spacing.S10)) {
             for ((tool, label) in tools) ChoiceChip(label, current == tool) { onPick(tool) }
         }
     }
