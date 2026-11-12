@@ -88,7 +88,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         for (tool in InkTool.entries) put(tool, store.preset(tool))
     }
     private val overlays = HashMap<String, RectF>()
-    private var drawingMode = InputMode.STYLUS_DRAW
+    /** What a finger does when the view is not only for viewing, as the canvas has it now. */
+    private val drawingMode get() = if (canvas.fingerDraws) InputMode.FINGER_DRAW else InputMode.STYLUS_DRAW
 
     var activeTool by mutableStateOf(ActiveTool.PEN)
         private set
@@ -607,8 +608,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     var colorTarget by mutableStateOf<ColorTarget?>(null)
     var viewOnly by mutableStateOf(false)
         private set
-    var fingerDraws by mutableStateOf(false)
-        private set
+    /** Whether a finger draws; the canvas's own state, so the button follows the settings a note opens with and the shortcuts too. */
+    val fingerDraws get() = canvas.fingerDraws
     var rulerOn by mutableStateOf(false)
         private set
     var laserWidthSlot by mutableIntStateOf(1)
@@ -1419,11 +1420,7 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         colorTarget = null
     }
 
-    fun toggleFingerDraw() {
-        fingerDraws = !fingerDraws
-        drawingMode = if (fingerDraws) InputMode.FINGER_DRAW else InputMode.STYLUS_DRAW
-        if (!viewOnly) canvas.inputMode = drawingMode
-    }
+    fun toggleFingerDraw() = canvas.chooseFingerDraws(!canvas.fingerDraws)
 
     fun toggleViewOnly() {
         viewOnly = !viewOnly

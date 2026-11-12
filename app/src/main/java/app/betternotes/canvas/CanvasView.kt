@@ -736,15 +736,38 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Called whenever the input mode changes, so that the toolbars can follow a shortcut. */
     var onInputModeChanged: (InputMode) -> Unit = {}
 
+    /**
+     * Whether a finger draws, as the finger mode button shows it: true in finger-draw mode and false in scroll mode, and kept while the view is
+     * only for viewing. It is what the canvas does, so the button can never show scroll while a finger draws.
+     */
+    var fingerDraws by mutableStateOf(false)
+        private set
+
     var inputMode: InputMode
         get() = recognizer.mode
         set(value) {
             if (recognizer.mode == value) return
             if (value == InputMode.VIEW_ONLY) modeBeforeViewOnly = recognizer.mode
             recognizer.mode = value
+            when (value) {
+                InputMode.FINGER_DRAW -> fingerDraws = true
+                InputMode.STYLUS_DRAW -> fingerDraws = false
+                InputMode.VIEW_ONLY -> Unit
+            }
             stopFling()
             onInputModeChanged(value)
         }
+
+    /** Makes a finger draw or scroll, from the button. While the view is only for viewing the choice waits for it to be left. */
+    fun chooseFingerDraws(draws: Boolean) {
+        val mode = if (draws) InputMode.FINGER_DRAW else InputMode.STYLUS_DRAW
+        if (inputMode == InputMode.VIEW_ONLY) {
+            fingerDraws = draws
+            modeBeforeViewOnly = mode
+        } else {
+            inputMode = mode
+        }
+    }
 
     /** Changing direction keeps the current page in view. */
     var scrollDirection = ScrollDirection.VERTICAL
