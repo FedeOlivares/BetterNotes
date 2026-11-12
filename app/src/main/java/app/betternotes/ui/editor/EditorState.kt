@@ -791,8 +791,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         canvas.onTapeLaid = { toolUsed(ActiveTool.TAPE) }
         canvas.onItemCreated = ::itemCreated
         canvas.onSelectionLeft = {
-            // A tool that makes items gives way, once its selection is let go, to the tool in hand before it.
-            if (activeTool in TOOLS_THAT_MAKE_ITEMS && toolToReturnTo() != activeTool) {
+            if (activeTool == ActiveTool.TEXT) {
+                // A touch away from a text box that was selected only lets it go: nothing is written there. The tool before comes back unless it is set not to.
+                if (toolReturn(ActiveTool.TEXT).on && toolToReturnTo() != activeTool) returnToPreviousTool()
+                true
+            } else if (activeTool in TOOLS_THAT_MAKE_ITEMS && toolToReturnTo() != activeTool) {
+                // A tool that makes items gives way, once its selection is let go, to the tool in hand before it.
                 returnToPreviousTool()
                 true
             } else {

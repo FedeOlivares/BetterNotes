@@ -37,7 +37,13 @@ internal class PaneFrame(context: Context, private val onTouched: () -> Unit) : 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
             onTouched()
-            penOnCanvas = event.getToolType(0) == MotionEvent.TOOL_TYPE_STYLUS && penCanvas?.penWritesAt(event.x, event.y) == true
+            val toolType = event.getToolType(0)
+            // A pen goes to the canvas to write, and a finger in scroll mode on the box to move the page, not into the box's text field.
+            penOnCanvas = when (toolType) {
+                MotionEvent.TOOL_TYPE_STYLUS -> penCanvas?.penWritesAt(event.x, event.y) == true
+                MotionEvent.TOOL_TYPE_FINGER -> penCanvas?.fingerPansAt(event.x, event.y) == true
+                else -> false
+            }
         }
         val toCanvas = penOnCanvas
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) penOnCanvas = false

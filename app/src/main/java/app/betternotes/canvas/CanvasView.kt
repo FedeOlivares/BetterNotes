@@ -2280,6 +2280,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             }
             // A touch on a text box selects it, as the pen does, so that it can be moved and its look changed.
             is CanvasTool.Text -> {
+                // Words waiting to become text are not thrown away, and the box is not closed on them.
+                if (afterWordsLand {}) return
                 endTextEdit()
                 topItemOfType<TextItem>(pageId, pageX(x, y, index), pageY(x, y, index))?.second?.let { selectText(index, pageId, it) }
             }
@@ -2485,7 +2487,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val typing = tool is CanvasTool.Text && textEdit != null
         // A touch away from the box while words are being written does not throw them away: they finish turning into text, then the box closes.
         if (typing && kind != PointerKind.STYLUS_ERASER && topItemOfType<TextItem>(page.id, pageX(x, y, index), pageY(x, y, index)) == null &&
-            afterWordsLand { endTextEdit(); onTextToolLeft() }
+            afterWordsLand {}
         ) {
             return
         }
@@ -4062,7 +4064,12 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
                     finishAreaDrag()
                 }
             }
-            if (!away || !afterWordsLand(endTyping)) endTyping()
+            // With words still waiting to become text, a touch away from the box only lets them: they turn into text and the box stays open.
+            if (away) {
+                afterWordsLand {}
+            } else {
+                endTyping()
+            }
             return
         }
         val event = currentEvent ?: return
@@ -4258,6 +4265,13 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val height = maxOf(request.height, request.contentHeightPx)
         return TurnedBox.contains(x, y, request.left, request.top, request.width, height, request.turnDegrees, request.pivotX, request.pivotY, marginPx)
     }
+
+    /**
+     * Whether a finger at the screen point, with the page in scroll mode, is on the box being typed in: it moves and zooms the page there as
+     * anywhere else, and the text field does not take it.
+     */
+    fun fingerPansAt(x: Float, y: Float): Boolean =
+        tool is CanvasTool.Text && textEdit != null && recognizer.mode == InputMode.STYLUS_DRAW && insideOpenBox(x, y)
 
     /** Whether a pen at the screen point writes into the open text box: the app reads handwriting there as it does around it. */
     fun penWritesAt(x: Float, y: Float): Boolean {
