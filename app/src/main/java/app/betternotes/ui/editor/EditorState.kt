@@ -27,6 +27,8 @@ import app.betternotes.core.model.InkTool
 import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.model.ShapeKind
+import app.betternotes.core.model.StrokeItem
+import app.betternotes.core.model.LineKind
 import app.betternotes.core.model.StickyNoteItem
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.withLocked
@@ -79,7 +81,10 @@ private val ActiveTool.hasPanel get() = true
 private val TOOLS_THAT_MAKE_ITEMS = setOf(ActiveTool.SHAPE, ActiveTool.STICKY, ActiveTool.TABLE, ActiveTool.IMAGE, ActiveTool.EMOJI)
 
 /** What the color wheel's result is for. */
-internal enum class ColorTarget { FILL_PATTERN, TAPE, CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, TABLE_HEADER, SELECTED_TABLE_LINE, SELECTED_TABLE_FILL, SELECTED_TABLE_HEADER, LASER, TOOLBAR, SELECTED_NOTE, FILL, LIST_DOT, TEXT_COLOR, TEXT_BACKGROUND, PLANNER_ELEMENT }
+/** The pop-ups of the selection toolbar. */
+internal enum class SelectionPopup { ARRANGE, MORE, LINE_TYPE, THICKNESS, FONT, SIZE, OPACITY, COLORS }
+
+internal enum class ColorTarget { FILL_PATTERN, TAPE, CUSTOM_SLOT, SELECTED_SLOT, PALETTE, SHAPE_BORDER, SHAPE_FILL, NOTE, TABLE_BORDER, TABLE_FILL, TABLE_HEADER, SELECTED_TABLE_LINE, SELECTED_TABLE_FILL, SELECTED_TABLE_HEADER, LASER, TOOLBAR, SELECTED_NOTE, FILL, LIST_DOT, TEXT_COLOR, TEXT_BACKGROUND, PLANNER_ELEMENT, SELECTED_LINE, SELECTED_TEXT }
 
 /** What the toolbars show, and the one place that passes their choices on to the canvas. */
 @Stable
@@ -681,18 +686,19 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     var viewMoves by mutableIntStateOf(0)
         private set
-    /** Whether the "..." menu of the selection is open, which holds lock, translucency and a sticky note's options. */
-    var selectionMenuOpen by mutableStateOf(false)
+    /** Which of the selection toolbar's pop-ups is open: the positioning row or the "..." list. */
+    var selectionPopup by mutableStateOf<SelectionPopup?>(null)
 
-    private fun closeSelectionMenu() = setSelectionMenu(false)
-
-    private fun setSelectionMenu(open: Boolean) {
-        selectionMenuOpen = open
-        canvas.selectionMenuOpen = open
+    private fun closeSelectionMenu() {
+        selectionPopup = null
     }
 
-    /** Where the options bar goes, as the right edge and top of its place on the screen, or null. */
-    fun selectionMenuAnchor() = canvas.selectionMenuAnchor()
+    fun toggleSelectionPopup(popup: SelectionPopup) {
+        selectionPopup = if (selectionPopup == popup) null else popup
+    }
+
+    /** Where the selection is on the screen as left, top, right and bottom, or null. */
+    fun selectionScreenBounds() = canvas.selectionScreenBounds()
 
     /** What the lasso has selected, or null. Locked items can be selected but not moved. */
     var selection by mutableStateOf<List<PageItem>?>(null)
@@ -853,10 +859,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
                 if (colorTarget == ColorTarget.PLANNER_ELEMENT) colorTarget = null
             }
         }
-        canvas.onSelectionMenu = { setSelectionMenu(!selectionMenuOpen) }
         canvas.onItemsCopied = clipboard::remember
         canvas.setGrid(grid.on && grid.cross, grid.on && grid.thirds)
-        canvas.onSaveSticker = ::saveAsSticker
         canvas.onFillFailed = { say(R.string.notice_fill_open) }
         canvas.onWritingModelsMissing = { say(R.string.notice_writing_models) }
         canvas.onReturnTool = { toolUsed(ActiveTool.EMOJI) }
@@ -1169,6 +1173,75 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
         if (draft != null) update { it.withColorList(draft) }
     }
 
+    /** The color of the whole text box selected, whatever colors single letters had, however the box was selected. */
+    fun setSelectedTextColor(color: Int) =
+        changeSelectedText { it.copy(color = color, spans = it.spans.map { span -> span.copy(look = span.look.copy(color = null)) }.filter { span -> !span.look.isPlain }) }
+
+    fun setSelectedTextFont(name: String) = changeSelectedText { it.copy(style = it.style.copy(font = name)) }
+
+    fun setSelectedTextSize(size: Int) = changeSelectedText { it.copy(textSize = size.toFloat()) }
+
+    /** Whether the toolbar offers to save the selection as a sticker. */
+    val selectionCanBeSticker get() = selection?.let { app.betternotes.stickers.canBeSticker(it) } == true
+
+    fun saveSelectionAsSticker() {
+        selection?.let(::saveAsSticker)
+    }
+
+    fun duplicateSelection() = canvas.duplicateSelection()
+
+    /** Puts the selection on the clipboard and takes it off the page, as one step that can be undone. */
+    fun cutSelection() {
+        val items = selection ?: return
+        clipboard.remember(items)
+        canvas.deleteSelection()
+    }
+
+    /** The line items a selection can have the look of a line changed on: pen strokes and shapes other than tape. */
+    private fun lineItems() = selection.orEmpty().filter { it is StrokeItem || (it is ShapeItem && it.kind != ShapeKind.TAPE) }
+
+    /** The color of the first line item selected. */
+    fun selectedLineColor(): Int? = when (val first = lineItems().firstOrNull()) {
+        is StrokeItem -> first.style.color
+        is ShapeItem -> first.strokeColor
+        else -> null
+    }
+
+    fun selectedLineWidth(): Float? = when (val first = lineItems().firstOrNull()) {
+        is StrokeItem -> first.style.width
+        is ShapeItem -> first.strokeWidth
+        else -> null
+    }
+
+    fun selectedLineKind(): LineKind? = when (val first = lineItems().firstOrNull()) {
+        is StrokeItem -> first.style.line.kind
+        is ShapeItem -> first.line.kind
+        else -> null
+    }
+
+    fun recolorSelectedLines(color: Int) = changeSelectedLines(
+        { it.copy(style = it.style.copy(color = color)) },
+        { it.copy(strokeColor = color) },
+    )
+
+    fun setSelectedLineWidth(width: Float) = changeSelectedLines(
+        { it.copy(style = it.style.copy(width = width)) },
+        { it.copy(strokeWidth = width) },
+    )
+
+    fun setSelectedLineKind(kind: LineKind) = changeSelectedLines(
+        { it.copy(style = it.style.copy(line = it.style.line.copy(kind = kind))) },
+        { it.copy(line = it.line.copy(kind = kind)) },
+    )
+
+    private fun changeSelectedLines(stroke: (StrokeItem) -> StrokeItem, shape: (ShapeItem) -> ShapeItem) = canvas.changeSelection {
+        when {
+            it is StrokeItem -> stroke(it)
+            it is ShapeItem && it.kind != ShapeKind.TAPE -> shape(it)
+            else -> it
+        }
+    }
+
     fun setSelectionLocked(locked: Boolean) = canvas.changeSelection { it.withLocked(locked) }
 
     /** Groups the selected items so they are selected and moved as one, or splits them again. */
@@ -1343,6 +1416,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.TEXT_COLOR -> shownTextColor(note)
             ColorTarget.TEXT_BACKGROUND -> shownTextStyle(note).backgroundColor.takeIf { it ushr ALPHA_SHIFT != 0 } ?: DEFAULT_FILL
             ColorTarget.SELECTED_NOTE -> selection?.filterIsInstance<StickyNoteItem>()?.firstOrNull()?.color ?: DEFAULT_FILL
+            ColorTarget.SELECTED_LINE -> selectedLineColor() ?: DEFAULT_FILL
+            ColorTarget.SELECTED_TEXT -> (selection?.singleOrNull() as? TextItem)?.color ?: DEFAULT_FILL
             ColorTarget.PLANNER_ELEMENT -> plannerSlot?.let { canvas.plannerPickColor(it) } ?: DEFAULT_FILL
             else -> preset?.color ?: DEFAULT_FILL
         }
@@ -1414,6 +1489,8 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
             ColorTarget.LIST_DOT -> updateNoteStyle { it.copy(list = (it.list ?: ListStyle(ListKind.DOT)).copy(dotColor = color or OPAQUE_ALPHA)) }
             ColorTarget.TEXT_COLOR -> setTextColor(color or OPAQUE_ALPHA)
             ColorTarget.TEXT_BACKGROUND -> updateNoteStyle { it.copy(backgroundColor = color or OPAQUE_ALPHA) }
+            ColorTarget.SELECTED_LINE -> recolorSelectedLines(color or OPAQUE_ALPHA)
+            ColorTarget.SELECTED_TEXT -> setSelectedTextColor(color or OPAQUE_ALPHA)
             ColorTarget.PLANNER_ELEMENT -> plannerSlot?.let { restylePlanner(app.betternotes.core.planner.PlannerPages.StyleChange(it, color or OPAQUE_ALPHA)) }
             null -> Unit
         }

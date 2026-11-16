@@ -87,8 +87,8 @@ A notebook is either paged, with resizable pages (A4, A5, Letter, Legal or your 
 
 ## Selecting and arranging
 - **Lasso** (freeform or rectangle) with filters for which kinds of items to catch, handles to resize and rotate, and snapping to align.
-- **Buttons under the selection:** delete, copy, save as a sticker, and a "..." bar. The buttons always stay on the screen, even when the selection is near the edge of a page.
-- **The "..." bar** locks or unlocks items (locked items form a layer below the rest), recolors post-its, sets a picture's opacity, and puts the selection at the **front, middle or back** of the page's items.
+- **The selection toolbar** floats under whatever you select, and shows what suits it. Lines and shapes: color, line type, position, thickness, copy, save as a sticker, delete. A text box: color, font, font size, position, copy, delete. Post-its: the color in use (touch it for the palette), the color wheel, opacity, keep open, position, copy, delete. Pictures and tables show their own options. A text box open for typing gets a small bar with color, font and size for the selected letters or the whole text.
+- **The "..." list** locks or unlocks items (locked items form a layer below the rest), groups or ungroups, mirrors shapes, cuts, and puts the selection at the **front, middle or back** of the page's items. **Position** in the toolbar opens the same three choices.
 - **Layers.** Post-its are always at the bottom of a page, except on a cover, where they can be raised above other items. Drawing, stickers, post-its and the canvas are layered for the paint bucket.
 - **Groups.** Group a selection to move, resize and rotate it as one; Ungroup splits it again.
 - **Layers.** Each page can have several layers: only the working layer is editable, and layers can be hidden, renamed, reordered, merged, deleted, and items moved between them.

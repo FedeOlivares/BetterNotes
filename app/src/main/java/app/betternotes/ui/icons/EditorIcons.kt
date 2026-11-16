@@ -156,6 +156,10 @@ internal object EditorIcons {
         )
     }
     val Sliders by lazy { line("sliders", "M3 8h10 M19 8h2 M3 16h2 M11 16h10 M16 5a3 3 0 1 0 .01 0 M8 13a3 3 0 1 0 .01 0") }
+    val Copy by lazy { line("copy", "M9 9h11v11H9z M5 15V4h11") }
+    val Cut by lazy { line("cut", "M6 4.5a2.5 2.5 0 1 0 .01 0 M6 14.5a2.5 2.5 0 1 0 .01 0 M8 6.5L20 18 M8 16.5L20 5") }
+    val Thickness by lazy { filled("thickness", "M4 5h16v1.5H4z M4 10h16v3H4z M4 16.500h16V21H4z") }
+    val TextSize by lazy { line("text-size", "M3 19l5-13 5 13 M5 14h6 M15 19l3-7 3 7 M16.200 17h3.600") }
     val Mirror by lazy { line("mirror", "M12 3v18 M8 7l-5 11h5z M16 7l5 11h-5z") }
     val Close by lazy { line("close", "M6 6l12 12 M18 6L6 18") }
     // What the tape is printed with, and how it is laid down. Each tape icon is a strip with its mark inside.

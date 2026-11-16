@@ -26,7 +26,6 @@ import app.betternotes.core.model.PageItem
 import app.betternotes.core.model.ShapeItem
 import app.betternotes.core.tools.withTape
 import app.betternotes.core.model.ShapeKind
-import app.betternotes.stickers.canBeSticker
 import app.betternotes.core.model.TableItem
 import app.betternotes.core.model.TextItem
 import app.betternotes.core.tools.TableHandle
@@ -109,14 +108,8 @@ internal class LassoController(
         redraw()
     }
 
-    /** Called when the "..." button next to delete and copy is pressed. */
-    var onMenu: () -> Unit = {}
-
     /** Called with the items the copy button copied, which stay as they were. */
     var onCopied: (List<PageItem>) -> Unit = {}
-
-    /** Called with the selected items when the sticker button is pressed. */
-    var onSaveSticker: (List<PageItem>) -> Unit = {}
 
     /** Called with the new selection, or null, whenever it changes, so the toolbars can offer what suits it. */
     var onSelectionChanged: (Selection?) -> Unit = {}
@@ -163,14 +156,6 @@ internal class LassoController(
         style = Paint.Style.STROKE
         color = GUIDE_COLOR
         strokeWidth = SELECTION_WIDTH_DP * density
-    }
-    private val buttonFill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val dotFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = CanvasColors.ACTION_GLYPH }
-    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        color = CanvasColors.ACTION_GLYPH
-        strokeWidth = 1.6f * density
-        strokeCap = Paint.Cap.ROUND
     }
     private val paramFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PARAM_COLOR }
     private val paramEdge = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -463,95 +448,22 @@ internal class LassoController(
         redraw()
     }
 
-    /**
-     * A press on the selection's delete or copy button, in page coordinates. Returns true if it was one,
-     * and the button's action is done.
-     */
-    fun pressButton(pageIndex: Int, x: Float, y: Float, reachDp: Float = BUTTON_RADIUS_DP): Boolean {
-        val box = selection?.bounds ?: return false
-        if (pageIndex != this.pageIndex) return false
-        val reach = reachDp * density / viewport.pxPerPt
-        val kinds = buttonKinds()
-        val hit = kinds.withIndex().firstOrNull { (slot, _) ->
-            val center = buttonCenter(box, slot)
-            kotlin.math.hypot(x - center[0], y - center[1]) <= reach
-        }?.value ?: return false
-        when (hit) {
-            ButtonKind.MORE -> if (menuOpen) return false else onMenu()
-            ButtonKind.DELETE -> deleteSelection()
-            ButtonKind.COPY -> duplicateSelection()
-            ButtonKind.STICKER -> selection?.items?.let(onSaveSticker)
-        }
-        return true
-    }
-
-    /** Whether the options bar is open where the "..." button sits, which hides that button. */
-    var menuOpen = false
-        set(value) {
-            field = value
-            redraw()
-        }
-
-    /**
-     * Where the "..." button sits, as the screen's own x and y of its right edge and its top, in the view's unturned
-     * coordinates, or null when nothing is selected.
-     */
-    fun menuAnchor(): FloatArray? {
+    /** The selection's box on the screen as left, top, right and bottom in the view's unturned pixels, or null with nothing selected. */
+    fun screenBounds(): FloatArray? {
         val box = selection?.bounds ?: return null
         if (pageIndex < 0) return null
-        val center = buttonCenter(box, buttonKinds().indexOf(ButtonKind.MORE))
-        val reach = BUTTON_RADIUS_DP * density
         val at = Matrix()
         pageToScreenOf(pageIndex, at)
-        at.mapPoints(center)
-        return floatArrayOf(center[0] + reach, center[1] - reach)
+        val corners = floatArrayOf(box.left, box.top, box.right, box.top, box.right, box.bottom, box.left, box.bottom)
+        at.mapPoints(corners)
+        return floatArrayOf(
+            minOf(corners[0], corners[2], corners[4], corners[6]),
+            minOf(corners[1], corners[3], corners[5], corners[7]),
+            maxOf(corners[0], corners[2], corners[4], corners[6]),
+            maxOf(corners[1], corners[3], corners[5], corners[7]),
+        )
     }
 
-    private enum class ButtonKind { DELETE, COPY, STICKER, MORE }
-
-    /** The buttons under the selection, from the corner: delete, copy, save as a sticker when the selection can be one, and "...". */
-    private fun buttonKinds(): List<ButtonKind> {
-        val canStick = selection?.items?.let(::canBeSticker) == true
-        return listOfNotNull(ButtonKind.DELETE, ButtonKind.COPY, ButtonKind.STICKER.takeIf { canStick }, ButtonKind.MORE)
-    }
-
-    /** The button's center in page units: slot 0 is the one at the corner, slot 1 is next to it. */
-    private fun buttonCenter(box: Bounds, slot: Int): FloatArray {
-        val unit = density / viewport.pxPerPt
-        val gap = BUTTON_RADIUS_DP * unit
-        val step = (2 * BUTTON_RADIUS_DP + BUTTON_GAP_DP) * unit
-        // The corner button's place: just under the selection's lower right corner.
-        var x = box.right - gap
-        var y = box.bottom + gap + BUTTON_GAP_DP * unit
-        // A selection that runs to the page's edge, such as a cover's background, would put its buttons outside the page, where a
-        // touch is not on any page. They stay inside it, over the selection's lower right corner.
-        val size = editor?.document?.pages?.getOrNull(pageIndex)?.size
-        if (size != null) {
-            x = x.coerceAtMost(size.widthPt - gap)
-            y = y.coerceAtMost(size.heightPt - gap)
-        }
-        // And they are always on the screen: when the corner is out of view they are drawn at the nearest edge of it.
-        if (viewWidthPx > 0 && viewHeightPx > 0) {
-            val corner = floatArrayOf(x, y)
-            pageToScreenOf(pageIndex, clampMatrix)
-            clampMatrix.mapPoints(corner)
-            val radius = BUTTON_RADIUS_DP * density
-            val margin = BUTTON_VIEW_MARGIN_DP * density
-            val row = (buttonKinds().size - 1) * (2 * BUTTON_RADIUS_DP + BUTTON_GAP_DP) * density
-            val minX = radius + margin + row
-            val maxX = (viewWidthPx - radius - margin).coerceAtLeast(minX)
-            val minY = radius + margin
-            val maxY = (viewHeightPx - radius - margin).coerceAtLeast(minY)
-            corner[0] = corner[0].coerceIn(minX, maxX)
-            corner[1] = corner[1].coerceIn(minY, maxY)
-            if (clampMatrix.invert(clampInverse)) {
-                clampInverse.mapPoints(corner)
-                x = corner[0]
-                y = corner[1]
-            }
-        }
-        return floatArrayOf(x - slot * step, y)
-    }
 
     /** Puts a copy of the selection a little down and right of it, and selects the copy. */
     fun duplicateSelection() {
@@ -1221,62 +1133,7 @@ internal class LassoController(
         }
     }
 
-    private fun drawButtons(canvas: Canvas, box: Bounds) {
-        val radius = BUTTON_RADIUS_DP * density
-        val point = FloatArray(2)
-        for ((slot, kind) in buttonKinds().withIndex()) {
-            if (kind == ButtonKind.MORE && menuOpen) continue
-            val center = buttonCenter(box, slot)
-            point[0] = center[0]
-            point[1] = center[1]
-            pageToScreen.mapPoints(point)
-            buttonFill.color = when (kind) {
-                ButtonKind.DELETE -> DELETE_COLOR
-                ButtonKind.COPY -> COPY_COLOR
-                ButtonKind.STICKER -> STICKER_COLOR
-                ButtonKind.MORE -> MORE_COLOR
-            }
-            canvas.drawCircle(point[0], point[1], radius, buttonFill)
-            when (kind) {
-                ButtonKind.DELETE -> drawTrash(canvas, point[0], point[1], radius)
-                ButtonKind.COPY -> drawCopy(canvas, point[0], point[1], radius)
-                ButtonKind.STICKER -> drawSticker(canvas, point[0], point[1], radius)
-                ButtonKind.MORE -> drawMore(canvas, point[0], point[1], radius)
-            }
-        }
-    }
-
-    /** A note with a folded corner and a smile. */
-    private fun drawSticker(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
-        val u = radius / 10f * GLYPH_SCALE
-        canvas.drawRoundRect(cx - 6 * u, cy - 6 * u, cx + 6 * u, cy + 6 * u, 2 * u, 2 * u, glyph)
-        canvas.drawCircle(cx - 2.2f * u, cy - 1.5f * u, 0.9f * u, dotFill)
-        canvas.drawCircle(cx + 2.2f * u, cy - 1.5f * u, 0.9f * u, dotFill)
-        canvas.drawArc(cx - 3 * u, cy - 1 * u, cx + 3 * u, cy + 4 * u, 20f, 140f, false, glyph)
-    }
-
-    private fun drawTrash(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
-        val u = radius / 10f * GLYPH_SCALE
-        canvas.drawLine(cx - 5 * u, cy - 4 * u, cx + 5 * u, cy - 4 * u, glyph)
-        canvas.drawLine(cx - 1.5f * u, cy - 6 * u, cx + 1.5f * u, cy - 6 * u, glyph)
-        canvas.drawRect(cx - 4 * u, cy - 4 * u, cx + 4 * u, cy + 6 * u, glyph)
-        canvas.drawLine(cx - 1.5f * u, cy - 1.5f * u, cx - 1.5f * u, cy + 3.5f * u, glyph)
-        canvas.drawLine(cx + 1.5f * u, cy - 1.5f * u, cx + 1.5f * u, cy + 3.5f * u, glyph)
-    }
-
-    private fun drawMore(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
-        val u = radius / 10f
-        for (k in -1..1) canvas.drawCircle(cx + k * 4.5f * u, cy, 1.4f * u, dotFill)
-    }
-
-    private fun drawCopy(canvas: Canvas, cx: Float, cy: Float, radius: Float) {
-        val u = radius / 10f * GLYPH_SCALE
-        canvas.drawRoundRect(cx - 2 * u, cy - 6 * u, cx + 6 * u, cy + 3 * u, u, u, glyph)
-        canvas.drawRoundRect(cx - 6 * u, cy - 2 * u, cx + 2 * u, cy + 7 * u, u, u, glyph)
-    }
-
     private fun drawHandles(canvas: Canvas, box: Bounds) {
-        drawButtons(canvas, box)
         // A round knob on a stem above the top edge turns the selection.
         val knob = knobCenter(box)
         val top = floatArrayOf(box.centerX, box.top, knob[0], knob[1])
@@ -1334,17 +1191,7 @@ internal class LassoController(
         const val BUTTON_GLYPH_COLOR = CanvasColors.ACTION_GLYPH
         const val PARAM_COLOR = CanvasColors.SHAPE_PARAMETER_HANDLE
         const val BUTTON_RADIUS_DP = 18f
-
-        /** How far in from the screen's edge the buttons keep when they have to be moved onto it. */
-        const val BUTTON_VIEW_MARGIN_DP = 8f
-
-        /** The symbols in the buttons are this share of their drawn size, so they do not crowd the circle's edge. */
-        const val GLYPH_SCALE = 0.8f
         const val BUTTON_GAP_DP = 8f
-        const val DELETE_COLOR = CanvasColors.ACTION_DELETE
-        const val COPY_COLOR = CanvasColors.ACTION_COPY
-        const val MORE_COLOR = CanvasColors.ACTION_MORE
-        const val STICKER_COLOR = CanvasColors.ACTION_STICKER
         const val DUPLICATE_OFFSET_PT = 18f
 
         /** Less than this is a tap on the selection, not a drag of it. */

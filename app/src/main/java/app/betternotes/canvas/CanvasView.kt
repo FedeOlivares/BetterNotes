@@ -708,9 +708,6 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
     /** Called for a stylus button or shortcut's action that isn't the canvas's, as for choosing a tool. */
     var onToolAction: (EditorAction) -> Boolean = { false }
 
-    /** Called with the selected items when the button that saves them as a sticker is pressed. */
-    var onSaveSticker: (List<PageItem>) -> Unit = {}
-
     /** Called just before a shape, note, table or picture that was just made is selected, so that the tool in use can be given back once it is let go. */
     var onItemCreated: () -> Unit = {}
 
@@ -1000,8 +997,6 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         ).also { controller ->
             controller.onSelectionChanged = { onSelectionChanged(it?.items) }
             controller.onCopied = { onItemsCopied(it) }
-            controller.onMenu = { onSelectionMenu() }
-            controller.onSaveSticker = { onSaveSticker(it) }
             controller.onNoItems = { index, points -> pickPlannerElements(index, points) }
             controller.onCleared = { plannerPick.clear() }
         }
@@ -1220,21 +1215,14 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
 
     val hasSelection get() = lasso.hasSelection
 
-    /** Whether the selection's options bar is open, which takes the place of the "..." button. */
-    var selectionMenuOpen: Boolean
-        get() = lasso.menuOpen
-        set(value) {
-            lasso.menuOpen = value
-        }
+    /** The selection's box on the screen, as left, top, right and bottom, or null with nothing selected. */
+    fun selectionScreenBounds(): FloatArray? = lasso.screenBounds()
 
-    /** Where the options bar goes: its right edge and its top on the screen, or null with nothing selected. */
-    fun selectionMenuAnchor(): FloatArray? {
-        val anchor = lasso.menuAnchor() ?: return null
-        return anchor
+    /** Puts a copy of the selection a little down and right of it, and selects the copy. */
+    fun duplicateSelection() {
+        lasso.duplicateSelection()
+        syncChanges()
     }
-
-    /** Called when the selection's "..." button is pressed. */
-    var onSelectionMenu: () -> Unit = {}
 
     /** Called with the items the selection's copy button copied. */
     var onItemsCopied: (List<PageItem>) -> Unit = {}
@@ -2263,23 +2251,9 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
-    /**
-     * A press on a button of the selection that lies outside every page, which happens when the selection runs to the page's edge, as a
-     * cover's background does: the buttons sit just under it. True when one was pressed and did its action.
-     */
-    private fun pressSelectionButtonOffPage(x: Float, y: Float, reachDp: Float): Boolean {
-        val index = lasso.selectionPageIndex()
-        if (index < 0) return false
-        return lasso.pressButton(index, pageX(x, y, index), pageY(x, y, index), reachDp)
-    }
-
     /** What a finger tap does that only the pen could before: touch a circle drawn for circle to lasso, or a button of a lasso selection. */
     private fun fingerTapped(x: Float, y: Float) {
         val editor = editor ?: return
-        if ((tool is CanvasTool.Lasso || lasso.hasSelection) && pressSelectionButtonOffPage(x, y, FINGER_BUTTON_REACH_DP)) {
-            syncChanges()
-            return
-        }
         val index = layout?.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y)) ?: return
         if (index < 0) return
         val pageId = editor.document.pages[index].id
@@ -2299,7 +2273,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
             is CanvasTool.Lasso -> {
                 val px = pageX(x, y, index)
                 val py = pageY(x, y, index)
-                if (lasso.pressButton(index, px, py, FINGER_BUTTON_REACH_DP) || lasso.pressTableButton(index, px, py, FINGER_BUTTON_REACH_DP)) syncChanges()
+                if (lasso.pressTableButton(index, px, py, FINGER_BUTTON_REACH_DP)) syncChanges()
             }
             // A touch on a text box selects it, as the pen does, so that it can be moved and its look changed.
             is CanvasTool.Text -> {
@@ -2460,11 +2434,6 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val layout = layout ?: return
         drawingInLoupe = loupeOpen && loupe.contains(x, y)
         if (loupeOpen && !drawingInLoupe && startDraggingLoupeBox(pointerId, x, y)) return
-        // The selection's buttons are always on the screen, but not always on its page: pressing one is found by the selection's page.
-        if ((tool is CanvasTool.Lasso || lasso.hasSelection) && !drawingInLoupe && kind != PointerKind.STYLUS_ERASER && !holdErasing && pressSelectionButtonOffPage(x, y, BUTTON_REACH_OFF_PAGE_DP)) {
-            syncChanges()
-            return
-        }
         val index = if (drawingInLoupe) loupe.pageIndex else layout.pageIndexAt(viewport.toWorldX(x), viewport.toWorldY(y))
         if (index < 0) return
         val page = editor.document.pages[index]
@@ -2541,7 +2510,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         } else if (tool is CanvasTool.Lasso) {
             lassoPointer = pointerId
             editor.content(page.id)
-            if (lasso.pressButton(index, pageX(x, y, index), pageY(x, y, index)) || lasso.pressTableButton(index, pageX(x, y, index), pageY(x, y, index))) {
+            if (lasso.pressTableButton(index, pageX(x, y, index), pageY(x, y, index))) {
                 syncChanges()
                 return
             }
@@ -5352,7 +5321,6 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val FINGER_LOOP_REACH_MM = 5f
         private const val MM_PER_INCH = 25.4f
         const val FINGER_BUTTON_REACH_DP = 30f
-        const val BUTTON_REACH_OFF_PAGE_DP = 18f
         /** What one press of a zoom shortcut multiplies the zoom by. */
         const val ZOOM_STEP = 1.25f
 

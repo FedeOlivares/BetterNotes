@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="selection_color">Color</string>
+    <string name="selection_arrange">Posición</string>
+    <string name="selection_more">Más opciones</string>
+    <string name="selection_copy">Copiar</string>
+    <string name="selection_cut">Cortar</string>
+    <string name="selection_delete">Eliminar</string>
+    <string name="selection_sticker">Convertir en sticker</string>
+    <string name="selection_line_type">Tipo de línea</string>
+    <string name="selection_thickness">Grosor de la línea</string>
+    <string name="selection_font">Fuente</string>
+    <string name="selection_font_size">Tamaño de fuente</string>
+    <string name="selection_opacity">Opacidad</string>
+</resources>

@@ -1,3 +1,21 @@
+# Better Notes 2.5.4 — Release Notes
+
+A new toolbar for what you select, and a "..." list beside it.
+
+- The selection toolbar: a bar now floats under the selection (over it when there is no room below) and replaces the round buttons that were drawn under it. It shows what suits what you picked:
+  - Lines and shapes: color, line type, position, thickness, copy, save as a sticker, delete.
+  - A text box: color, font, font size, position, copy, delete.
+  - Post-its: the color in use (touch it for the palette in columns), the color wheel, opacity, keep open, position, copy, delete.
+  - Pictures, tables and mixed selections: position, copy, sticker, delete, and a picture's opacity or a table's line, fill and header colors.
+- Position: one button opens front, middle and back.
+- The "..." list: lock or unlock, group or ungroup, mirror (shapes), cut, edit a post-it's text, copy to the other pane, and save a text box or post-it as a sticker. Front, middle and back also sit at the top of it.
+- Typing in a text box: a bar under the open box changes color, font and size for the selected letters, or for all the text when none are selected.
+- New actions: cut, and changing the color, line type and thickness of selected lines and shapes. Group is what the old "link" button did. The look of the toolbar is kept in one file (`SelectionToolbarStyle.kt`), so it can be restyled.
+- Not built: Keep aspect ratio, Add to library, Screenshot and the rotation readout of the reference screen. The text options row of the second toolbar is still there, so text options show twice.
+- Tested: the core unit tests, lint, and the debug and release builds pass (`scripts\check.ps1`). The connected tests were not run. The owner tried the first version of the toolbar on the Pad 7 and asked for the bar under the selection, the text options and the post-it color change; those changes were built and installed on the Pad 7 but their last round was not reported back. Selecting each kind of item and every popup was not checked by hand by the developer.
+
+---
+
 # Better Notes 2.5.3 — Release Notes
 
 Bug fix for the finger mode button.

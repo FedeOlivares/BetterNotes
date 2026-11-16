@@ -410,7 +410,7 @@ private fun EditorControls(state: EditorState, actions: EditorActions, notices: 
 
         if (state.loupeOpen && !state.viewOnly) LoupeBar(state, Modifier.align(Alignment.BottomCenter))
         ToolbarPaint(state) {
-            SelectionBar(state)
+            SelectionToolbar(state)
             PlannerRecolorBar(state)
             // Where the map of an infinite canvas goes, which a page of fixed size has none of.
             // In the bottom corner only when the toolbar is along the bottom, as the map is; otherwise in the middle, as before.
