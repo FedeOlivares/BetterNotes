@@ -1553,8 +1553,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val middleY = viewport.toWorldY((event.getY(0) + event.getY(1)) / 2f)
         val index = layout?.pageIndexAt(middleX, middleY)?.takeIf { it >= 0 } ?: currentPageIndex
         val page = pages?.getOrNull(index)
-        // A page of a PDF, or an infinite canvas, is not turned.
-        if (layout == null || page == null || page.size == null || page.source != PageSource.Blank) {
+        // An infinite canvas has no edges to turn about, and the cover stays upright. A PDF page turns like any other.
+        if (layout == null || page == null || page.size == null || page.isCover) {
             twist.end()
             return false
         }

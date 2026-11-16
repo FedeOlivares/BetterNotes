@@ -55,6 +55,13 @@ internal interface PaintSource {
         y: Double,
         scale: Float,
     ) = Unit
+
+    /**
+     * Paints a PDF page that is turned, onto a canvas already scaled to points and turned with the page, so the page's corner
+     * is at 0, 0. A turned page cannot use the tiles' own pixels, which line up only when it is upright, so it is drawn from a
+     * picture of the whole page.
+     */
+    fun paintPdfTurned(canvas: Canvas, page: Page, pdf: PageSource.PdfPage, originX: Float, originY: Float, scale: Float) = Unit
 }
 
 /** Locked items first, then the rest, so the locked ones lie below. */
@@ -98,12 +105,13 @@ internal class PagePainter(private val source: PaintSource, private val ink: Ink
             val page = pages[index]
             val pdfSource = page.source as? PageSource.PdfPage
             // Before the translation below, because PDF rasters sit on the tile's own pixels.
-            if (pdfSource != null) source.paintPdfTile(canvas, page, pdfSource, originX, originY, x, y, scale)
             val turn = layout.turn(index)
+            if (pdfSource != null && turn == 0f) source.paintPdfTile(canvas, page, pdfSource, originX, originY, x, y, scale)
             canvas.withTranslation(x.toFloat(), y.toFloat()) {
                 scale(scale, scale)
                 // A turned page turns about its middle. What of it the tile shows is the box around the tile's corners as they lie on the page.
                 if (turn != 0f) rotate(turn, layout.pageWidth(index) / 2f, layout.pageHeight(index) / 2f)
+                if (pdfSource != null && turn != 0f) source.paintPdfTurned(this, page, pdfSource, originX, originY, scale)
                 val local = if (turn == 0f) {
                     Bounds(region.left - originX, region.top - originY, region.right - originX, region.bottom - originY)
                 } else {

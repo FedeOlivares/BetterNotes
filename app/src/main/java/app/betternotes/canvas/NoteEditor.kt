@@ -62,6 +62,10 @@ class NoteEditor(
         ) {
             this@NoteEditor.pdf?.paint(canvas, page, pdf, originX, originY, x, y, scale)
         }
+
+        override fun paintPdfTurned(canvas: Canvas, page: Page, pdf: PageSource.PdfPage, originX: Float, originY: Float, scale: Float) {
+            this@NoteEditor.pdf?.paintTurned(canvas, page, pdf, originX, originY, scale)
+        }
     }
 
     /** Called on the main thread when a page's ink arrives from the disk. */
