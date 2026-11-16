@@ -72,6 +72,8 @@
     <string name="pages_add">Agregar una página</string>
     <string name="pages_add_after">Agregar una página después de esta</string>
     <string name="pages_delete">Eliminar esta página</string>    <string name="pages_select">Seleccionar páginas</string>
+    <string name="pages_rotate_left">Girar a la izquierda</string>
+    <string name="pages_rotate_right">Girar a la derecha</string>
     <string name="menu_insert">Insertar</string>
     <string name="menu_search">Buscar</string>
     <string name="panel_image_library">Imágenes</string>

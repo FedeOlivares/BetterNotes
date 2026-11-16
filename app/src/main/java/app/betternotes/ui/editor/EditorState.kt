@@ -1380,6 +1380,16 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
 
     fun movePage(from: Int, to: Int) = canvas.movePage(from, to)
 
+    /** Counts the pages turned from the pages panel, so it draws them again. */
+    var pageTurns by mutableIntStateOf(0)
+        private set
+
+    /** Turns page [index] a quarter turn. It is saved with the document and exported turned. */
+    fun turnPage(index: Int, clockwise: Boolean) {
+        canvas.quarterTurn(index, clockwise)
+        pageTurns++
+    }
+
     fun thumbnail(pageId: Long, maxPx: Int) = canvas.thumbnail(pageId, maxPx)
 
     suspend fun pdfThumbnail(pageId: Long, widthPx: Int) = canvas.pdfThumbnail(pageId, widthPx)

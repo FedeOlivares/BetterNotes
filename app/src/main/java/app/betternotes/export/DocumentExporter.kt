@@ -64,7 +64,7 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
             for (index in selection.resolve(pages.size)) {
                 if (cancelled()) return written
                 val area = loadPage(index) ?: continue
-                val frame = ExportFrame.forPdf(area, options.scale)
+                val frame = ExportFrame.forPdf(area, options.scale, ExportFrame.turnOf(pages[index]))
                 val info = PdfDocument.PageInfo.Builder(frame.outputWidth, frame.outputHeight, written + 1).create()
                 val page = pdf.startPage(info)
                 if (options.rasterize || options.invert) {
@@ -103,7 +103,7 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
         for (index in indices) {
             if (cancelled()) break
             val area = loadPage(index) ?: continue
-            val frame = ExportFrame.forImage(area, options.effectiveDpi)
+            val frame = ExportFrame.forImage(area, options.effectiveDpi, ExportFrame.turnOf(pages[index]))
             val bitmap = createBitmap(frame.outputWidth, frame.outputHeight)
             try {
                 paint(Canvas(bitmap), pages[index], frame, frame.scale, options.invert)
@@ -137,8 +137,10 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
     fun thumbnail(index: Int, widthPx: Int): Bitmap {
         val page = pages[index]
         val area = loadPage(index) ?: Bounds(0f, 0f, EMPTY_CANVAS_WIDTH_PT, EMPTY_CANVAS_HEIGHT_PT)
-        val factor = widthPx / area.width
-        val frame = ExportFrame(area, factor, widthPx, ceil(area.height * factor).toInt().coerceAtLeast(1))
+        val turn = ExportFrame.turnOf(page)
+        val (turnedWidth, turnedHeight) = ExportFrame.turnedSize(area.width, area.height, turn)
+        val factor = widthPx / turnedWidth
+        val frame = ExportFrame(area, factor, widthPx, ceil(turnedHeight * factor).toInt().coerceAtLeast(1), turn)
         val bitmap = createBitmap(frame.outputWidth, frame.outputHeight)
         paint(Canvas(bitmap), page, frame, frame.scale, invert = false)
         source.clear()
@@ -147,7 +149,7 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
 
     /** One picture per page, put in the PDF at the page's size. A full-page picture at 300 dpi takes about 35 MB. */
     private fun paintAsPicture(target: Canvas, page: Page, area: Bounds, frame: ExportFrame, options: PdfExportOptions) {
-        val picture = ExportFrame.forImage(area, PDF_PAGE_DPI * options.scale)
+        val picture = ExportFrame.forImage(area, PDF_PAGE_DPI * options.scale, frame.turn)
         val bitmap = createBitmap(picture.outputWidth, picture.outputHeight)
         try {
             paint(Canvas(bitmap), page, picture, picture.scale, options.invert)
@@ -162,7 +164,11 @@ class DocumentExporter(private val store: DocumentStore, private val title: Stri
         val layer = if (invert) canvas.saveLayer(null, invertPaint) else -1
         canvas.withSave {
             scale(frame.scale, frame.scale)
-            translate(-frame.area.left, -frame.area.top)
+            // A turned page turns about its middle, which sits in the middle of the box it comes out as.
+            val (boxWidth, boxHeight) = ExportFrame.turnedSize(frame.area.width, frame.area.height, frame.turn)
+            translate(boxWidth / 2f, boxHeight / 2f)
+            rotate(frame.turn)
+            translate(-(frame.area.left + frame.area.width / 2f), -(frame.area.top + frame.area.height / 2f))
             (page.source as? PageSource.PdfPage)?.let { paintPdf(this, page, it, pdfPxPerPt) }
             painter.paintPage(this, page, frame.area, frame.scale)
         }

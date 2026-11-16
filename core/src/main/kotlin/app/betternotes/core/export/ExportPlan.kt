@@ -3,8 +3,11 @@ package app.betternotes.core.export
 import app.betternotes.core.geometry.Bounds
 import app.betternotes.core.model.Page
 import app.betternotes.core.model.PageItem
+import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.math.cos
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** Which pages to export. */
@@ -70,10 +73,10 @@ data class ImageExportOptions(
 
 /**
  * What one exported page shows and at what size: [area], in the page's own points, is drawn at
- * [scale] onto a page or image of [outputWidth] by [outputHeight]. Those are points in a PDF and
- * pixels in an image.
+ * [scale] onto a page or image of [outputWidth] by [outputHeight], turned [turn] degrees clockwise about its
+ * middle. Those are points in a PDF and pixels in an image. A turned page comes out as the box around it.
  */
-data class ExportFrame(val area: Bounds, val scale: Float, val outputWidth: Int, val outputHeight: Int) {
+data class ExportFrame(val area: Bounds, val scale: Float, val outputWidth: Int, val outputHeight: Int, val turn: Float = 0f) {
     companion object {
         /** The largest page side the PDF format allows readers to reject beyond. */
         const val MAX_PDF_SIDE_PT = 14400f
@@ -95,19 +98,37 @@ data class ExportFrame(val area: Bounds, val scale: Float, val outputWidth: Int,
             return items.map { it.bounds }.reduce(Bounds::union).outset(CANVAS_MARGIN_PT)
         }
 
-        /** One point of the document is one point of the PDF, unless the area is too large for a PDF page. */
-        fun forPdf(area: Bounds, scale: Float = 1f): ExportFrame = fitted(area, scale, MAX_PDF_SIDE_PT)
+        /** How far [page] is turned in an export. A canvas has no edge to turn about, so it is never turned. */
+        fun turnOf(page: Page): Float = if (page.size == null) 0f else page.rotation
 
-        fun forImage(area: Bounds, dpi: Float): ExportFrame {
-            val wanted = dpi / POINTS_PER_INCH
-            val pixels = area.width * wanted * area.height * wanted
-            val limited = if (pixels > MAX_IMAGE_PIXELS) wanted * sqrt(MAX_IMAGE_PIXELS / pixels) else wanted
-            return fitted(area, limited, MAX_IMAGE_SIDE_PX)
+        /** The width and height of the box around a [width] by [height] rectangle turned [turn] degrees. */
+        fun turnedSize(width: Float, height: Float, turn: Float): Pair<Float, Float> {
+            val radians = Math.toRadians(turn.toDouble())
+            val cos = abs(cos(radians)).toFloat()
+            val sin = abs(sin(radians)).toFloat()
+            // A quarter turn is exact, not a hair over from the float sine.
+            return when (((turn % 180f) + 180f) % 180f) {
+                0f -> width to height
+                90f -> height to width
+                else -> (width * cos + height * sin) to (width * sin + height * cos)
+            }
         }
 
-        private fun fitted(area: Bounds, wantedScale: Float, maxSide: Float): ExportFrame {
-            val scale = min(wantedScale, min(maxSide / area.width, maxSide / area.height))
-            return ExportFrame(area, scale, ceil(area.width * scale).toInt(), ceil(area.height * scale).toInt())
+        /** One point of the document is one point of the PDF, unless the area is too large for a PDF page. */
+        fun forPdf(area: Bounds, scale: Float = 1f, turn: Float = 0f): ExportFrame = fitted(area, scale, MAX_PDF_SIDE_PT, turn)
+
+        fun forImage(area: Bounds, dpi: Float, turn: Float = 0f): ExportFrame {
+            val wanted = dpi / POINTS_PER_INCH
+            val (width, height) = turnedSize(area.width, area.height, turn)
+            val pixels = width * wanted * height * wanted
+            val limited = if (pixels > MAX_IMAGE_PIXELS) wanted * sqrt(MAX_IMAGE_PIXELS / pixels) else wanted
+            return fitted(area, limited, MAX_IMAGE_SIDE_PX, turn)
+        }
+
+        private fun fitted(area: Bounds, wantedScale: Float, maxSide: Float, turn: Float): ExportFrame {
+            val (width, height) = turnedSize(area.width, area.height, turn)
+            val scale = min(wantedScale, min(maxSide / width, maxSide / height))
+            return ExportFrame(area, scale, ceil(width * scale).toInt(), ceil(height * scale).toInt(), turn)
         }
     }
 }

@@ -36,6 +36,32 @@ class ExportPlanTest {
     }
 
     @Test
+    fun `a page turned a quarter comes out sideways`() {
+        val frame = ExportFrame.forPdf(Bounds(0f, 0f, 100f, 200f), turn = 90f)
+        assertEquals(200, frame.outputWidth)
+        assertEquals(100, frame.outputHeight)
+        val left = ExportFrame.forPdf(Bounds(0f, 0f, 100f, 200f), turn = -90f)
+        assertEquals(200, left.outputWidth)
+        assertEquals(100, left.outputHeight)
+        val half = ExportFrame.forImage(Bounds(0f, 0f, 72f, 144f), dpi = 72f, turn = 180f)
+        assertEquals(72, half.outputWidth)
+        assertEquals(144, half.outputHeight)
+    }
+
+    @Test
+    fun `a page turned at a free angle comes out as the box around it`() {
+        val frame = ExportFrame.forPdf(Bounds(0f, 0f, 100f, 100f), turn = 45f)
+        val side = (100 * kotlin.math.sqrt(2.0)).toInt()
+        assertTrue(frame.outputWidth in side..side + 1 && frame.outputHeight in side..side + 1)
+    }
+
+    @Test
+    fun `a canvas is never turned in an export and a pdf page is`() {
+        assertEquals(0f, ExportFrame.turnOf(Page(1, null, rotation = 30f)), 0f)
+        assertEquals(30f, ExportFrame.turnOf(Page(1, PageSize(100f, 200f), rotation = 30f)), 0f)
+    }
+
+    @Test
     fun `one point stays one point in a pdf`() {
         val frame = ExportFrame.forPdf(Bounds(0f, 0f, 595.276f, 841.89f))
         assertEquals(1f, frame.scale)
