@@ -1384,6 +1384,12 @@ internal class EditorState(private val canvas: CanvasView, private val store: To
     var pageTurns by mutableIntStateOf(0)
         private set
 
+    /** Whether the page in view can be turned: a canvas has no edges to turn about, and the cover stays upright. */
+    val canTurnCurrentPage get() = canvas.pages.getOrNull(currentPage)?.let { it.size != null && !it.isCover } == true
+
+    /** Turns the page in view a quarter turn, as the two-finger twist does, so annotations turn with it. */
+    fun turnCurrentPage(clockwise: Boolean) = turnPage(currentPage, clockwise)
+
     /** Turns page [index] a quarter turn. It is saved with the document and exported turned. */
     fun turnPage(index: Int, clockwise: Boolean) {
         canvas.quarterTurn(index, clockwise)

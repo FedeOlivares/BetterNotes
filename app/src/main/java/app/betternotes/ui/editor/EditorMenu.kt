@@ -126,6 +126,16 @@ internal fun EditorMenu(state: EditorState, actions: EditorActions, onClose: () 
                 onClose()
                 actions.onOpenOverlay(SettingsOverlay.SEARCH)
             }
+            if (state.canTurnCurrentPage) {
+                Entry(EditorIcons.Rotate, R.string.pages_rotate_left) {
+                    onClose()
+                    state.turnCurrentPage(clockwise = false)
+                }
+                Entry(EditorIcons.Rotate, R.string.pages_rotate_right) {
+                    onClose()
+                    state.turnCurrentPage(clockwise = true)
+                }
+            }
             Entry(EditorIcons.Template, R.string.menu_change_template) {
                 onClose()
                 actions.onOpenOverlay(SettingsOverlay.TEMPLATE)
