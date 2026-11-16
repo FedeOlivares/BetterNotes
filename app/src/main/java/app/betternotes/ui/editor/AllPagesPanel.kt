@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -39,6 +40,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import app.betternotes.core.export.ExportFrame
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -61,7 +64,7 @@ import kotlinx.coroutines.yield
 internal fun AllPagesPanel(state: EditorState, notices: Notices) {
     val colors = LocalEditorColors.current
     val grid = rememberLazyGridState()
-    val pages = remember(state.historyVersion) { state.pages() }
+    val pages = remember(state.historyVersion, state.pageTurns) { state.pages() }
     var dragging by remember { mutableStateOf<Int?>(null) }
     val latestDragging by rememberUpdatedState(dragging)
     Box(
@@ -164,17 +167,22 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
     val pdf by produceState<Bitmap?>(null, page.id) { value = state.pdfThumbnail(page.id, THUMBNAIL_PX) }
     val size = page.size
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = Spacing.S12, vertical = Spacing.S8)) {
-        Box(
+        // A turned page shows as the box around it, with the page turned inside.
+        val (boxWidth, boxHeight) = if (size != null) ExportFrame.turnedSize(size.widthPt, size.heightPt, page.rotation) else 1f to 1f
+        BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(if (size != null) size.widthPt / size.heightPt else 1f)
+                .aspectRatio(boxWidth / boxHeight)
                 .clip(shape)
-                .background(Color(page.background.color))
                 .then(if (isCurrent || isDragged) Modifier.border(2.dp, colors.accent, shape) else Modifier)
                 .clickable(role = Role.Button) { state.goToPage(index) },
+            contentAlignment = Alignment.Center,
         ) {
-            pdf?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
-            thumbnail?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
+            val inner = if (size != null) Modifier.size(maxWidth * (size.widthPt / boxWidth), maxWidth * (size.heightPt / boxWidth)) else Modifier.fillMaxSize()
+            Box(inner.graphicsLayer { rotationZ = if (size != null) page.rotation else 0f }.background(Color(page.background.color))) {
+                pdf?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
+                thumbnail?.let { Image(it.asImageBitmap(), null, modifier = Modifier.fillMaxSize()) }
+            }
         }
         Box {
             Row(
@@ -191,6 +199,22 @@ private fun PageTile(state: EditorState, page: Page, index: Int, isCurrent: Bool
                         onClick = {
                             menu = false
                             state.addPage(index)
+                        },
+                    )
+                }
+                if (size != null && !page.isCover) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.pages_rotate_left), fontSize = TextSize.S14) },
+                        onClick = {
+                            menu = false
+                            state.turnPage(index, clockwise = false)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.pages_rotate_right), fontSize = TextSize.S14) },
+                        onClick = {
+                            menu = false
+                            state.turnPage(index, clockwise = true)
                         },
                     )
                 }

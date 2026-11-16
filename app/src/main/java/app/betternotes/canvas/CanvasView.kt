@@ -157,7 +157,9 @@ import java.io.IOException
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -1407,6 +1409,30 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         }
     }
 
+    /**
+     * Turns page [index] to the next quarter turn clockwise, or counterclockwise, and remembers it so the page is saved and
+     * exported turned. A page with no edges, a canvas, does not turn.
+     */
+    fun quarterTurn(index: Int, clockwise: Boolean) {
+        val layout = layout ?: return
+        if (index !in 0 until layout.pageCount || editor?.document?.pages?.getOrNull(index)?.size == null) return
+        resetAnimator?.cancel()
+        val from = layout.turn(index)
+        val steps = from / QUARTER_TURN
+        val target = (if (clockwise) floor(steps) + 1f else ceil(steps) - 1f) * QUARTER_TURN
+        val normalized = ((target % FULL_TURN_DEGREES) + FULL_TURN_DEGREES) % FULL_TURN_DEGREES
+        val hereX = layout.centerX(index)
+        val hereY = layout.centerY(index)
+        turnPage(index, normalized)
+        if (index == currentPageIndex) {
+            // The page in view keeps its place on the screen while the room it takes changes.
+            viewport.panX += (hereX - layout.centerX(index)) * viewport.pxPerPt
+            viewport.panY += (hereY - layout.centerY(index)) * viewport.pxPerPt
+        }
+        finishTurn(index)
+        viewMoved()
+    }
+
     private fun updatePageToScreen() {
         screenToPage.invert(pageToScreen)
     }
@@ -1527,8 +1553,8 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         val middleY = viewport.toWorldY((event.getY(0) + event.getY(1)) / 2f)
         val index = layout?.pageIndexAt(middleX, middleY)?.takeIf { it >= 0 } ?: currentPageIndex
         val page = pages?.getOrNull(index)
-        // A page of a PDF, or an infinite canvas, is not turned.
-        if (layout == null || page == null || page.size == null || page.source != PageSource.Blank) {
+        // An infinite canvas has no edges to turn about, and the cover stays upright. A PDF page turns like any other.
+        if (layout == null || page == null || page.size == null || page.isCover) {
             twist.end()
             return false
         }
@@ -5239,6 +5265,7 @@ class CanvasView(context: Context) : FrameLayout(context), GestureListener, InPr
         const val TAP_DOT_PT = 6f
         const val TAP_DOT_WAIT_MS = 200L
         const val RESET_TURN_MS = 250L
+        const val QUARTER_TURN = 90f
 
         /** How far past the last page the view may go, as a share of that page, and how much of a page must show to offer a new one. */
         const val ADD_PAGE_ROOM = 0.6f

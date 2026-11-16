@@ -114,6 +114,35 @@ internal class PdfPages(store: DocumentStore, private val document: Document) {
         }
     }
 
+    /**
+     * Paints a turned page onto a canvas that is already in points and turned with the page. The tiles' pixels line up with the
+     * screen only when the page is upright, so a turned page is drawn from one picture of the whole page, as sharp as the zoom
+     * asks up to [TURNED_LONG_SIDE_PX] on its long side, in steps of two so a pinch does not render at every zoom.
+     */
+    fun paintTurned(canvas: Canvas, page: Page, source: PageSource.PdfPage, originX: Float, originY: Float, scale: Float) {
+        val size = page.size ?: return
+        destination.set(0f, 0f, size.widthPt, size.heightPt)
+        canvas.drawRect(destination, paper)
+        val centerX = originX + size.widthPt / 2f
+        val centerY = originY + size.heightPt / 2f
+        val previewScale = previewScale(size)
+        val limit = TURNED_LONG_SIDE_PX / max(size.widthPt, size.heightPt)
+        if (min(scale, limit) > previewScale) {
+            var steps = 1
+            while (previewScale * (1 shl steps) < min(scale, limit) && steps < MAX_TURNED_STEPS) steps++
+            val sharpRaster = previewRaster(source, size, min(limit, previewScale * (1 shl steps)))
+            val sharpBitmap = previews[sharpRaster]
+            if (sharpBitmap != null) {
+                canvas.drawBitmap(sharpBitmap, null, destination, smooth)
+                return
+            }
+            if (pinching) skippedWhilePinching = true else request(sharpRaster, page.id, centerX, centerY)
+        }
+        val preview = previewRaster(source, size, previewScale)
+        val previewBitmap = previews[preview]
+        if (previewBitmap != null) canvas.drawBitmap(previewBitmap, null, destination, smooth) else request(preview, page.id, centerX, centerY)
+    }
+
     /** Stretches whatever the zoom before left that overlaps this tile. */
     private fun paintFallback(canvas: Canvas, source: PageSource.PdfPage, x: Double, y: Double, scale: Float, left: Int, top: Int, right: Int, bottom: Int) {
         if (fallbackScale == 0f) return
@@ -223,6 +252,10 @@ internal class PdfPages(store: DocumentStore, private val document: Document) {
         /** Enough for a screen of pages at the lowest zoom, at about 0.7 MB for an A4 preview. */
         const val PREVIEW_CACHE_BYTES = 96 * 1024 * 1024
         const val PREVIEW_LONG_SIDE_PX = 512
+
+        /** The most pixels on the long side of a turned page's picture, which takes about 19 MB for an A4 page. */
+        const val TURNED_LONG_SIDE_PX = 2600f
+        const val MAX_TURNED_STEPS = 4
 
         /** About four Pad 7 screens: the view, the ring around it, and the zoom before. */
         const val TILE_CACHE_BYTES = 128 * 1024 * 1024

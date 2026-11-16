@@ -37,7 +37,10 @@ data class Page(
     val size: PageSize?,
     val background: PageBackground = PageBackground(),
     val source: PageSource = PageSource.Blank,
-    /** The angle in degrees the page is shown at, clockwise. Only the view turns; the page's content does not. */
+    /**
+     * The angle in degrees the page is shown at, clockwise. It is saved with the document and applied when the page
+     * is exported. The page's content keeps its own coordinates; only the page as a whole turns.
+     */
     val rotation: Float = 0f,
     /** The id of the cover design when this is the document's cover page, which is locked in place as the first page. */
     val cover: String? = null,
@@ -152,7 +155,7 @@ class Document(
     }
 
     /**
-     * Turns the view of a page. It is not an edit, so undo skips it: only how the page is shown changes, never its content.
+     * Turns a page. It is not an edit, so undo skips it: only how the page is shown and exported changes, never its content.
      * A document with a page turned saves again, because the page list is saved with it.
      */
     fun setPageRotation(pageId: Long, degrees: Float) {

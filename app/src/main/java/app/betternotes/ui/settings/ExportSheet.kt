@@ -384,10 +384,10 @@ private fun sizeLabel(pages: List<Page>, selected: Set<Int>, scale: Float, inPix
     val page = first.size ?: return null
     val area = Bounds(0f, 0f, page.widthPt, page.heightPt)
     if (inPixels) {
-        val frame = ExportFrame.forImage(area, ImageExportOptions.DEFAULT_DPI * scale)
+        val frame = ExportFrame.forImage(area, ImageExportOptions.DEFAULT_DPI * scale, ExportFrame.turnOf(first))
         return stringResource(R.string.export_size_px, frame.outputWidth, frame.outputHeight)
     }
-    val frame = ExportFrame.forPdf(area, scale)
+    val frame = ExportFrame.forPdf(area, scale, ExportFrame.turnOf(first))
     val toMm = MM_PER_INCH / POINTS_PER_INCH
     return stringResource(R.string.export_size_mm, (frame.outputWidth * toMm).roundToInt(), (frame.outputHeight * toMm).roundToInt())
 }
