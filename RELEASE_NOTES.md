@@ -1,3 +1,15 @@
+# Better Notes 2.5.5 — Release Notes
+
+PDF pages turn like notes.
+
+- Twist two fingers on a PDF page and it turns like a note page, at any angle. The ink on it turns too, and the turn is kept with the page. The reset badge puts it back upright.
+- Rotate left and right for the page in view is in the editor menu, and the pages panel can turn a page a quarter left or right. Exported PDFs and images come out turned, as the box around the page.
+- While a PDF page is turned, its PDF is drawn from one picture of the whole page, at most about 2600 pixels on the long side, so it gets soft when you zoom in far. Upright pages stay sharp at any zoom.
+- The page format is unchanged, so older versions open these documents.
+- Tested: the core unit tests, lint and the release build (`scripts\check.ps1`). Turning a PDF page was not tried on the Pad 7 by the developer.
+
+---
+
 # Better Notes 2.5.4 — Release Notes
 
 A new toolbar for what you select, and a "..." list beside it.

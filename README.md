@@ -105,6 +105,7 @@ A notebook is either paged, with resizable pages (A4, A5, Letter, Legal or your 
 ## PDFs
 - Import a PDF as a notebook, or open one from a file manager or another app with "Open with". It is copied into the app, and an encrypted file is stored decrypted (the password is never kept). Page sizes are the PDF's own.
 - Annotate with every tool. Pages open without waiting for the renderer: a preview first, then sharp tiles nearest the view.
+- Turn a PDF page like a note page: twist two fingers on it, or use rotate left and right in the editor menu or the pages panel. Ink turns with the page, the turn is kept, and an export comes out turned. While a page is turned, its PDF is drawn from one picture of the whole page, at most about 2600 pixels on the long side, so it gets soft when you zoom in far.
 - Search the PDF's printed text next to your handwriting. Blank pages can be added to a PDF, and a PDF can have a cover.
 
 ## Search and handwriting recognition
